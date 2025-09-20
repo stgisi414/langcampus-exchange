@@ -373,6 +373,7 @@ const ChatModal: React.FC<{
   nativeLanguage: string;
   teachMeCache: { language: string; type: string; topic: string; content: string; } | null;
   setTeachMeCache: (cache: { language: string; type: string; topic: string; content: string; } | null) => void;
+  onShareQuizResults: (topic: string, score: number, questions: QuizQuestion[], userAnswers: string[]) => void;
 }> = ({ partner, initialMessages, onClose, onSaveChat, nativeLanguage, teachMeCache, setTeachMeCache }) => {
     const [messages, setMessages] = useState<Message[]>(initialMessages);
     const [newMessage, setNewMessage] = useState('');
