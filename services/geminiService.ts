@@ -1,7 +1,7 @@
 import { Message, Partner, QuizQuestion } from '../types';
 
 // Make sure this is the correct URL for your deployed Cloud Function.
-const PROXY_URL = "https://geminiproxy-langcampus-exchange.a.run.app"; // Replace if yours is different
+const PROXY_URL = "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiProxy"; // Replace if yours is different
 
 /**
  * A helper function to safely parse JSON from the AI,
@@ -76,11 +76,34 @@ export const getChatResponse = async (messages: Message[], partner: Partner, cor
   const conversationHistory = messages.map(m => `${m.sender === 'user' ? 'Me' : partner.name}: ${m.text}`).join('\n');
   const userLastMessage = messages[messages.length - 1].text;
 
-  const prompt = `You are ${partner.name}, a friendly language exchange partner... (rest of your prompt is the same)`; // Abridged for clarity
+  // This prompt is much more direct and less conversational to force JSON output.
+  const prompt = `
+    You are an AI language partner.
+    Conversation history:
+    ${conversationHistory}
+
+    My last message was: "${userLastMessage}"
+
+    Your task is to generate a response.
+    ${corrections ? `I have requested corrections. If my last message has errors, provide a corrected version.` : ''}
+
+    IMPORTANT: Your entire response must be a single, valid JSON object. Do not include any text, greetings, or explanations outside of the JSON object.
+
+    The JSON object must have two string properties:
+    1. "text": Your conversational reply to my last message.
+    2. "correction": The corrected version of my last message. If there are no errors, this must be an empty string "".
+
+    Example of a valid response:
+    {
+      "text": "Hello! It's nice to meet you too.",
+      "correction": "It's nice to meet you."
+    }
+
+    Now, generate the JSON object for your response.
+  `;
 
   try {
     const data = await callGeminiProxy(prompt);
-    // Use our new helper function here too
     const aiResponse = cleanAndParseJson(data.candidates[0].content.parts[0].text);
     return {
       sender: 'ai',
