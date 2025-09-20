@@ -1,9 +1,11 @@
 import { Message, Partner, QuizQuestion } from '../types';
 
 // Make sure this is the correct URL for your deployed Cloud Function.
-const PROXY_URL = "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiProxy"; // Replace if yours is different
-const TTS_PROXY_URL = "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiTTS";
-
+//const PROXY_URL = "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiProxy"; // Replace if yours is different
+//const TTS_PROXY_URL = "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiTTS";
+//Functions emulator addresses
+const PROXY_URL = "http://127.0.0.1:5001/langcampus-exchange/us-central1/geminiProxy";
+const TTS_PROXY_URL = "http://127.0.0.1:5001/langcampus-exchange/us-central1/geminiTTS";
 
 /**
  * A helper function to safely parse JSON from the AI,
@@ -88,40 +90,82 @@ export const generatePartners = async (nativeLanguage: string, targetLanguage: s
     const data = await callGeminiProxy(prompt);
     // Use our new helper function to safely parse the response
     const partnersData = cleanAndParseJson(data.candidates[0].content.parts[0].text);
-    return partnersData.map((p: any) => ({
-      ...p,
-      avatar: `https://api.dicebear.com/8.x/micah/svg?seed=${p.name}`,
-    }));
+    if (!Array.isArray(partnersData)) {
+      console.error("AI did not return a valid array for partners:", partnersData);
+      return []; // Return an empty array to prevent crashing
+    }
+
+    return partnersData
+      .filter((p: any) => p && p.name && p.nativeLanguage && p.learningLanguage && Array.isArray(p.interests))
+      .map((p: any) => ({
+        ...p,
+        avatar: `https://api.dicebear.com/8.x/micah/svg?seed=${p.name}`,
+      }));
   } catch (error) {
     console.error("Error generating partners:", error);
     throw new Error("Failed to generate AI partners. Please try again.");
   }
 };
 
-export const getChatResponse = async (messages: Message[], partner: Partner, corrections: boolean, userProfile: UserProfileData): Promise<Message> => {
-  const conversationHistory = messages.map(m => `${m.sender === 'user' ? userProfile.name || 'Me' : partner.name}: ${m.text}`).join('\n');
+export const getChatResponse = async (messages: Message[], partner: Partner, corrections: boolean): Promise<Message> => {
+  // 1. Guard Clause: Prevent crashes if partner is invalid
+  if (!partner || !partner.name) {
+    console.error("getChatResponse called with an invalid partner object.");
+    return { sender: 'ai', text: "Sorry, there's a problem with my memory. Please try starting a new chat." };
+  }
+
+  const conversationHistory = messages.map(m => `${m.sender === 'user' ? 'Me' : partner.name}: ${m.text}`).join('\n');
   const userLastMessage = messages[messages.length - 1].text;
 
-  const prompt = `You are ${partner.name}, a friendly language exchange partner. Your native language is ${partner.nativeLanguage}.
+  // 2. Enhanced Prompt: Give the AI a clear persona and instructions
+  const prompt = `
+    You are an AI language exchange partner.
+    Your name is ${partner.name}.
+    Your native language is ${partner.nativeLanguage}.
+    You are learning ${partner.learningLanguage}.
+    Your interests include: ${partner.interests.join(', ')}.
+    The user's native language is ${partner.learningLanguage}.
 
-  You are talking to ${userProfile.name || 'a new friend'}. Their hobbies are ${userProfile.hobbies || 'not specified'}, and their bio is: "${userProfile.bio || 'not specified'}". Use this information to make the conversation more personal and engaging.
+    Conversation History:
+    ${conversationHistory}
 
-  Our conversation so far:
-  ${conversationHistory}
-  
-  Your personality is encouraging and curious. Keep your response concise and natural, like a real chat message.
-  
-  ${corrections ? `I have asked for corrections. If my last message "${userLastMessage}" has any grammatical errors, please provide a correction.` : `Respond naturally to my last message: "${userLastMessage}"`}
-  
-  Your entire response must be a single, valid JSON object with two properties: "text" (your conversational reply) and "correction" (the corrected version of my last message, or an empty string "" if no correction is needed).`;
+    My last message to you was: "${userLastMessage}"
+
+    Your task is to generate a conversational response in your native language (${partner.nativeLanguage}).
+    ${corrections ? `The user wants corrections. If their last message contains errors in ${partner.nativeLanguage}, provide a correction.` : ''}
+
+    IMPORTANT: Your entire response must be a single, valid JSON object. Do not include any text, greetings, or explanations outside of the JSON object.
+
+    The JSON object must have two string properties:
+    1. "text": Your conversational reply in ${partner.nativeLanguage}.
+    2. "correction": The corrected version of the user's last message. If there are no errors, this must be an empty string "".
+
+    Example of a valid response:
+    {
+      "text": "안녕하세요! 만나서 반가워요.",
+      "correction": ""
+    }
+
+    Now, generate the JSON object for your response.
+  `;
 
   try {
     const data = await callGeminiProxy(prompt);
-    // This is our robust JSON cleaning function from before
-    const aiResponse = cleanAndParseJson(data.candidates[0].content.parts[0].text);
+    const rawText = data.candidates[0].content.parts[0].text;
+    
+    let aiResponse;
+    try {
+      aiResponse = cleanAndParseJson(rawText);
+    } catch (e) {
+      console.warn("AI returned a non-JSON response. Treating as plain text.", rawText);
+      aiResponse = { text: rawText, correction: "" };
+    }
+
+    const responseText = aiResponse.text || "Sorry, I'm having trouble thinking right now.";
+
     return {
       sender: 'ai',
-      text: aiResponse.text,
+      text: responseText,
       correction: aiResponse.correction || undefined,
     };
   } catch (error) {
@@ -156,14 +200,52 @@ export const getContent = async (topic: string, type: 'Grammar' | 'Vocabulary', 
 };
 
 export const generateQuiz = async (topic: string, type: 'Grammar' | 'Vocabulary', language: string): Promise<QuizQuestion[]> => {
-  const prompt = `Create a multiple-choice quiz with exactly 8 questions... (rest of your prompt is the same)`; // Abridged for clarity
+  const prompt = `
+    You are a language teacher creating a quiz.
+    Your task is to generate a multiple-choice quiz based on the provided topic.
+
+    Language: ${language}
+    Topic: "${topic}"
+    Number of Questions: 8
+
+    IMPORTANT INSTRUCTIONS:
+    1.  Your entire response MUST be a single, valid JSON array.
+    2.  Do NOT include any text, greetings, titles, answer keys, or explanations outside of the JSON array.
+    3.  Each element in the array must be a JSON object representing one question.
+    4.  Each question object must have exactly three properties:
+        - "question": A string for the question text.
+        - "options": An array of exactly 4 strings for the multiple-choice options.
+        - "correctAnswer": A string that exactly matches one of the strings in the "options" array.
+
+    Example of a valid response format:
+    [
+      {
+        "question": "Which of these is a fruit?",
+        "options": ["Carrot", "Apple", "Broccoli", "Celery"],
+        "correctAnswer": "Apple"
+      },
+      {
+        "question": "What is the past tense of 'go'?",
+        "options": ["Goed", "Gone", "Went", "Going"],
+        "correctAnswer": "Went"
+      }
+    ]
+
+    Now, generate the JSON array for the quiz about "${topic}" in the ${language} language.
+  `;
 
   try {
     const data = await callGeminiProxy(prompt);
-    // And finally, use the helper function here
-    return cleanAndParseJson(data.candidates[0].content.parts[0].text);
+    const rawText = data.candidates[0].content.parts[0].text;
+    const quizData = cleanAndParseJson(rawText);
+
+    if (!Array.isArray(quizData) || quizData.length === 0) {
+      throw new Error("AI returned an empty or invalid array for the quiz.");
+    }
+
+    return quizData;
   } catch (error) {
     console.error("Error generating quiz:", error);
-    throw new Error("Failed to generate quiz.");
+    throw new Error("Failed to generate quiz. The AI may have returned an invalid format.");
   }
 };

@@ -223,7 +223,13 @@ const QuizModal: React.FC<{ questions: QuizQuestion[]; topic: string; onClose: (
 
 
 // Teach Me Modal Component
-const TeachMeModal: React.FC<{ language: string; onClose: () => void; nativeLanguage: string; }> = ({ language, onClose, nativeLanguage }) => {
+const TeachMeModal: React.FC<{ 
+    language: string; 
+    onClose: () => void; 
+    nativeLanguage: string;
+    cache: { language: string; type: string; topic: string; content: string; } | null;
+    setCache: (cache: { language: string; type: string; topic: string; content: string; } | null) => void;
+}> = ({ language, onClose, nativeLanguage, cache, setCache }) => {
     const [activeTab, setActiveTab] = useState<'Grammar' | 'Vocabulary'>('Grammar');
     const [level, setLevel] = useState(1); // State for the difficulty level
     const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
@@ -231,6 +237,14 @@ const TeachMeModal: React.FC<{ language: string; onClose: () => void; nativeLang
     const [isLoading, setIsLoading] = useState(false);
     const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[] | null>(null);
     const [showQuiz, setShowQuiz] = useState(false);
+
+    useEffect(() => {
+        if (cache && cache.language === language) {
+            setActiveTab(cache.type as 'Grammar' | 'Vocabulary');
+            setSelectedTopic(cache.topic);
+            setContent(cache.content);
+        }
+    }, [cache, language]);
 
     // Reset topic when tab or level changes
     useEffect(() => {
@@ -261,6 +275,8 @@ const TeachMeModal: React.FC<{ language: string; onClose: () => void; nativeLang
             const nativeLanguageName = LANGUAGES.find(lang => lang.code === nativeLanguage)?.name || nativeLanguage;
             const fetchedContent = await geminiService.getContent(topic, activeTab, language, nativeLanguageName);
             setContent(fetchedContent);
+            // Save the successful fetch to the cache
+            setCache({ language, type: activeTab, topic, content: fetchedContent }); 
         } catch (error) {
             setContent('Sorry, there was an error loading the content. Please try again.');
         } finally {
@@ -345,7 +361,9 @@ const ChatModal: React.FC<{
   onSaveChat: (messages: Message[]) => void;
   userProfile: UserProfileData;
   nativeLanguage: string;
-}> = ({ partner, initialMessages, onClose, onSaveChat, userProfile, nativeLanguage }) => { 
+  teachMeCache: { language: string; type: string; topic: string; content: string; } | null;
+  setTeachMeCache: (cache: { language: string; type: string; topic: string; content: string; } | null) => void;
+}> = ({ partner, initialMessages, onClose, onSaveChat, nativeLanguage, teachMeCache, setTeachMeCache }) => {
     const [messages, setMessages] = useState<Message[]>(initialMessages);
     const [newMessage, setNewMessage] = useState('');
     const [isSending, setIsSending] = useState(false);
@@ -466,7 +484,13 @@ const ChatModal: React.FC<{
                     </div>
                 </div>
             </div>
-            {showTeachMe && <TeachMeModal language={partnerLanguageName} onClose={() => setShowTeachMe(false)} nativeLanguage={nativeLanguage} />}
+            {showTeachMe && <TeachMeModal 
+                language={partnerLanguageName} 
+                onClose={() => setShowTeachMe(false)} 
+                nativeLanguage={nativeLanguage}
+                cache={teachMeCache}
+                setCache={setTeachMeCache}
+            />}   
         </div>
     );
 };
@@ -484,6 +508,8 @@ const App: React.FC = () => {
   const [currentChatMessages, setCurrentChatMessages] = useState<Message[]>([]);
   const [savedChat, setSavedChat] = useStickyState<SavedChat | null>(null, 'savedChat');
   const [showTutorial, setShowTutorial] = useStickyState<boolean>(true, 'showTutorial');
+  const [teachMeCache, setTeachMeCache] = useState<{ language: string; type: string; topic: string; content: string; } | null>(null);
+
 
   const findPartners = useCallback(async () => {
     setIsLoadingPartners(true);
@@ -587,7 +613,15 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {currentPartner && <ChatModal partner={currentPartner} initialMessages={currentChatMessages} onClose={handleCloseChat} onSaveChat={handleSaveChat} nativeLanguage={nativeLanguage}/>}
+      {currentPartner && <ChatModal 
+        partner={currentPartner} 
+        initialMessages={currentChatMessages} 
+        onClose={handleCloseChat} 
+        onSaveChat={handleSaveChat} 
+        nativeLanguage={nativeLanguage}
+        teachMeCache={teachMeCache}
+        setTeachMeCache={setTeachMeCache}
+      />} 
       {showTutorial && <TutorialModal onClose={() => setShowTutorial(false)} />}
     </div>
   );
