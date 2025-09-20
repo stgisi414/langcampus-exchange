@@ -66,3 +66,58 @@ export const geminiProxy = onRequest(
     });
   }
 );
+
+export const geminiTTS = onRequest(
+  {secrets: ["GEMINI_API_KEY"]},
+  (request, response) => {
+    corsHandler(request, response, async () => {
+      logger.info("TTS Function started, CORS check passed.");
+
+      if (request.method !== "POST") {
+        response.status(405).send("Method Not Allowed");
+        return;
+      }
+
+      const {text, languageCode} = request.body;
+      if (!text || !languageCode) {
+        response.status(400).send("Bad Request: Missing text or languageCode");
+        return;
+      }
+
+      const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+      if (!GEMINI_API_KEY) {
+        response.status(500).send("Internal Server Error: API key not configured.");
+        return;
+      }
+
+      try {
+        const ttsUrl = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${GEMINI_API_KEY}`;
+        const ttsResponse = await fetch(
+          ttsUrl,
+          {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+              input: {text},
+              voice: {languageCode, model_name:"gemini-2.5-pro-preview-tts"},
+              audioConfig: {audioEncoding: "MP3"},
+            }),
+          }
+        );
+
+        if (!ttsResponse.ok) {
+          const errorText = await ttsResponse.text();
+          logger.error("Error from Text-to-Speech API:", errorText);
+          response.status(ttsResponse.status).send(errorText);
+          return;
+        }
+
+        const data = await ttsResponse.json();
+        response.json(data);
+      } catch (error) {
+        logger.error("Error calling Text-to-Speech API:", error);
+        response.status(500).send("Internal Server Error");
+      }
+    });
+  }
+);

@@ -2,6 +2,8 @@ import { Message, Partner, QuizQuestion } from '../types';
 
 // Make sure this is the correct URL for your deployed Cloud Function.
 const PROXY_URL = "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiProxy"; // Replace if yours is different
+const TTS_PROXY_URL = "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiTTS";
+
 
 /**
  * A helper function to safely parse JSON from the AI,
@@ -49,6 +51,30 @@ const callGeminiProxy = async (prompt: string) => {
   }
 };
 
+export const synthesizeSpeech = async (text: string, languageCode: string): Promise<string> => {
+  try {
+    const response = await fetch(TTS_PROXY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ text, languageCode }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Error from TTS proxy function:", errorText);
+      throw new Error(`TTS proxy request failed: ${errorText}`);
+    }
+
+    const data = await response.json();
+    return data.audioContent;
+  } catch (error) {
+    console.error("Error calling the TTS proxy function:", error);
+    throw error;
+  }
+}
+
 export const generatePartners = async (nativeLanguage: string, targetLanguage: string, userInterests: string): Promise<Partner[]> => {
   const prompt = `Generate a diverse list of 6 JSON objects representing language exchange partners.
     My native language is ${nativeLanguage}. I want to learn ${targetLanguage}.
@@ -72,38 +98,26 @@ export const generatePartners = async (nativeLanguage: string, targetLanguage: s
   }
 };
 
-export const getChatResponse = async (messages: Message[], partner: Partner, corrections: boolean): Promise<Message> => {
-  const conversationHistory = messages.map(m => `${m.sender === 'user' ? 'Me' : partner.name}: ${m.text}`).join('\n');
+export const getChatResponse = async (messages: Message[], partner: Partner, corrections: boolean, userProfile: UserProfileData): Promise<Message> => {
+  const conversationHistory = messages.map(m => `${m.sender === 'user' ? userProfile.name || 'Me' : partner.name}: ${m.text}`).join('\n');
   const userLastMessage = messages[messages.length - 1].text;
 
-  // This prompt is much more direct and less conversational to force JSON output.
-  const prompt = `
-    You are an AI language partner.
-    Conversation history:
-    ${conversationHistory}
+  const prompt = `You are ${partner.name}, a friendly language exchange partner. Your native language is ${partner.nativeLanguage}.
 
-    My last message was: "${userLastMessage}"
+  You are talking to ${userProfile.name || 'a new friend'}. Their hobbies are ${userProfile.hobbies || 'not specified'}, and their bio is: "${userProfile.bio || 'not specified'}". Use this information to make the conversation more personal and engaging.
 
-    Your task is to generate a response.
-    ${corrections ? `I have requested corrections. If my last message has errors, provide a corrected version.` : ''}
-
-    IMPORTANT: Your entire response must be a single, valid JSON object. Do not include any text, greetings, or explanations outside of the JSON object.
-
-    The JSON object must have two string properties:
-    1. "text": Your conversational reply to my last message.
-    2. "correction": The corrected version of my last message. If there are no errors, this must be an empty string "".
-
-    Example of a valid response:
-    {
-      "text": "Hello! It's nice to meet you too.",
-      "correction": "It's nice to meet you."
-    }
-
-    Now, generate the JSON object for your response.
-  `;
+  Our conversation so far:
+  ${conversationHistory}
+  
+  Your personality is encouraging and curious. Keep your response concise and natural, like a real chat message.
+  
+  ${corrections ? `I have asked for corrections. If my last message "${userLastMessage}" has any grammatical errors, please provide a correction.` : `Respond naturally to my last message: "${userLastMessage}"`}
+  
+  Your entire response must be a single, valid JSON object with two properties: "text" (your conversational reply) and "correction" (the corrected version of my last message, or an empty string "" if no correction is needed).`;
 
   try {
     const data = await callGeminiProxy(prompt);
+    // This is our robust JSON cleaning function from before
     const aiResponse = cleanAndParseJson(data.candidates[0].content.parts[0].text);
     return {
       sender: 'ai',

@@ -5,6 +5,7 @@ import { LANGUAGES } from './constants';
 import * as geminiService from './services/geminiService';
 import { ChevronDownIcon, CloseIcon, InfoIcon, TrashIcon, BookOpenIcon, VolumeUpIcon, SaveIcon, SendIcon } from './components/Icons';
 import LoadingSpinner from './components/LoadingSpinner';
+import { grammarData, vocabData } from './teachMeData';
 
 // Helper for localStorage
 const useStickyState = <T,>(defaultValue: T, key: string): [T, React.Dispatch<React.SetStateAction<T>>] => {
@@ -224,16 +225,32 @@ const QuizModal: React.FC<{ questions: QuizQuestion[]; topic: string; onClose: (
 // Teach Me Modal Component
 const TeachMeModal: React.FC<{ language: string; onClose: () => void }> = ({ language, onClose }) => {
     const [activeTab, setActiveTab] = useState<'Grammar' | 'Vocabulary'>('Grammar');
+    const [level, setLevel] = useState(1); // State for the difficulty level
     const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
     const [content, setContent] = useState<string>('');
     const [isLoading, setIsLoading] = useState(false);
     const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[] | null>(null);
     const [showQuiz, setShowQuiz] = useState(false);
 
-    const topics = {
-        Grammar: ['Verb Tenses', 'Articles (a, an, the)', 'Prepositions', 'Conditionals'],
-        Vocabulary: ['Common Greetings', 'Food and Dining', 'Travel', 'Daily Routines']
+    // Reset topic when tab or level changes
+    useEffect(() => {
+        setSelectedTopic(null);
+        setContent('');
+        setQuizQuestions(null);
+    }, [activeTab, level]);
+
+    const getTopicsForLevel = () => {
+        if (activeTab === 'Grammar') {
+            const langData = grammarData[language as keyof typeof grammarData] || [];
+            return langData.filter(topic => topic.level === level).map(topic => topic.title);
+        }
+        if (activeTab === 'Vocabulary') {
+            return vocabData.filter(topic => topic.level === level).map(topic => topic.title);
+        }
+        return [];
     };
+
+    const availableTopics = getTopicsForLevel();
 
     const handleTopicSelect = async (topic: string) => {
         setSelectedTopic(topic);
@@ -249,7 +266,7 @@ const TeachMeModal: React.FC<{ language: string; onClose: () => void }> = ({ lan
             setIsLoading(false);
         }
     };
-    
+
     const handleQuizMe = async () => {
         if (!selectedTopic) return;
         setIsLoading(true);
@@ -274,19 +291,29 @@ const TeachMeModal: React.FC<{ language: string; onClose: () => void }> = ({ lan
                     </button>
                 </div>
                 <div className="flex-grow flex overflow-hidden">
-                    <div className="w-1/3 border-r dark:border-gray-700 p-4 overflow-y-auto">
+                    <div className="w-1/3 border-r dark:border-gray-700 p-4 flex flex-col">
                         <div className="flex border-b dark:border-gray-600 mb-4">
                             <button onClick={() => setActiveTab('Grammar')} className={`flex-1 py-2 text-center ${activeTab === 'Grammar' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-500'}`}>Grammar</button>
                             <button onClick={() => setActiveTab('Vocabulary')} className={`flex-1 py-2 text-center ${activeTab === 'Vocabulary' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-500'}`}>Vocabulary</button>
                         </div>
-                        <ul className="space-y-2">
-                           {topics[activeTab].map(topic => (
+                        <div className="mb-4">
+                            <p className="font-semibold mb-2 text-center">Select Level:</p>
+                            <div className="flex justify-center gap-2">
+                                {[1, 2, 3, 4, 5].map(lvl => (
+                                    <button key={lvl} onClick={() => setLevel(lvl)} className={`px-3 py-1 rounded-full text-sm ${level === lvl ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>
+                                        {lvl}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <ul className="space-y-2 overflow-y-auto flex-grow">
+                           {availableTopics.length > 0 ? availableTopics.map(topic => (
                                 <li key={topic}>
-                                    <button onClick={() => handleTopicSelect(topic)} className={`w-full text-left p-2 rounded ${selectedTopic === topic ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+                                    <button onClick={() => handleTopicSelect(topic)} className={`w-full text-left p-2 rounded text-sm ${selectedTopic === topic ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
                                         {topic}
                                     </button>
                                 </li>
-                           ))}
+                           )) : <p className="text-gray-500 text-center p-4">No topics found for this level and language.</p>}
                         </ul>
                     </div>
                     <div className="w-2/3 p-6 overflow-y-auto">
@@ -315,7 +342,8 @@ const ChatModal: React.FC<{
   initialMessages: Message[];
   onClose: () => void;
   onSaveChat: (messages: Message[]) => void;
-}> = ({ partner, initialMessages, onClose, onSaveChat }) => {
+  userProfile: UserProfileData; // <-- ADD THIS LINE
+}> = ({ partner, initialMessages, onClose, onSaveChat, userProfile }) => { 
     const [messages, setMessages] = useState<Message[]>(initialMessages);
     const [newMessage, setNewMessage] = useState('');
     const [isSending, setIsSending] = useState(false);
@@ -327,10 +355,18 @@ const ChatModal: React.FC<{
         chatHistoryRef.current?.scrollTo(0, chatHistoryRef.current.scrollHeight);
     }, [messages]);
     
-    const handleSpeak = (text: string) => {
+    const handleSpeak = async (text: string, langCode: string) => {
+      try {
+        const audioContent = await geminiService.synthesizeSpeech(text, langCode);
+        const audio = new Audio("data:audio/mp3;base64," + audioContent);
+        audio.play();
+      } catch (error) {
+        console.error("Error synthesizing speech:", error);
+        // Fallback to browser's speech synthesis if the API fails
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = partner.nativeLanguage;
+        utterance.lang = langCode;
         window.speechSynthesis.speak(utterance);
+      }
     };
 
     const handleSendMessage = async (e: React.FormEvent) => {
@@ -344,7 +380,7 @@ const ChatModal: React.FC<{
 
         try {
             const updatedMessages = [...messages, userMessage];
-            const aiResponse = await geminiService.getChatResponse(updatedMessages, partner, correctionsEnabled);
+            const aiResponse = await geminiService.getChatResponse(updatedMessages, partner, correctionsEnabled, userProfile);
             setMessages(prev => [...prev, aiResponse]);
         } catch (error) {
             console.error(error);
@@ -383,7 +419,7 @@ const ChatModal: React.FC<{
                             <div className={`max-w-md p-3 rounded-lg ${msg.sender === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'}`}>
                                 <p>{msg.text}</p>
                                 {msg.correction && <p className="mt-2 pt-2 border-t border-green-300 dark:border-green-700 text-sm text-green-700 dark:text-green-300">Correction: <em>{msg.correction}</em></p>}
-                                <button onClick={() => handleSpeak(msg.text)} className="mt-1 text-xs opacity-60 hover:opacity-100">
+                                <button onClick={() => handleSpeak(msg.text, partner.nativeLanguage)} className="mt-1 text-xs opacity-60 hover:opacity-100">
                                     <VolumeUpIcon className="w-4 h-4 inline-block"/>
                                 </button>
                             </div>
@@ -421,7 +457,10 @@ const ChatModal: React.FC<{
                     </div>
                 </div>
             </div>
-            {showTeachMe && <TeachMeModal language={partner.nativeLanguage} onClose={() => setShowTeachMe(false)} />}
+            {showTeachMe && (() => {
+                const partnerLanguageName = LANGUAGES.find(lang => lang.code === partner.nativeLanguage)?.name || partner.nativeLanguage;
+                return <TeachMeModal language={partnerLanguageName} onClose={() => setShowTeachMe(false)} />;
+            })()}
         </div>
     );
 };
@@ -536,13 +575,13 @@ const App: React.FC = () => {
         )}
         {!isLoadingPartners && !error && partners.length === 0 && (
             <div className="text-center mt-12 text-gray-500">
-                <p className="text-xl">Welcome to Polyglot Pal!</p>
+                <p className="text-xl">Welcome to Langcampus Exchange!</p>
                 <p>Select your languages and click "Find New Pals" to start your journey.</p>
             </div>
         )}
       </main>
 
-      {currentPartner && <ChatModal partner={currentPartner} initialMessages={currentChatMessages} onClose={handleCloseChat} onSaveChat={handleSaveChat}/>}
+      {currentPartner && <ChatModal partner={currentPartner} initialMessages={currentChatMessages} onClose={handleCloseChat} onSaveChat={handleSaveChat} userProfile={userProfile}/>}
       {showTutorial && <TutorialModal onClose={() => setShowTutorial(false)} />}
     </div>
   );
