@@ -223,7 +223,7 @@ const QuizModal: React.FC<{ questions: QuizQuestion[]; topic: string; onClose: (
 
 
 // Teach Me Modal Component
-const TeachMeModal: React.FC<{ language: string; onClose: () => void }> = ({ language, onClose }) => {
+const TeachMeModal: React.FC<{ language: string; onClose: () => void; nativeLanguage: string; }> = ({ language, onClose, nativeLanguage }) => {
     const [activeTab, setActiveTab] = useState<'Grammar' | 'Vocabulary'>('Grammar');
     const [level, setLevel] = useState(1); // State for the difficulty level
     const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
@@ -258,7 +258,8 @@ const TeachMeModal: React.FC<{ language: string; onClose: () => void }> = ({ lan
         setContent('');
         setQuizQuestions(null);
         try {
-            const fetchedContent = await geminiService.getContent(topic, activeTab, language);
+            const nativeLanguageName = LANGUAGES.find(lang => lang.code === nativeLanguage)?.name || nativeLanguage;
+            const fetchedContent = await geminiService.getContent(topic, activeTab, language, nativeLanguageName);
             setContent(fetchedContent);
         } catch (error) {
             setContent('Sorry, there was an error loading the content. Please try again.');
@@ -342,8 +343,9 @@ const ChatModal: React.FC<{
   initialMessages: Message[];
   onClose: () => void;
   onSaveChat: (messages: Message[]) => void;
-  userProfile: UserProfileData; // <-- ADD THIS LINE
-}> = ({ partner, initialMessages, onClose, onSaveChat, userProfile }) => { 
+  userProfile: UserProfileData;
+  nativeLanguage: string;
+}> = ({ partner, initialMessages, onClose, onSaveChat, userProfile, nativeLanguage }) => { 
     const [messages, setMessages] = useState<Message[]>(initialMessages);
     const [newMessage, setNewMessage] = useState('');
     const [isSending, setIsSending] = useState(false);
@@ -355,16 +357,16 @@ const ChatModal: React.FC<{
         chatHistoryRef.current?.scrollTo(0, chatHistoryRef.current.scrollHeight);
     }, [messages]);
     
-    const handleSpeak = async (text: string, langCode: string) => {
+    const handleSpeak = async (text: string) => {
       try {
-        const audioContent = await geminiService.synthesizeSpeech(text, langCode);
+        const audioContent = await geminiService.synthesizeSpeech(text, partnerLanguageCode);
         const audio = new Audio("data:audio/mp3;base64," + audioContent);
         audio.play();
       } catch (error) {
         console.error("Error synthesizing speech:", error);
         // Fallback to browser's speech synthesis if the API fails
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = langCode;
+        utterance.lang = partnerLanguageCode;
         window.speechSynthesis.speak(utterance);
       }
     };
@@ -390,6 +392,13 @@ const ChatModal: React.FC<{
             setIsSending(false);
         }
     };
+
+    const partnerLanguageObject = LANGUAGES.find(lang => 
+      partner.nativeLanguage.startsWith(lang.code.split('-')[0])
+    ) || LANGUAGES.find(lang => lang.code === 'en-US')!;
+
+    const partnerLanguageName = partnerLanguageObject.name;
+    const partnerLanguageCode = partnerLanguageObject.code;
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-40 p-4" role="dialog" aria-modal="true">
@@ -419,7 +428,7 @@ const ChatModal: React.FC<{
                             <div className={`max-w-md p-3 rounded-lg ${msg.sender === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'}`}>
                                 <p>{msg.text}</p>
                                 {msg.correction && <p className="mt-2 pt-2 border-t border-green-300 dark:border-green-700 text-sm text-green-700 dark:text-green-300">Correction: <em>{msg.correction}</em></p>}
-                                <button onClick={() => handleSpeak(msg.text, partner.nativeLanguage)} className="mt-1 text-xs opacity-60 hover:opacity-100">
+                                <button onClick={() => handleSpeak(msg.text)} className="mt-1 text-xs opacity-60 hover:opacity-100">
                                     <VolumeUpIcon className="w-4 h-4 inline-block"/>
                                 </button>
                             </div>
@@ -457,10 +466,7 @@ const ChatModal: React.FC<{
                     </div>
                 </div>
             </div>
-            {showTeachMe && (() => {
-                const partnerLanguageName = LANGUAGES.find(lang => lang.code === partner.nativeLanguage)?.name || partner.nativeLanguage;
-                return <TeachMeModal language={partnerLanguageName} onClose={() => setShowTeachMe(false)} />;
-            })()}
+            {showTeachMe && <TeachMeModal language={partnerLanguageName} onClose={() => setShowTeachMe(false)} nativeLanguage={nativeLanguage} />}
         </div>
     );
 };
@@ -581,7 +587,7 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {currentPartner && <ChatModal partner={currentPartner} initialMessages={currentChatMessages} onClose={handleCloseChat} onSaveChat={handleSaveChat} userProfile={userProfile}/>}
+      {currentPartner && <ChatModal partner={currentPartner} initialMessages={currentChatMessages} onClose={handleCloseChat} onSaveChat={handleSaveChat} nativeLanguage={nativeLanguage}/>}
       {showTutorial && <TutorialModal onClose={() => setShowTutorial(false)} />}
     </div>
   );

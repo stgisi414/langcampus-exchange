@@ -130,10 +130,24 @@ export const getChatResponse = async (messages: Message[], partner: Partner, cor
   }
 };
 
-export const getContent = async (topic: string, type: 'Grammar' | 'Vocabulary', language: string): Promise<string> => {
-  const prompt = `You are a language teacher... (rest of your prompt is the same)`; // Abridged for clarity
+export const getContent = async (topic: string, type: 'Grammar' | 'Vocabulary', targetLanguage: string, nativeLanguage: string): Promise<string> => {
+  const prompt = `
+    You are an expert language teacher. Your student's native language is ${nativeLanguage}.
+    Your task is to provide a clear and comprehensive explanation for a language learner about a topic in their TARGET language, which is ${targetLanguage}.
+
+    **IMPORTANT INSTRUCTION:** Write the entire explanation in the student's NATIVE language (${nativeLanguage}). However, all examples of the target language must be clearly presented in ${targetLanguage}, followed by a translation into ${nativeLanguage}.
+
+    Language to Teach (Target Language): ${targetLanguage}
+    Language of Instruction (Native Language): ${nativeLanguage}
+    Topic Type: ${type}
+    Selected Topic: "${topic}"
+
+    Please provide a detailed lesson on this topic, following all instructions above. Use Markdown for formatting (headings, bold text, lists).
+    Return ONLY the lesson content in Markdown format. Do not include any conversational pleasantries or introductions.
+    `;
   try {
     const data = await callGeminiProxy(prompt);
+    // The response is expected to be Markdown text directly
     return data.candidates[0].content.parts[0].text;
   } catch (error) {
     console.error(`Error getting ${type} content:`, error);
