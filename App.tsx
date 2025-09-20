@@ -33,38 +33,57 @@ const UserProfile: React.FC<{
     setLocalProfile({ ...localProfile, [e.target.name]: e.target.value });
   };
   
-  const handleBlur = () => onProfileChange(localProfile);
+  const handleSaveAndClose = () => {
+    onProfileChange(localProfile);
+    setIsOpen(false);
+  };
 
   return (
-    <div className="absolute top-4 right-4 z-30">
+    <>
+      {/* This is the new, cleaner button that will open the modal */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-lg shadow-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-all"
-        aria-haspopup="true"
-        aria-expanded={isOpen}
+        onClick={() => setIsOpen(true)}
+        className="p-2 rounded-full text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+        aria-label="Open user profile"
       >
-        My Info <ChevronDownIcon className={`w-5 h-5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <InfoIcon className="w-6 h-6" />
       </button>
+      
+      {/* This is the modal that will appear when the button is clicked */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-gray-800 rounded-lg shadow-xl p-4 space-y-3 animate-fade-in-down" role="dialog">
-          <div>
-            <label htmlFor="name-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Name</label>
-            <input id="name-input" type="text" name="name" value={localProfile.name} onChange={handleChange} onBlur={handleBlur} className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 dark:text-gray-100" />
-          </div>
-          <div>
-            <label htmlFor="hobbies-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Hobbies</label>
-            <input id="hobbies-input" type="text" name="hobbies" value={localProfile.hobbies} onChange={handleChange} onBlur={handleBlur} placeholder="e.g., hiking, coding, music" className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 dark:text-gray-100" />
-          </div>
-          <div>
-            <label htmlFor="bio-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Bio</label>
-            <textarea id="bio-input" name="bio" rows={3} value={localProfile.bio} onChange={handleChange} onBlur={handleBlur} className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 dark:text-gray-100"></textarea>
-          </div>
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4" role="dialog" aria-modal="true">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md animate-fade-in-down">
+                 <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">My Info</h2>
+                    <button onClick={() => setIsOpen(false)} className="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200" aria-label="Close profile editor">
+                        <CloseIcon className="w-6 h-6" />
+                    </button>
+                </div>
+                <div className="p-6 space-y-4">
+                  <div>
+                    <label htmlFor="name-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Name</label>
+                    <input id="name-input" type="text" name="name" value={localProfile.name} onChange={handleChange} className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 dark:text-gray-100" />
+                  </div>
+                  <div>
+                    <label htmlFor="hobbies-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Hobbies</label>
+                    <input id="hobbies-input" type="text" name="hobbies" value={localProfile.hobbies} onChange={handleChange} placeholder="e.g., hiking, coding, music" className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 dark:text-gray-100" />
+                  </div>
+                  <div>
+                    <label htmlFor="bio-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Bio</label>
+                    <textarea id="bio-input" name="bio" rows={3} value={localProfile.bio} onChange={handleChange} className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 dark:text-gray-100"></textarea>
+                  </div>
+                </div>
+                 <div className="flex justify-end p-4 border-t dark:border-gray-700">
+                    <button onClick={handleSaveAndClose} className="px-6 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition-colors">
+                        Save and Close
+                    </button>
+                </div>
+            </div>
         </div>
       )}
-    </div>
+    </>
   );
 };
-
 
 // Partner Card Component
 const PartnerCard: React.FC<{
@@ -466,7 +485,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
-      <header className="bg-white dark:bg-gray-800 shadow-md p-4 flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0 relative">
+      <header className="bg-white dark:bg-gray-800 shadow-md p-4 flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
         <h1 className="text-3xl font-bold text-blue-600 dark:text-blue-400 flex items-center">
           <img src="/logo.png" alt="Langcampus Exchange Logo" className="h-8 w-8 mr-3" />
           Langcampus Exchange
@@ -477,8 +496,10 @@ const App: React.FC = () => {
            <button onClick={findPartners} disabled={isLoadingPartners} className="px-6 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
             {isLoadingPartners ? 'Searching...' : 'Find New Pals'}
           </button>
+           {/* The UserProfile is now here, inside the flex container */}
+           <UserProfile profile={userProfile} onProfileChange={setUserProfile} />
         </div>
-        <UserProfile profile={userProfile} onProfileChange={setUserProfile} />
+        {/* The old absolute positioning wrapper is gone */}
       </header>
 
       <main className="p-4 sm:p-8">
