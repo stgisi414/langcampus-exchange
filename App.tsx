@@ -467,7 +467,10 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
       <header className="bg-white dark:bg-gray-800 shadow-md p-4 flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0 relative">
-        <h1 className="text-3xl font-bold text-blue-600 dark:text-blue-400">Polyglot Pal</h1>
+        <h1 className="text-3xl font-bold text-blue-600 dark:text-blue-400 flex items-center">
+          <img src="/logo.png" alt="Langcampus Exchange Logo" className="h-8 w-8 mr-3" />
+          Langcampus Exchange
+        </h1>
         <div className="flex flex-col sm:flex-row items-center gap-4">
            <LanguageSelector label="I speak:" value={nativeLanguage} onChange={setNativeLanguage} options={LANGUAGES} />
            <LanguageSelector label="I want to learn:" value={targetLanguage} onChange={setTargetLanguage} options={LANGUAGES} />
@@ -483,7 +486,7 @@ const App: React.FC = () => {
             <div className="bg-blue-100 dark:bg-blue-900 border-l-4 border-blue-500 text-blue-700 dark:text-blue-200 p-4 rounded-md mb-6 flex justify-between items-center shadow-lg">
                 <div>
                     <p className="font-bold">New Here?</p>
-                    <p>Click the button to learn how to use Polyglot Pal.</p>
+                    <p>Click the button to learn how to use Langcampus Exchange.</p>
                 </div>
                 <button onClick={() => setShowTutorial(true)} className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">Show Tutorial</button>
             </div>
