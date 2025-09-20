@@ -143,10 +143,14 @@ const TutorialModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
 );
 
 // Quiz Modal Component
-const QuizModal: React.FC<{ questions: QuizQuestion[]; topic: string; onClose: () => void }> = ({ questions, topic, onClose }) => {
+const QuizModal: React.FC<{ questions: QuizQuestion[]; topic: string; onClose: () => void; onShareQuizResults: (topic: string, score: number, questions: QuizQuestion[], userAnswers: string[]) => void; }> = ({ questions, topic, onClose, onShareQuizResults }) => {
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [userAnswers, setUserAnswers] = useState<string[]>([]);
     const [showResults, setShowResults] = useState(false);
+    const handleShare = () => {
+        onShareQuizResults(topic, score, questions, userAnswers);
+        onClose(); // Close the quiz modal after sharing
+    };
 
     if (!questions || questions.length === 0) {
         return (
@@ -190,9 +194,14 @@ const QuizModal: React.FC<{ questions: QuizQuestion[]; topic: string; onClose: (
                     <div className="p-6 text-center space-y-4">
                         <p className="text-2xl text-gray-800 dark:text-gray-200">You scored</p>
                         <p className="text-5xl font-bold text-blue-500">{score} / {questions.length}</p>
-                        <button onClick={onClose} className="mt-4 px-6 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600">
-                            Finish
-                        </button>
+                        <div className="mt-4 flex justify-center gap-4">
+                            <button onClick={onClose} className="px-6 py-2 bg-gray-500 text-white font-bold rounded-lg hover:bg-gray-600">
+                                Finish
+                            </button>
+                            <button onClick={handleShare} className="px-6 py-2 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600">
+                                Discuss with Pal
+                            </button>
+                        </div>
                     </div>
                 ) : (
                     <div className="p-6 space-y-4">
@@ -229,7 +238,8 @@ const TeachMeModal: React.FC<{
     nativeLanguage: string;
     cache: { language: string; type: string; topic: string; content: string; } | null;
     setCache: (cache: { language: string; type: string; topic: string; content: string; } | null) => void;
-}> = ({ language, onClose, nativeLanguage, cache, setCache }) => {
+    onShareQuizResults: (topic: string, score: number, questions: QuizQuestion[], userAnswers: string[]) => void;
+}> = ({ language, onClose, nativeLanguage, cache, setCache, onShareQuizResults }) => {
     const [activeTab, setActiveTab] = useState<'Grammar' | 'Vocabulary'>('Grammar');
     const [level, setLevel] = useState(1); // State for the difficulty level
     const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
@@ -490,6 +500,7 @@ const ChatModal: React.FC<{
                 nativeLanguage={nativeLanguage}
                 cache={teachMeCache}
                 setCache={setTeachMeCache}
+                onShareQuizResults={onShareQuizResults}
             />}   
         </div>
     );
@@ -552,6 +563,32 @@ const App: React.FC = () => {
       if (window.confirm('Are you sure you want to delete this saved chat?')) {
           setSavedChat(null);
       }
+  };
+
+  const handleShareQuizResults = (topic: string, score: number, questions: QuizQuestion[], userAnswers: string[]) => {
+    let quizSummary = `I just took a quiz on "${topic}" and my score was ${score}/${questions.length}.`;
+    
+    if (score < questions.length) {
+      quizSummary += "\n\nHere are the questions I got wrong:\n";
+      questions.forEach((q, index) => {
+        if (userAnswers[index] !== q.correctAnswer) {
+          quizSummary += `- Question: "${q.question}"\n  - My answer: "${userAnswers[index]}"\n  - Correct answer: "${q.correctAnswer}"\n`;
+        }
+      });
+      quizSummary += "\nCan you help me understand my mistakes?";
+    } else {
+      quizSummary += " I got a perfect score! Let's talk about something related to this topic.";
+    }
+
+    const quizMessage: Message = { sender: 'user', text: quizSummary };
+    
+    // Add the summary to the chat and make sure the chat is open
+    setCurrentChatMessages(prev => [...prev, quizMessage]);
+    if (!currentPartner) {
+        // If for some reason the chat was closed, reopen it with the last saved partner or first available one.
+        const partnerToChatWith = savedChat?.partner || partners[0];
+        if(partnerToChatWith) setCurrentPartner(partnerToChatWith);
+    }
   };
 
   return (
@@ -621,6 +658,7 @@ const App: React.FC = () => {
         nativeLanguage={nativeLanguage}
         teachMeCache={teachMeCache}
         setTeachMeCache={setTeachMeCache}
+        onShareQuizResults={handleShareQuizResults}
       />} 
       {showTutorial && <TutorialModal onClose={() => setShowTutorial(false)} />}
     </div>
