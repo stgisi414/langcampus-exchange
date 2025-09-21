@@ -523,7 +523,7 @@ const App: React.FC = () => {
   const [teachMeCache, setTeachMeCache] = useState<{ language: string; type: string; topic: string; content: string; } | null>(null);
 
 
-  const findPartners = useCallback(async () => {
+  const findPartners = async () => {
     setIsLoadingPartners(true);
     setError(null);
     setPartners([]);
@@ -537,7 +537,7 @@ const App: React.FC = () => {
     } finally {
         setIsLoadingPartners(false);
     }
-  }, [nativeLanguage, targetLanguage, userProfile.hobbies]);
+  };
 
   const handleStartChat = (partner: Partner) => {
     setCurrentPartner(partner);
@@ -660,6 +660,7 @@ const App: React.FC = () => {
         teachMeCache={teachMeCache}
         setTeachMeCache={setTeachMeCache}
         onShareQuizResults={handleShareQuizResults}
+        userProfile={userProfile}
       />} 
       {showTutorial && <TutorialModal onClose={() => setShowTutorial(false)} />}
     </div>
