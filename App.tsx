@@ -87,34 +87,39 @@ const UserProfile: React.FC<{
 const PartnerCard: React.FC<{
   partner: Partner;
   onStartChat: (partner: Partner) => void;
-}> = ({ partner, onStartChat }) => (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden transform hover:-translate-y-1 transition-transform duration-300 flex flex-col">
-        <img src={partner.avatar} alt={partner.name} className="w-full h-48 object-cover"/>
-        <div className="p-4 flex flex-col flex-grow">
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white">{partner.name}</h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Speaks: {partner.nativeLanguage}</p>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Learning: {partner.learningLanguage}</p>
-            <div className="mt-2 flex-grow">
-                <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Interests:</p>
-                <div className="flex flex-wrap gap-1 mt-1">
-                    {partner.interests.slice(0, 3).map(interest => (
-                        <span key={interest} className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs rounded-full">{interest}</span>
-                    ))}
+}> = ({ partner, onStartChat }) => {
+    const nativeLangName = LANGUAGES.find(l => l.name === partner.nativeLanguage || l.code.split('-')[0] === partner.nativeLanguage)?.name || partner.nativeLanguage;
+    const learningLangName = LANGUAGES.find(l => l.name === partner.learningLanguage || l.code.split('-')[0] === partner.learningLanguage)?.name || partner.learningLanguage;
+
+    return (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden transform hover:-translate-y-1 transition-transform duration-300 flex flex-col">
+            <img src={partner.avatar} alt={partner.name} className="w-full h-48 object-cover"/>
+            <div className="p-4 flex flex-col flex-grow">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">{partner.name}</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Speaks: {nativeLangName}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Learning: {learningLangName}</p>
+                <div className="mt-2 flex-grow">
+                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Interests:</p>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                        {partner.interests.slice(0, 3).map(interest => (
+                            <span key={interest} className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs rounded-full">{interest}</span>
+                        ))}
+                    </div>
                 </div>
+                <button onClick={() => onStartChat(partner)} className="mt-4 w-full bg-blue-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors">
+                    Start Chat
+                </button>
             </div>
-            <button onClick={() => onStartChat(partner)} className="mt-4 w-full bg-blue-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600 transition-colors">
-                Start Chat
-            </button>
         </div>
-    </div>
-);
+    );
+};
 
 // Tutorial Modal Component
 const TutorialModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4" role="dialog" aria-modal="true">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col animate-fade-in-down">
             <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Welcome to Polyglot Pal!</h2>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Welcome to Langcampus Exchange!</h2>
                 <button onClick={onClose} className="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200" aria-label="Close tutorial">
                     <CloseIcon className="w-6 h-6" />
                 </button>
@@ -180,7 +185,6 @@ const QuizModal: React.FC<{
 
     const handleShare = () => {
         onShareQuizResults(topic, score, questions, userAnswers);
-        onClose(); // Close the quiz modal after sharing
     };
 
     return (
@@ -250,20 +254,25 @@ const TeachMeModal: React.FC<{
     const [isLoading, setIsLoading] = useState(false);
     const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[] | null>(null);
     const [showQuiz, setShowQuiz] = useState(false);
+    const isInitialRender = useRef(true);
 
     useEffect(() => {
+        // This effect runs only once when the modal is first opened.
         if (cache && cache.language === language) {
             setActiveTab(cache.type as 'Grammar' | 'Vocabulary');
+            
+            const topicData = (cache.type === 'Grammar'
+                ? grammarData[language as keyof typeof grammarData]
+                : vocabData
+            )?.find(t => t.title === cache.topic);
+
+            if (topicData) {
+                setLevel(topicData.level);
+            }
             setSelectedTopic(cache.topic);
             setContent(cache.content);
         }
-    }, [cache, language]);
-
-    useEffect(() => {
-        setSelectedTopic(null);
-        setContent('');
-        setQuizQuestions(null);
-    }, [activeTab, level]);
+    }, []);
 
     const getTopicsForLevel = () => {
         if (activeTab === 'Grammar') {
@@ -293,6 +302,11 @@ const TeachMeModal: React.FC<{
         } finally {
             setIsLoading(false);
         }
+    };
+
+    const handleShareAndClose = (topic: string, score: number, questions: QuizQuestion[], userAnswers: string[]) => {
+        onShareQuizResults(topic, score, questions, userAnswers);
+        onClose(); 
     };
 
     const handleQuizMe = async () => {
@@ -358,7 +372,7 @@ const TeachMeModal: React.FC<{
                     </button>
                 </div>
             </div>
-            {showQuiz && quizQuestions && <QuizModal questions={quizQuestions} topic={selectedTopic!} onClose={() => setShowQuiz(false)} onShareQuizResults={onShareQuizResults} />}
+            {showQuiz && quizQuestions && <QuizModal questions={quizQuestions} topic={selectedTopic!} onClose={() => setShowQuiz(false)} onShareQuizResults={handleShareAndClose} />}
         </div>
     );
 };
@@ -367,7 +381,8 @@ const TeachMeModal: React.FC<{
 // Chat Modal Component
 const ChatModal: React.FC<{
   partner: Partner;
-  initialMessages: Message[];
+  messages: Message[];
+  onMessagesChange: React.Dispatch<React.SetStateAction<Message[]>>;
   onClose: () => void;
   onSaveChat: (messages: Message[]) => void;
   nativeLanguage: string; 
@@ -375,18 +390,58 @@ const ChatModal: React.FC<{
   setTeachMeCache: (cache: { language: string; type: string; topic: string; content: string; } | null) => void;
   onShareQuizResults: (topic: string, score: number, questions: QuizQuestion[], userAnswers: string[]) => void;
   userProfile: UserProfileData;
-}> = ({ partner, initialMessages, onClose, onSaveChat, nativeLanguage, teachMeCache, setTeachMeCache, onShareQuizResults, userProfile }) => {
-    const [messages, setMessages] = useState<Message[]>(initialMessages);
+}> = ({ partner, messages, onMessagesChange, onClose, onSaveChat, nativeLanguage, teachMeCache, setTeachMeCache, onShareQuizResults, userProfile }) => {
     const [newMessage, setNewMessage] = useState('');
     const [isSending, setIsSending] = useState(false);
     const [correctionsEnabled, setCorrectionsEnabled] = useState(true);
     const [showTeachMe, setShowTeachMe] = useState(false);
     const chatHistoryRef = useRef<HTMLDivElement>(null);
+    const isMounted = useRef(false);
+    const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+    const getBotResponse = useCallback(async (currentMessages: Message[]) => {
+      if (isSending) return;
+      setIsSending(true);
+      try {
+        const aiResponse = await geminiService.getChatResponse(currentMessages, partner, correctionsEnabled, userProfile);
+        onMessagesChange(prev => [...prev, aiResponse]);
+      } catch (error) {
+        console.error(error);
+        const errorMessage: Message = { sender: 'ai', text: 'Sorry, I encountered an error. Please try again.' };
+        onMessagesChange(prev => [...prev, errorMessage]);
+      } finally {
+        setIsSending(false);
+      }
+    }, [partner, correctionsEnabled, userProfile, onMessagesChange, isSending]);
 
     useEffect(() => {
         chatHistoryRef.current?.scrollTo(0, chatHistoryRef.current.scrollHeight);
     }, [messages]);
     
+    useEffect(() => {
+      const lastMessage = messages[messages.length - 1];
+
+      // If the last message is from the user, get a response immediately.
+      if (lastMessage?.sender === 'user' && !isSending) {
+        getBotResponse(messages);
+      }
+    }, [messages, getBotResponse, isSending]); // This effect now ONLY handles responses to the user.
+
+    useEffect(() => {
+      // This effect ONLY handles the initial 8-second greeting timer.
+      if (messages.length === 0 && !isSending) {
+        const timer = setTimeout(() => {
+          // Check again inside the timeout in case a message was sent while waiting
+          if (messages.length === 0) {
+            getBotResponse([{ sender: 'user', text: '(Start of conversation)' }]);
+          }
+        }, 8000); // 8 seconds
+
+        // This cleanup function is crucial. It runs when the modal is closed.
+        return () => clearTimeout(timer);
+      }
+    }, [partner]); // Rerunning this logic every time the partner changes (i.e., a new chat is opened)
+
     const partnerLanguageObject = LANGUAGES.find(lang => 
       partner.nativeLanguage.startsWith(lang.code.split('-')[0])
     ) || LANGUAGES.find(lang => lang.code === 'en-US')!;
@@ -412,21 +467,8 @@ const ChatModal: React.FC<{
         if (!newMessage.trim() || isSending) return;
 
         const userMessage: Message = { sender: 'user', text: newMessage };
-        setMessages(prev => [...prev, userMessage]);
+        onMessagesChange(prev => [...prev, userMessage]);
         setNewMessage('');
-        setIsSending(true);
-
-        try {
-            const updatedMessages = [...messages, userMessage];
-            const aiResponse = await geminiService.getChatResponse(updatedMessages, partner, correctionsEnabled, userProfile);
-            setMessages(prev => [...prev, aiResponse]);
-        } catch (error) {
-            console.error(error);
-            const errorMessage: Message = { sender: 'ai', text: 'Sorry, I encountered an error. Please try again.' };
-            setMessages(prev => [...prev, errorMessage]);
-        } finally {
-            setIsSending(false);
-        }
     };
 
     return (
@@ -540,7 +582,11 @@ const App: React.FC = () => {
 
   const handleStartChat = (partner: Partner) => {
     setCurrentPartner(partner);
-    setCurrentChatMessages([]);
+    if (savedChat && savedChat.partner.name === partner.name) {
+      setCurrentChatMessages(savedChat.messages);
+    } else {
+      setCurrentChatMessages([]);
+    }
   };
 
   const handleCloseChat = () => setCurrentPartner(null);
@@ -572,7 +618,7 @@ const App: React.FC = () => {
       quizSummary += "\n\nHere are the questions I got wrong:\n";
       questions.forEach((q, index) => {
         if (userAnswers[index] !== q.correctAnswer) {
-          quizSummary += `- Question: "${q.question}"\n  - My answer: "${userAnswers[index]}"\n  - Correct answer: "${q.correctAnswer}"\n`;
+          quizSummary += `- Question: "${q.question}"\n  - My answer: "${userAnswers[index] || 'No answer'}"\n  - Correct answer: "${q.correctAnswer}"\n`;
         }
       });
       quizSummary += "\nCan you help me understand my mistakes?";
@@ -593,7 +639,7 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
       <header className="bg-white dark:bg-gray-800 shadow-md p-4 flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
         <h1 className="text-3xl font-bold text-blue-600 dark:text-blue-400 flex items-center">
-          <img src="/logo.png" alt="Langcampus Exchange Logo" className="h-8 w-8 mr-3" />
+          <img src="/logo.png" alt="Langcampus Exchange Logo" className="h-16 w-16 mr-3" />
           Langcampus Exchange
         </h1>
         <div className="flex flex-col sm:flex-row items-center gap-4">
@@ -640,7 +686,7 @@ const App: React.FC = () => {
         )}
         {!isLoadingPartners && !error && partners.length === 0 && (
             <div className="text-center mt-12 text-gray-500">
-                <p className="text-xl">Welcome to Polyglot Pal!</p>
+                <p className="text-xl">Welcome to Langcampus Exchange!</p>
                 <p>Select your languages and click "Find New Pals" to start your journey.</p>
             </div>
         )}
@@ -648,7 +694,8 @@ const App: React.FC = () => {
 
       {currentPartner && <ChatModal 
           partner={currentPartner} 
-          initialMessages={currentChatMessages} 
+          messages={currentChatMessages}
+          onMessagesChange={setCurrentChatMessages}
           onClose={handleCloseChat} 
           onSaveChat={handleSaveChat}
           nativeLanguage={nativeLanguage}
