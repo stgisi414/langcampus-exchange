@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { UserProfileData, Partner, Message, QuizQuestion, SavedChat, Language } from './types';
 import { LANGUAGES } from './constants';
@@ -41,7 +40,6 @@ const UserProfile: React.FC<{
 
   return (
     <>
-      {/* This is the new, cleaner button that will open the modal */}
       <button
         onClick={() => setIsOpen(true)}
         className="p-2 rounded-full text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -50,7 +48,6 @@ const UserProfile: React.FC<{
         <InfoIcon className="w-6 h-6" />
       </button>
       
-      {/* This is the modal that will appear when the button is clicked */}
       {isOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4" role="dialog" aria-modal="true">
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md animate-fade-in-down">
@@ -143,14 +140,15 @@ const TutorialModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
 );
 
 // Quiz Modal Component
-const QuizModal: React.FC<{ questions: QuizQuestion[]; topic: string; onClose: () => void; onShareQuizResults: (topic: string, score: number, questions: QuizQuestion[], userAnswers: string[]) => void; }> = ({ questions, topic, onClose, onShareQuizResults }) => {
+const QuizModal: React.FC<{ 
+    questions: QuizQuestion[]; 
+    topic: string; 
+    onClose: () => void;
+    onShareQuizResults: (topic: string, score: number, questions: QuizQuestion[], userAnswers: string[]) => void;
+}> = ({ questions, topic, onClose, onShareQuizResults }) => {
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [userAnswers, setUserAnswers] = useState<string[]>([]);
     const [showResults, setShowResults] = useState(false);
-    const handleShare = () => {
-        onShareQuizResults(topic, score, questions, userAnswers);
-        onClose(); // Close the quiz modal after sharing
-    };
 
     if (!questions || questions.length === 0) {
         return (
@@ -178,6 +176,11 @@ const QuizModal: React.FC<{ questions: QuizQuestion[]; topic: string; onClose: (
                 setShowResults(true);
             }
         }, 500);
+    };
+
+    const handleShare = () => {
+        onShareQuizResults(topic, score, questions, userAnswers);
+        onClose(); // Close the quiz modal after sharing
     };
 
     return (
@@ -241,7 +244,7 @@ const TeachMeModal: React.FC<{
     onShareQuizResults: (topic: string, score: number, questions: QuizQuestion[], userAnswers: string[]) => void;
 }> = ({ language, onClose, nativeLanguage, cache, setCache, onShareQuizResults }) => {
     const [activeTab, setActiveTab] = useState<'Grammar' | 'Vocabulary'>('Grammar');
-    const [level, setLevel] = useState(1); // State for the difficulty level
+    const [level, setLevel] = useState(1);
     const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
     const [content, setContent] = useState<string>('');
     const [isLoading, setIsLoading] = useState(false);
@@ -256,7 +259,6 @@ const TeachMeModal: React.FC<{
         }
     }, [cache, language]);
 
-    // Reset topic when tab or level changes
     useEffect(() => {
         setSelectedTopic(null);
         setContent('');
@@ -285,8 +287,7 @@ const TeachMeModal: React.FC<{
             const nativeLanguageName = LANGUAGES.find(lang => lang.code === nativeLanguage)?.name || nativeLanguage;
             const fetchedContent = await geminiService.getContent(topic, activeTab, language, nativeLanguageName);
             setContent(fetchedContent);
-            // Save the successful fetch to the cache
-            setCache({ language, type: activeTab, topic, content: fetchedContent }); 
+            setCache({ language, type: activeTab, topic, content: fetchedContent });
         } catch (error) {
             setContent('Sorry, there was an error loading the content. Please try again.');
         } finally {
@@ -357,7 +358,7 @@ const TeachMeModal: React.FC<{
                     </button>
                 </div>
             </div>
-            {showQuiz && quizQuestions && <QuizModal questions={quizQuestions} topic={selectedTopic!} onClose={() => setShowQuiz(false)} />}
+            {showQuiz && quizQuestions && <QuizModal questions={quizQuestions} topic={selectedTopic!} onClose={() => setShowQuiz(false)} onShareQuizResults={onShareQuizResults} />}
         </div>
     );
 };
@@ -369,12 +370,12 @@ const ChatModal: React.FC<{
   initialMessages: Message[];
   onClose: () => void;
   onSaveChat: (messages: Message[]) => void;
-  userProfile: UserProfileData;
-  nativeLanguage: string;
+  nativeLanguage: string; 
   teachMeCache: { language: string; type: string; topic: string; content: string; } | null;
   setTeachMeCache: (cache: { language: string; type: string; topic: string; content: string; } | null) => void;
   onShareQuizResults: (topic: string, score: number, questions: QuizQuestion[], userAnswers: string[]) => void;
-}> = ({ partner, initialMessages, onClose, onSaveChat, nativeLanguage, teachMeCache, setTeachMeCache }) => {
+  userProfile: UserProfileData;
+}> = ({ partner, initialMessages, onClose, onSaveChat, nativeLanguage, teachMeCache, setTeachMeCache, onShareQuizResults, userProfile }) => {
     const [messages, setMessages] = useState<Message[]>(initialMessages);
     const [newMessage, setNewMessage] = useState('');
     const [isSending, setIsSending] = useState(false);
@@ -386,6 +387,13 @@ const ChatModal: React.FC<{
         chatHistoryRef.current?.scrollTo(0, chatHistoryRef.current.scrollHeight);
     }, [messages]);
     
+    const partnerLanguageObject = LANGUAGES.find(lang => 
+      partner.nativeLanguage.startsWith(lang.code.split('-')[0])
+    ) || LANGUAGES.find(lang => lang.code === 'en-US')!;
+
+    const partnerLanguageName = partnerLanguageObject.name;
+    const partnerLanguageCode = partnerLanguageObject.code;
+
     const handleSpeak = async (text: string) => {
       try {
         const audioContent = await geminiService.synthesizeSpeech(text, partnerLanguageCode);
@@ -393,7 +401,6 @@ const ChatModal: React.FC<{
         audio.play();
       } catch (error) {
         console.error("Error synthesizing speech:", error);
-        // Fallback to browser's speech synthesis if the API fails
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = partnerLanguageCode;
         window.speechSynthesis.speak(utterance);
@@ -421,13 +428,6 @@ const ChatModal: React.FC<{
             setIsSending(false);
         }
     };
-
-    const partnerLanguageObject = LANGUAGES.find(lang => 
-      partner.nativeLanguage.startsWith(lang.code.split('-')[0])
-    ) || LANGUAGES.find(lang => lang.code === 'en-US')!;
-
-    const partnerLanguageName = partnerLanguageObject.name;
-    const partnerLanguageCode = partnerLanguageObject.code;
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-40 p-4" role="dialog" aria-modal="true">
@@ -502,7 +502,7 @@ const ChatModal: React.FC<{
                 cache={teachMeCache}
                 setCache={setTeachMeCache}
                 onShareQuizResults={onShareQuizResults}
-            />}   
+            />}
         </div>
     );
 };
@@ -521,7 +521,6 @@ const App: React.FC = () => {
   const [savedChat, setSavedChat] = useStickyState<SavedChat | null>(null, 'savedChat');
   const [showTutorial, setShowTutorial] = useStickyState<boolean>(true, 'showTutorial');
   const [teachMeCache, setTeachMeCache] = useState<{ language: string; type: string; topic: string; content: string; } | null>(null);
-
 
   const findPartners = async () => {
     setIsLoadingPartners(true);
@@ -583,10 +582,8 @@ const App: React.FC = () => {
 
     const quizMessage: Message = { sender: 'user', text: quizSummary };
     
-    // Add the summary to the chat and make sure the chat is open
     setCurrentChatMessages(prev => [...prev, quizMessage]);
     if (!currentPartner) {
-        // If for some reason the chat was closed, reopen it with the last saved partner or first available one.
         const partnerToChatWith = savedChat?.partner || partners[0];
         if(partnerToChatWith) setCurrentPartner(partnerToChatWith);
     }
@@ -605,10 +602,8 @@ const App: React.FC = () => {
            <button onClick={findPartners} disabled={isLoadingPartners} className="px-6 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
             {isLoadingPartners ? 'Searching...' : 'Find New Pals'}
           </button>
-           {/* The UserProfile is now here, inside the flex container */}
            <UserProfile profile={userProfile} onProfileChange={setUserProfile} />
         </div>
-        {/* The old absolute positioning wrapper is gone */}
       </header>
 
       <main className="p-4 sm:p-8">
@@ -645,23 +640,23 @@ const App: React.FC = () => {
         )}
         {!isLoadingPartners && !error && partners.length === 0 && (
             <div className="text-center mt-12 text-gray-500">
-                <p className="text-xl">Welcome to Langcampus Exchange!</p>
+                <p className="text-xl">Welcome to Polyglot Pal!</p>
                 <p>Select your languages and click "Find New Pals" to start your journey.</p>
             </div>
         )}
       </main>
 
       {currentPartner && <ChatModal 
-        partner={currentPartner} 
-        initialMessages={currentChatMessages} 
-        onClose={handleCloseChat} 
-        onSaveChat={handleSaveChat} 
-        nativeLanguage={nativeLanguage}
-        teachMeCache={teachMeCache}
-        setTeachMeCache={setTeachMeCache}
-        onShareQuizResults={handleShareQuizResults}
-        userProfile={userProfile}
-      />} 
+          partner={currentPartner} 
+          initialMessages={currentChatMessages} 
+          onClose={handleCloseChat} 
+          onSaveChat={handleSaveChat}
+          nativeLanguage={nativeLanguage}
+          teachMeCache={teachMeCache}
+          setTeachMeCache={setTeachMeCache}
+          onShareQuizResults={handleShareQuizResults}
+          userProfile={userProfile}
+      />}
       {showTutorial && <TutorialModal onClose={() => setShowTutorial(false)} />}
     </div>
   );
