@@ -1,11 +1,11 @@
-import { Message, Partner, QuizQuestion } from '../types';
+import { Message, Partner, QuizQuestion, UserProfileData } from '../types';
 
 // Make sure this is the correct URL for your deployed Cloud Function.
-//const PROXY_URL = "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiProxy"; // Replace if yours is different
-//const TTS_PROXY_URL = "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiTTS";
-//Functions emulator addresses
-const PROXY_URL = "http://127.0.0.1:5001/langcampus-exchange/us-central1/geminiProxy";
-const TTS_PROXY_URL = "http://127.0.0.1:5001/langcampus-exchange/us-central1/geminiTTS";
+const PROXY_URL = "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiProxy"; // Replace if yours is different
+const TTS_PROXY_URL = "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiTTS";
+// Functions emulator addresses
+// const PROXY_URL = "http://127.0.0.1:5001/langcampus-exchange/us-central1/geminiProxy";
+// const TTS_PROXY_URL = "http://127.0.0.1:5001/langcampus-exchange/us-central1/geminiTTS";
 
 /**
  * A helper function to safely parse JSON from the AI,
@@ -108,7 +108,6 @@ export const generatePartners = async (nativeLanguage: string, targetLanguage: s
 };
 
 export const getChatResponse = async (messages: Message[], partner: Partner, corrections: boolean, userProfile: UserProfileData): Promise<Message> => {
-  // 1. Guard Clause: Prevent crashes if partner is invalid
   if (!partner || !partner.name) {
     console.error("getChatResponse called with an invalid partner object.");
     return { sender: 'ai', text: "Sorry, there's a problem with my memory. Please try starting a new chat." };
@@ -117,10 +116,8 @@ export const getChatResponse = async (messages: Message[], partner: Partner, cor
   const conversationHistory = messages.map(m => `${m.sender === 'user' ? 'Me' : partner.name}: ${m.text}`).join('\n');
   const userLastMessage = messages[messages.length - 1].text;
 
-  // 2. Enhanced Prompt: Give the AI a clear persona and instructions
   const prompt = `
-    You are an AI language exchange partner.
-    Your name is ${partner.name}.
+    You are an AI language exchange partner. Your name is ${partner.name}.
     Your native language is ${partner.nativeLanguage}.
     You are learning ${partner.learningLanguage}.
     Your interests include: ${partner.interests.join(', ')}.
@@ -134,22 +131,39 @@ export const getChatResponse = async (messages: Message[], partner: Partner, cor
 
     My last message to you was: "${userLastMessage}"
 
-    Your task is to generate a conversational response in your native language (${partner.nativeLanguage}).
-    ${corrections ? `The user wants corrections. If their last message contains errors in ${partner.nativeLanguage}, provide a correction.` : ''}
+    **Your Task:**
+    Your main goal is to help the user practice your native language (${partner.nativeLanguage}). Therefore, you should primarily respond in ${partner.nativeLanguage}.
+    
+    **EXCEPTION:** If the user's last message is clearly in their native language (${partner.learningLanguage}), it means they might be confused or asking for help. In this case, **you should respond in their native language (${partner.learningLanguage})** to be helpful and explain things clearly.
+    
+    ${corrections ? `The user wants corrections. If their last message contains errors in your native language (${partner.nativeLanguage}), provide a simple correction.` : ''}
 
-    IMPORTANT: Your entire response must be a single, valid JSON object. Do not include any text, greetings, or explanations outside of the JSON object.
+    **IMPORTANT:** Your entire response must be a single, valid JSON object. Do not include any text outside of the JSON object.
 
-    The JSON object must have two string properties:
-    1. "text": Your conversational reply in ${partner.nativeLanguage}.
-    2. "correction": The corrected version of the user's last message. If there are no errors, this must be an empty string "".
+    The JSON object must have three string properties:
+    1. "text": Your conversational reply. This can be in either your native language OR the user's native language, depending on the rule above.
+    2. "correction": The corrected version of the user's last message if it was in your native language and had errors. If there are no errors, or if the user spoke in their own language, this must be an empty string "".
+    3. "translation": If you reply in your native language (${partner.nativeLanguage}), provide a simple translation of your reply into the user's language (${partner.learningLanguage}). If you reply in the user's native language, this must be an empty string "".
 
-    Example of a valid response:
+    Example 1 (User speaks target language):
+    User message: "Hola! ¿Comó estás?"
+    Your JSON response:
     {
-      "text": "안녕하세요! 만나서 반가워요.",
-      "correction": ""
+      "text": "¡Hola! Estoy muy bien, gracias. ¿Y tú?",
+      "correction": "¿Cómo estás?",
+      "translation": "Hi! I'm very well, thank you. And you?"
     }
 
-    Now, generate the JSON object for your response.
+    Example 2 (User speaks their native language):
+    User message: "Sorry, I don't understand what 'biblioteca' means."
+    Your JSON response:
+    {
+      "text": "No problem! 'Biblioteca' means 'library' in Spanish. It's a place where you can borrow books.",
+      "correction": "",
+      "translation": ""
+    }
+
+    Now, generate the JSON object for your response based on my last message.
   `;
 
   try {
@@ -161,7 +175,7 @@ export const getChatResponse = async (messages: Message[], partner: Partner, cor
       aiResponse = cleanAndParseJson(rawText);
     } catch (e) {
       console.warn("AI returned a non-JSON response. Treating as plain text.", rawText);
-      aiResponse = { text: rawText, correction: "" };
+      aiResponse = { text: rawText, correction: "", translation: "" };
     }
 
     const responseText = aiResponse.text || "Sorry, I'm having trouble thinking right now.";
@@ -170,6 +184,7 @@ export const getChatResponse = async (messages: Message[], partner: Partner, cor
       sender: 'ai',
       text: responseText,
       correction: aiResponse.correction || undefined,
+      translation: aiResponse.translation || undefined,
     };
   } catch (error) {
     console.error("Error getting chat response:", error);

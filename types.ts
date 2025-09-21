@@ -1,4 +1,3 @@
-
 export interface UserProfileData {
   name: string;
   hobbies: string;
@@ -17,6 +16,7 @@ export interface Message {
   sender: 'user' | 'ai';
   text: string;
   correction?: string;
+  translation?: string;
 }
 
 export interface QuizQuestion {

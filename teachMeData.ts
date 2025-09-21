@@ -1449,6 +1449,8 @@ export const grammarData = {
         { "title": "Introduction to Hangul (한글 소개 - Korean Alphabet Overview)", "level": 1, "tags": ["basics", "writing system", "hangul", "introduction"] },
         { "title": "Hangul: Basic Vowels I (ㅏ, ㅓ, ㅗ, ㅜ, ㅡ, ㅣ)", "level": 1, "tags": ["basics", "writing system", "hangul", "vowels"] },
         { "title": "Hangul: Basic Vowels II (ㅑ, ㅕ, ㅛ, ㅠ)", "level": 1, "tags": ["basics", "writing system", "hangul", "vowels", "yotized vowels"] },
+        { "title": "Hangul: Diphthongs/Complex Vowels I (ㅐ, ㅔ, ㅒ, ㅖ)", "level": 1, "tags": ["basics", "writing system", "hangul", "vowels", "diphthongs"] },
+        { "title": "Hangul: Diphthongs/Complex Vowels II (ㅘ, ㅙ, ㅚ, ㅝ, ㅞ, ㅟ, ㅢ)", "level": 1, "tags": ["basics", "writing system", "hangul", "vowels", "diphthongs"] },
         { "title": "Hangul: Basic Consonants I (ㄱ, ㄴ, ㄷ, ㄹ, ㅁ, ㅂ, ㅅ, ㅇ, ㅈ, ㅎ)", "level": 1, "tags": ["basics", "writing system", "hangul", "consonants"] },
         { "title": "Hangul: Aspirated Consonants (ㅊ, ㅋ, ㅌ, ㅍ)", "level": 1, "tags": ["basics", "writing system", "hangul", "consonants", "aspirated"] },
         { "title": "Hangul: Syllable Block Structure (글자 구성 원리)", "level": 1, "tags": ["basics", "writing system", "hangul", "syllable structure"] },

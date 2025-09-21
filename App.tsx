@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { UserProfileData, Partner, Message, QuizQuestion, SavedChat, Language } from './types';
 import { LANGUAGES } from './constants';
 import * as geminiService from './services/geminiService';
-import { ChevronDownIcon, CloseIcon, InfoIcon, TrashIcon, BookOpenIcon, VolumeUpIcon, SaveIcon, SendIcon } from './components/Icons';
+import { ChevronDownIcon, CloseIcon, InfoIcon, TrashIcon, BookOpenIcon, VolumeUpIcon, SaveIcon, SendIcon, MenuIcon } from './components/Icons';
 import LoadingSpinner from './components/LoadingSpinner';
 import { grammarData, vocabData } from './teachMeData';
 
@@ -16,6 +16,53 @@ const useStickyState = <T,>(defaultValue: T, key: string): [T, React.Dispatch<Re
     window.localStorage.setItem(key, JSON.stringify(value));
   }, [key, value]);
   return [value, setValue];
+};
+
+// Helper function to decode base64 string to ArrayBuffer
+const base64ToArrayBuffer = (base64: string) => {
+  const binaryString = window.atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes.buffer;
+};
+
+// Helper function to convert raw PCM audio data to a playable WAV Blob
+const pcmToWav = (pcmData: Int16Array, sampleRate: number) => {
+  const numChannels = 1;
+  const bitsPerSample = 16;
+  const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+  const blockAlign = numChannels * (bitsPerSample / 8);
+  const dataSize = pcmData.length * (bitsPerSample / 8);
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+
+  // RIFF header
+  view.setUint32(0, 0x52494646, false); // "RIFF"
+  view.setUint32(4, 36 + dataSize, true);
+  view.setUint32(8, 0x57415645, false); // "WAVE"
+
+  // fmt sub-chunk
+  view.setUint32(12, 0x666d7420, false); // "fmt "
+  view.setUint32(16, 16, true); // Sub-chunk size
+  view.setUint16(20, 1, true); // Audio format (1 for PCM)
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitsPerSample, true);
+
+  // data sub-chunk
+  view.setUint32(36, 0x64617461, false); // "data"
+  view.setUint32(40, dataSize, true);
+
+  // Write PCM data
+  const pcm16 = new Int16Array(buffer, 44);
+  pcm16.set(pcmData);
+
+  return new Blob([view], { type: 'audio/wav' });
 };
 
 
@@ -255,6 +302,7 @@ const TeachMeModal: React.FC<{
     const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[] | null>(null);
     const [showQuiz, setShowQuiz] = useState(false);
     const isInitialRender = useRef(true);
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
 
     useEffect(() => {
         // This effect runs only once when the modal is first opened.
@@ -273,6 +321,20 @@ const TeachMeModal: React.FC<{
             setContent(cache.content);
         }
     }, []);
+
+     useEffect(() => {
+        // If the language prop changes while the modal is open,
+        // reset the state to avoid showing stale topics from the previous language.
+        if (!isInitialRender.current) {
+            setSelectedTopic(null);
+            setContent('');
+            setQuizQuestions(null);
+            setLevel(1);
+        } else {
+            isInitialRender.current = false;
+        }
+    }, [language]); // Dependency array includes 'language'
+
 
     const getTopicsForLevel = () => {
         if (activeTab === 'Grammar') {
@@ -324,19 +386,40 @@ const TeachMeModal: React.FC<{
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4" role="dialog" aria-modal="true">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col animate-fade-in-down">
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-start pt-10 sm:items-center sm:pt-0 z-50 p-4" role="dialog" aria-modal="true">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[95vw] max-w-4xl h-[90vh] flex flex-col animate-fade-in-down">
                 <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Teach Me: {language}</h2>
+                    <div className="flex items-center gap-2">
+                        <button onClick={() => setIsMenuOpen(true)} className="p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 md:hidden" aria-label="Open topics menu">
+                            <MenuIcon className="w-6 h-6" />
+                        </button>
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Teach Me: {language}</h2>
+                    </div>
                     <button onClick={onClose} className="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200" aria-label="Close learning module">
                         <CloseIcon className="w-6 h-6" />
                     </button>
                 </div>
-                <div className="flex-grow flex overflow-hidden">
-                    <div className="w-1/3 border-r dark:border-gray-700 p-4 flex flex-col">
+                <div className="flex-grow flex relative overflow-hidden">
+                    {/* Overlay for mobile view */}
+                    {isMenuOpen && (
+                        <div 
+                            onClick={() => setIsMenuOpen(false)} 
+                            className="fixed inset-0 bg-black bg-opacity-50 z-10 md:hidden"
+                            aria-hidden="true"
+                        ></div>
+                    )}
+
+                    {/* Left Side Menu (Topics) */}
+                    <div className={`absolute top-0 left-0 h-full w-4/5 max-w-sm bg-white dark:bg-gray-800 z-20 transform transition-transform p-4 flex flex-col md:static md:w-1/3 md:translate-x-0 md:border-r md:dark:border-gray-700 ${isMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+                        <div className="flex justify-between items-center mb-4 md:hidden">
+                            <h3 className="text-lg font-bold">Topics</h3>
+                            <button onClick={() => setIsMenuOpen(false)} className="p-1" aria-label="Close topics menu">
+                                <CloseIcon className="w-6 h-6" />
+                            </button>
+                        </div>
                         <div className="flex border-b dark:border-gray-600 mb-4">
-                            <button onClick={() => setActiveTab('Grammar')} className={`flex-1 py-2 text-center ${activeTab === 'Grammar' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-500'}`}>Grammar</button>
-                            <button onClick={() => setActiveTab('Vocabulary')} className={`flex-1 py-2 text-center ${activeTab === 'Vocabulary' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-500'}`}>Vocabulary</button>
+                             <button onClick={() => setActiveTab('Grammar')} className={`flex-1 py-2 text-center ${activeTab === 'Grammar' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-500'}`}>Grammar</button>
+                             <button onClick={() => setActiveTab('Vocabulary')} className={`flex-1 py-2 text-center ${activeTab === 'Vocabulary' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-500'}`}>Vocabulary</button>
                         </div>
                         <div className="mb-4">
                             <p className="font-semibold mb-2 text-center">Select Level:</p>
@@ -358,7 +441,9 @@ const TeachMeModal: React.FC<{
                            )) : <p className="text-gray-500 text-center p-4">No topics found for this level and language.</p>}
                         </ul>
                     </div>
-                    <div className="w-2/3 p-6 overflow-y-auto">
+                    
+                    {/* Right Side Content */}
+                    <div className="w-full p-6 overflow-y-auto">
                         {isLoading && <div className="flex justify-center items-center h-full"><LoadingSpinner /></div>}
                         {!isLoading && content && (
                             <div className="prose dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: (window as any).marked.parse(content) }}></div>
@@ -396,7 +481,6 @@ const ChatModal: React.FC<{
     const [correctionsEnabled, setCorrectionsEnabled] = useState(true);
     const [showTeachMe, setShowTeachMe] = useState(false);
     const chatHistoryRef = useRef<HTMLDivElement>(null);
-    const isMounted = useRef(false);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
 
     const getBotResponse = useCallback(async (currentMessages: Message[]) => {
@@ -420,30 +504,29 @@ const ChatModal: React.FC<{
     
     useEffect(() => {
       const lastMessage = messages[messages.length - 1];
-
-      // If the last message is from the user, get a response immediately.
       if (lastMessage?.sender === 'user' && !isSending) {
         getBotResponse(messages);
       }
-    }, [messages, getBotResponse, isSending]); // This effect now ONLY handles responses to the user.
+    }, [messages, getBotResponse, isSending]);
 
     useEffect(() => {
-      // This effect ONLY handles the initial 8-second greeting timer.
-      if (messages.length === 0 && !isSending) {
-        const timer = setTimeout(() => {
-          // Check again inside the timeout in case a message was sent while waiting
-          if (messages.length === 0) {
-            getBotResponse([{ sender: 'user', text: '(Start of conversation)' }]);
-          }
-        }, 8000); // 8 seconds
-
-        // This cleanup function is crucial. It runs when the modal is closed.
-        return () => clearTimeout(timer);
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
       }
-    }, [partner]); // Rerunning this logic every time the partner changes (i.e., a new chat is opened)
+      if (messages.length === 0 && !isSending) {
+        timerRef.current = setTimeout(() => {
+          getBotResponse([{ sender: 'user', text: '(Start of conversation)' }]);
+        }, 8000);
+      }
+      return () => {
+        if (timerRef.current) {
+          clearTimeout(timerRef.current);
+        }
+      };
+    }, [partner, messages, isSending, getBotResponse]);
 
     const partnerLanguageObject = LANGUAGES.find(lang => 
-      partner.nativeLanguage.startsWith(lang.code.split('-')[0])
+      lang.name.toLowerCase() === partner.nativeLanguage.toLowerCase()
     ) || LANGUAGES.find(lang => lang.code === 'en-US')!;
 
     const partnerLanguageName = partnerLanguageObject.name;
@@ -452,10 +535,16 @@ const ChatModal: React.FC<{
     const handleSpeak = async (text: string) => {
       try {
         const audioContent = await geminiService.synthesizeSpeech(text, partnerLanguageCode);
-        const audio = new Audio("data:audio/mp3;base64," + audioContent);
+        const pcmData = base64ToArrayBuffer(audioContent);
+        // The Gemini TTS model returns signed 16-bit PCM audio data at a 24000 Hz sample rate.
+        const pcm16 = new Int16Array(pcmData);
+        const wavBlob = pcmToWav(pcm16, 24000);
+        const audioUrl = URL.createObjectURL(wavBlob);
+        const audio = new Audio(audioUrl);
         audio.play();
       } catch (error) {
         console.error("Error synthesizing speech:", error);
+        // Fallback to browser's built-in speech synthesis
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = partnerLanguageCode;
         window.speechSynthesis.speak(utterance);
@@ -472,8 +561,8 @@ const ChatModal: React.FC<{
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-40 p-4" role="dialog" aria-modal="true">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col animate-fade-in-down">
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-start pt-10 sm:items-center sm:pt-0 z-40 p-4" role="dialog" aria-modal="true">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[95vw] max-w-2xl h-[90vh] flex flex-col animate-fade-in-down">
                 <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
                     <div className="flex items-center gap-3">
                         <img src={partner.avatar} alt={partner.name} className="w-12 h-12 rounded-full object-cover"/>
@@ -499,6 +588,7 @@ const ChatModal: React.FC<{
                             <div className={`max-w-md p-3 rounded-lg ${msg.sender === 'user' ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'}`}>
                                 <p>{msg.text}</p>
                                 {msg.correction && <p className="mt-2 pt-2 border-t border-green-300 dark:border-green-700 text-sm text-green-700 dark:text-green-300">Correction: <em>{msg.correction}</em></p>}
+                                {msg.translation && <p className="mt-2 pt-2 border-t border-gray-300 dark:border-gray-600 text-sm text-gray-500 dark:text-gray-400"><em>{msg.translation}</em></p>}
                                 <button onClick={() => handleSpeak(msg.text)} className="mt-1 text-xs opacity-60 hover:opacity-100">
                                     <VolumeUpIcon className="w-4 h-4 inline-block"/>
                                 </button>
@@ -563,6 +653,15 @@ const App: React.FC = () => {
   const [savedChat, setSavedChat] = useStickyState<SavedChat | null>(null, 'savedChat');
   const [showTutorial, setShowTutorial] = useStickyState<boolean>(true, 'showTutorial');
   const [teachMeCache, setTeachMeCache] = useState<{ language: string; type: string; topic: string; content: string; } | null>(null);
+
+  useEffect(() => {
+    // When the user changes their target language,
+    // clear out the old partners and the cached lesson content
+    // to avoid showing stale information.
+    setPartners([]);
+    setTeachMeCache(null);
+  }, [targetLanguage]);
+
 
   const findPartners = async () => {
     setIsLoadingPartners(true);
@@ -637,12 +736,12 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
-      <header className="bg-white dark:bg-gray-800 shadow-md p-4 flex flex-col sm:flex-row justify-between items-center space-y-4 sm:space-y-0">
+      <header className="bg-white dark:bg-gray-800 shadow-md p-4 flex flex-col md:flex-row justify-between items-center gap-4">
         <h1 className="text-3xl font-bold text-blue-600 dark:text-blue-400 flex items-center">
           <img src="/logo.png" alt="Langcampus Exchange Logo" className="h-16 w-16 mr-3" />
           Langcampus Exchange
         </h1>
-        <div className="flex flex-col sm:flex-row items-center gap-4">
+        <div className="flex flex-wrap items-center justify-center md:justify-end gap-4">
            <LanguageSelector label="I speak:" value={nativeLanguage} onChange={setNativeLanguage} options={LANGUAGES} />
            <LanguageSelector label="I want to learn:" value={targetLanguage} onChange={setTargetLanguage} options={LANGUAGES} />
            <button onClick={findPartners} disabled={isLoadingPartners} className="px-6 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
