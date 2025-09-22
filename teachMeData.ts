@@ -1453,6 +1453,7 @@ export const grammarData = {
         { "title": "Hangul: Diphthongs/Complex Vowels II (ㅘ, ㅙ, ㅚ, ㅝ, ㅞ, ㅟ, ㅢ)", "level": 1, "tags": ["basics", "writing system", "hangul", "vowels", "diphthongs"] },
         { "title": "Hangul: Basic Consonants I (ㄱ, ㄴ, ㄷ, ㄹ, ㅁ, ㅂ, ㅅ, ㅇ, ㅈ, ㅎ)", "level": 1, "tags": ["basics", "writing system", "hangul", "consonants"] },
         { "title": "Hangul: Aspirated Consonants (ㅊ, ㅋ, ㅌ, ㅍ)", "level": 1, "tags": ["basics", "writing system", "hangul", "consonants", "aspirated"] },
+        { "title": "Hangul: Double Consonats (ㄲ, ㄸ, ㅃ, ㅆ, ㅉ)", "level": 1, "tags": ["basics", "writing system", "hangul", "consonants", "double"] },
         { "title": "Hangul: Syllable Block Structure (글자 구성 원리)", "level": 1, "tags": ["basics", "writing system", "hangul", "syllable structure"] },
         { "title": "Basic Pronunciation Rules: Introduction (기본 발음 규칙 소개)", "level": 1, "tags": ["basics", "pronunciation", "rules"] },
 

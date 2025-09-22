@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { UserProfileData, Partner, Message, QuizQuestion, SavedChat, Language } from './types';
 import { LANGUAGES } from './constants';
 import * as geminiService from './services/geminiService';
-import { ChevronDownIcon, CloseIcon, InfoIcon, TrashIcon, BookOpenIcon, VolumeUpIcon, SaveIcon, SendIcon, MenuIcon } from './components/Icons';
+import { ChevronDownIcon, CloseIcon, InfoIcon, TrashIcon, BookOpenIcon, VolumeUpIcon, SaveIcon, SendIcon, MenuIcon, SearchIcon } from './components/Icons';
 import LoadingSpinner from './components/LoadingSpinner';
 import { grammarData, vocabData } from './teachMeData';
 
@@ -303,6 +303,7 @@ const TeachMeModal: React.FC<{
     const [showQuiz, setShowQuiz] = useState(false);
     const isInitialRender = useRef(true);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
 
     useEffect(() => {
         // This effect runs only once when the modal is first opened.
@@ -336,18 +337,21 @@ const TeachMeModal: React.FC<{
     }, [language]); // Dependency array includes 'language'
 
 
-    const getTopicsForLevel = () => {
-        if (activeTab === 'Grammar') {
-            const langData = grammarData[language as keyof typeof grammarData] || [];
-            return langData.filter(topic => topic.level === level).map(topic => topic.title);
-        }
-        if (activeTab === 'Vocabulary') {
-            return vocabData.filter(topic => topic.level === level).map(topic => topic.title);
-        }
-        return [];
-    };
+    const availableTopics = useMemo(() => {
+        const data = activeTab === 'Grammar'
+            ? grammarData[language as keyof typeof grammarData] || []
+            : vocabData;
 
-    const availableTopics = getTopicsForLevel();
+        if (searchQuery.trim()) {
+            const lowercasedQuery = searchQuery.toLowerCase();
+            return data.filter(topic =>
+                topic.title.toLowerCase().includes(lowercasedQuery) ||
+                topic.tags.some(tag => tag.toLowerCase().includes(lowercasedQuery))
+            );
+        } else {
+            return data.filter(topic => topic.level === level);
+        }
+    }, [activeTab, level, language, searchQuery]);
 
     const handleTopicSelect = async (topic: string) => {
         setSelectedTopic(topic);
@@ -417,28 +421,49 @@ const TeachMeModal: React.FC<{
                                 <CloseIcon className="w-6 h-6" />
                             </button>
                         </div>
-                        <div className="flex border-b dark:border-gray-600 mb-4">
-                             <button onClick={() => setActiveTab('Grammar')} className={`flex-1 py-2 text-center ${activeTab === 'Grammar' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-500'}`}>Grammar</button>
-                             <button onClick={() => setActiveTab('Vocabulary')} className={`flex-1 py-2 text-center ${activeTab === 'Vocabulary' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-500'}`}>Vocabulary</button>
+                        
+                        <div className="relative mb-4">
+                            <input
+                                type="text"
+                                placeholder="Search lessons..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-full bg-gray-100 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                         </div>
-                        <div className="mb-4">
-                            <p className="font-semibold mb-2 text-center">Select Level:</p>
-                            <div className="flex justify-center gap-2">
-                                {[1, 2, 3, 4, 5].map(lvl => (
-                                    <button key={lvl} onClick={() => setLevel(lvl)} className={`px-3 py-1 rounded-full text-sm ${level === lvl ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>
-                                        {lvl}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
+
+                        {searchQuery.trim() === '' ? (
+                            <>
+                                <div className="flex border-b dark:border-gray-600 mb-4">
+                                     <button onClick={() => setActiveTab('Grammar')} className={`flex-1 py-2 text-center ${activeTab === 'Grammar' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-500'}`}>Grammar</button>
+                                     <button onClick={() => setActiveTab('Vocabulary')} className={`flex-1 py-2 text-center ${activeTab === 'Vocabulary' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-500'}`}>Vocabulary</button>
+                                </div>
+                                <div className="mb-4">
+                                    <p className="font-semibold mb-2 text-center">Select Level:</p>
+                                    <div className="flex justify-center gap-2">
+                                        {[1, 2, 3, 4, 5].map(lvl => (
+                                            <button key={lvl} onClick={() => setLevel(lvl)} className={`px-3 py-1 rounded-full text-sm ${level === lvl ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>
+                                                {lvl}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                           <div className="text-center mb-2">
+                             <p className="font-semibold">Search Results</p>
+                           </div>
+                        )}
+
                         <ul className="space-y-2 overflow-y-auto flex-grow">
                            {availableTopics.length > 0 ? availableTopics.map(topic => (
-                                <li key={topic}>
-                                    <button onClick={() => handleTopicSelect(topic)} className={`w-full text-left p-2 rounded text-sm ${selectedTopic === topic ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
-                                        {topic}
+                                <li key={topic.title}>
+                                    <button onClick={() => handleTopicSelect(topic.title)} className={`w-full text-left p-2 rounded text-sm ${selectedTopic === topic.title ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+                                        {topic.title}
                                     </button>
                                 </li>
-                           )) : <p className="text-gray-500 text-center p-4">No topics found for this level and language.</p>}
+                           )) : <p className="text-gray-500 text-center p-4">No topics found.</p>}
                         </ul>
                     </div>
                     

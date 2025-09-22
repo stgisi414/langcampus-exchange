@@ -40,7 +40,7 @@ export const geminiProxy = onRequest(
       }
 
       try {
-        const modelUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${GEMINI_API_KEY}`;
+        const modelUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 
         const geminiResponse = await fetch(
           modelUrl,
