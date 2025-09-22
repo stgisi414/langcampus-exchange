@@ -4,6 +4,9 @@ import { Response } from "express";
 import * as logger from "firebase-functions/logger";
 import Stripe from "stripe";
 import { getFirestore } from "firebase-admin/firestore";
+import { initializeApp } from "firebase-admin/app";
+
+initializeApp();
 
 // This is the list of all websites allowed to call your function.
 const allowedOrigins = [
@@ -190,7 +193,8 @@ export const createStripeCheckout = onRequest(
         payment_method_types: ["card"],
         mode: "subscription",
         line_items: [{
-          price: "price_1SAGshGYNyUbUaQ6L3QynrgC", 
+          price: "price_1SAIFpGYNyUbUaQ657RL4nVR", //Test price
+          //price: "price_1SAGshGYNyUbUaQ6L3QynrgC",
           quantity: 1,
         }],
         success_url: `${request.headers.origin}?checkout_success=true`,

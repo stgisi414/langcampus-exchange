@@ -807,7 +807,23 @@ const AppContent: React.FC = () => {
 
   const handleSaveChat = (messages: Message[]) => {
     if (currentPartner && user) {
-        const chatToSave = { partner: currentPartner, messages };
+        // Sanitize messages to remove any undefined fields before saving to Firestore
+        const sanitizedMessages = messages.map(msg => {
+            const sanitizedMsg: Message = {
+                sender: msg.sender,
+                text: msg.text,
+            };
+            // Only include correction and translation if they exist
+            if (msg.correction) {
+                sanitizedMsg.correction = msg.correction;
+            }
+            if (msg.translation) {
+                sanitizedMsg.translation = msg.translation;
+            }
+            return sanitizedMsg;
+        });
+
+        const chatToSave = { partner: currentPartner, messages: sanitizedMessages };
         firestoreService.saveChatInFirestore(user.uid, chatToSave);
         alert('Chat saved!');
     }
@@ -863,7 +879,7 @@ const AppContent: React.FC = () => {
     setIsUpgrading(true);
 
     try {
-        // IMPORTANT: Replace with your actual deployed function URL
+        const stripePromise = loadStripe(process.env.VITE_STRIPE_PUBLISHABLE_KEY!);
         //const functionUrl = "https://us-central1-langcampus-exchange.cloudfunctions.net/createStripeCheckout";
         const functionUrl = "http://127.0.0.1:5001/langcampus-exchange/us-central1/createStripeCheckout";
         
@@ -879,8 +895,12 @@ const AppContent: React.FC = () => {
             throw new Error(error);
         }
 
-        const stripe = (window as any).Stripe(process.env.VITE_STRIPE_PUBLISHABLE_KEY);
-        await stripe.redirectToCheckout({ sessionId });
+        const stripe = await stripePromise;
+        if (stripe) {
+            await stripe.redirectToCheckout({ sessionId });
+        } else {
+            throw new Error("Stripe.js failed to load.");
+        }
 
     } catch (error) {
         console.error("Upgrade Error:", error);
@@ -895,6 +915,8 @@ const AppContent: React.FC = () => {
     const query = new URLSearchParams(window.location.search);
     if (query.get("checkout_success")) {
       alert("Your subscription is complete! Welcome to Langcampus Pro.");
+      // Clean the URL to prevent the message from showing on refresh
+      window.history.replaceState(null, '', window.location.pathname);
     }
   }, []);
 
