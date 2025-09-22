@@ -12,6 +12,7 @@ import { signOut } from 'firebase/auth';
 import { checkAndIncrementUsage } from './services/firestoreService.ts';
 import SubscriptionModal from './components/SubscriptionModal.tsx';
 import * as firestoreService from './services/firestoreService.ts';
+import { loadStripe } from '@stripe/stripe-js';
 
 
 // Helper for localStorage
@@ -81,7 +82,8 @@ const UserProfile: React.FC<{
   onProfileChange: (profile: UserProfileData) => void;
   onUpgradeClick: () => void;
   usageData?: UsageData;
-}> = ({ profile, onProfileChange, onUpgradeClick, subscriptionStatus, usageData }) => {
+  isUpgrading: boolean;
+}> = ({ profile, onProfileChange, onUpgradeClick, subscriptionStatus, usageData, isUpgrading }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [localProfile, setLocalProfile] = useState(profile);
 
@@ -166,8 +168,12 @@ const UserProfile: React.FC<{
                             You're a Pro!
                         </button>
                     ) : (
-                        <button onClick={onUpgradeClick} className="px-6 py-2 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600">
-                            Upgrade
+                        <button 
+                            onClick={onUpgradeClick} 
+                            className="px-6 py-2 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 disabled:opacity-75"
+                            disabled={isUpgrading}
+                        >
+                            {isUpgrading ? "Redirecting..." : "Upgrade"}
                         </button>
                     )}
                     <button onClick={handleSaveAndClose} className="px-6 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition-colors">
@@ -740,14 +746,8 @@ const AppContent: React.FC = () => {
   const [teachMeCache, setTeachMeCache] = useState<{ language: string; type: string; topic: string; content: string; } | null>(null);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [subscriptionModalReason, setSubscriptionModalReason] = useState<'limit' | 'manual'>('limit');
+  const [isUpgrading, setIsUpgrading] = useState(false);
   const { user } = useAuth();
-
-  // The logic to handle upgrading and checking usage
-  const handleUpgrade = () => {
-    // TODO: Integrate Stripe checkout link here
-    alert("Stripe integration coming soon!");
-    setShowSubscriptionModal(false);
-  };
 
   const handleUsageCheck = async (feature: UsageKey, action: () => void) => {
     if (!user) return;
@@ -858,6 +858,46 @@ const AppContent: React.FC = () => {
 
   const savedChat = user?.savedChat || null;
 
+  const handleUpgrade = async () => {
+    if (!user) return;
+    setIsUpgrading(true);
+
+    try {
+        // IMPORTANT: Replace with your actual deployed function URL
+        //const functionUrl = "https://us-central1-langcampus-exchange.cloudfunctions.net/createStripeCheckout";
+        const functionUrl = "http://127.0.0.1:5001/langcampus-exchange/us-central1/createStripeCheckout";
+        
+        const response = await fetch(functionUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data: { userId: user.uid, userEmail: user.email } }),
+        });
+
+        const { sessionId, error } = await response.json();
+
+        if (error) {
+            throw new Error(error);
+        }
+
+        const stripe = (window as any).Stripe(process.env.VITE_STRIPE_PUBLISHABLE_KEY);
+        await stripe.redirectToCheckout({ sessionId });
+
+    } catch (error) {
+        console.error("Upgrade Error:", error);
+        alert("Could not connect to the payment gateway. Please try again later.");
+    } finally {
+        setIsUpgrading(false);
+    }
+  };
+
+  useEffect(() => {
+    // Check for a successful checkout redirect from Stripe
+    const query = new URLSearchParams(window.location.search);
+    if (query.get("checkout_success")) {
+      alert("Your subscription is complete! Welcome to Langcampus Pro.");
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
       <header className="bg-white dark:bg-gray-800 shadow-md p-4 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -871,7 +911,7 @@ const AppContent: React.FC = () => {
            <button onClick={findPartners} disabled={isLoadingPartners} className="px-6 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
             {isLoadingPartners ? 'Searching...' : 'Find New Pals'}
           </button>
-          <UserProfile profile={userProfile} onProfileChange={handleProfileChange} onUpgradeClick={() => { setSubscriptionModalReason('manual'); setShowSubscriptionModal(true); }} subscriptionStatus={user?.subscription || 'free'} usageData={user?.usage} />
+          <UserProfile profile={userProfile} onProfileChange={handleProfileChange} onUpgradeClick={() => { setSubscriptionModalReason('manual'); setShowSubscriptionModal(true); }} subscriptionStatus={user?.subscription || 'free'} usageData={user?.usage} isUpgrading={isUpgrading} />
         </div>
       </header>
 
@@ -929,7 +969,7 @@ const AppContent: React.FC = () => {
           handleUsageCheck={handleUsageCheck}
       />}
       {showTutorial && <TutorialModal onClose={() => setShowTutorial(false)} />}
-      {showSubscriptionModal && <SubscriptionModal onClose={() => setShowSubscriptionModal(false)} onSubscribe={handleUpgrade} reason={subscriptionModalReason} />}
+      {showSubscriptionModal && <SubscriptionModal onClose={() => setShowSubscriptionModal(false)} onSubscribe={handleUpgrade} reason={subscriptionModalReason} isUpgrading={isUpgrading} />}
     </div>
   );
 };

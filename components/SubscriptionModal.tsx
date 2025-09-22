@@ -5,9 +5,10 @@ interface SubscriptionModalProps {
   onClose: () => void;
   onSubscribe: () => void;
   reason: 'limit' | 'manual';
+  isUpgrading: boolean;
 }
 
-const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ onClose, onSubscribe, reason }) => {
+const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ onClose, onSubscribe, reason, isUpgrading   }) => {
   // Define messages based on the reason
   const title = reason === 'limit' ? "Daily Limit Reached" : "Upgrade to Langcampus Pro";
   const message = reason === 'limit' 
@@ -30,8 +31,8 @@ const SubscriptionModal: React.FC<SubscriptionModalProps> = ({ onClose, onSubscr
             <p className="text-lg text-gray-800 dark:text-gray-200 flex items-center"><span className="text-green-500 mr-2">✔</span> Unlimited Lessons & Quizzes</p>
         </div>
         
-        <button onClick={onSubscribe} className="w-full px-6 py-3 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 transition-colors text-lg">
-            Upgrade to Pro
+        <button onClick={onSubscribe} className="w-full px-6 py-3 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 transition-colors text-lg" disabled={isUpgrading}>
+             {isUpgrading ? "Redirecting..." : "Upgrade to Pro"}
         </button>
       </div>
     </div>

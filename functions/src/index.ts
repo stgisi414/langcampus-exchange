@@ -2,6 +2,8 @@ import cors from "cors";
 import { onRequest, Request } from "firebase-functions/v2/https";
 import { Response } from "express";
 import * as logger from "firebase-functions/logger";
+import Stripe from "stripe";
+import { getFirestore } from "firebase-admin/firestore";
 
 // This is the list of all websites allowed to call your function.
 const allowedOrigins = [
@@ -167,4 +169,89 @@ export const geminiTTS = onRequest(
       }
     });
   },
+);
+
+export const createStripeCheckout = onRequest(
+  { cors: true, secrets: ["STRIPE_SECRET_KEY"] },
+  async (request: Request, response: Response) => {
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+      apiVersion: "2025-08-27.basil",
+    });
+
+    const { userId, userEmail } = request.body.data;
+
+    if (!userId || !userEmail) {
+      response.status(400).send({ error: "Missing userId or userEmail" });
+      return;
+    }
+
+    try {
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        mode: "subscription",
+        line_items: [{
+          price: "price_1SAGshGYNyUbUaQ6L3QynrgC", 
+          quantity: 1,
+        }],
+        success_url: `${request.headers.origin}?checkout_success=true`,
+        cancel_url: `${request.headers.origin}`,
+        customer_email: userEmail,
+        // Pass the Firebase UID to Stripe's metadata
+        metadata: {
+            firebaseUID: userId,
+        }
+      });
+
+      response.status(200).send({ sessionId: session.id });
+    } catch (error) {
+      logger.error("Stripe Checkout Error:", error);
+      response.status(500).send({ error: "Failed to create Stripe session." });
+    }
+  }
+);
+
+export const stripeWebhook = onRequest(
+  { secrets: ["STRIPE_SECRET_KEY"] },
+  async (request: Request, response: Response) => {
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+      apiVersion: "2025-08-27.basil",
+    });
+    
+    const signature = request.headers["stripe-signature"];
+    if (!signature) {
+      response.status(400).send("No signature provided.");
+      return;
+    }
+
+    let event;
+    try {
+      event = stripe.webhooks.constructEvent(
+        request.rawBody,
+        signature,
+        process.env.STRIPE_SECRET_KEY!
+      );
+    } catch (err: any) {
+      logger.error("Webhook signature verification failed.", err.message);
+      response.status(400).send(`Webhook Error: ${err.message}`);
+      return;
+    }
+
+    // Handle the checkout.session.completed event
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const firebaseUID = session.metadata?.firebaseUID;
+
+      if (firebaseUID) {
+        try {
+          const userRef = getFirestore().collection("users").doc(firebaseUID);
+          await userRef.update({ subscription: "subscriber" });
+          logger.info(`User ${firebaseUID} successfully subscribed.`);
+        } catch (error) {
+          logger.error(`Failed to update user ${firebaseUID} in Firestore`, error);
+        }
+      }
+    }
+    
+    response.status(200).send({ received: true });
+  }
 );
