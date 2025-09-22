@@ -34,3 +34,31 @@ export interface Language {
   code: string;
   name: string;
 }
+
+export type SubscriptionStatus = 'free' | 'subscriber';
+
+export type UsageKey = 'searches' | 'messages' | 'audioPlays' | 'lessons' | 'quizzes';
+
+export interface UsageData {
+  searches: number;
+  messages: number;
+  audioPlays: number;
+  lessons: number;
+  quizzes: number;
+  lastUsageDate: string; // Stored as 'YYYY-MM-DD'
+}
+
+export interface UserData {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL: string | null;
+  subscription: SubscriptionStatus;
+  usage: UsageData;
+  // Merged from UserProfileData
+  name: string;
+  hobbies: string;
+  bio: string;
+  // Added for persistence
+  savedChat: SavedChat | null;
+}

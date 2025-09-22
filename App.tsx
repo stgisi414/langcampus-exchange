@@ -1,10 +1,18 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { UserProfileData, Partner, Message, QuizQuestion, SavedChat, Language } from './types';
+import { UserProfileData, Partner, Message, QuizQuestion, SavedChat, Language, SubscriptionStatus } from './types';
 import { LANGUAGES } from './constants';
 import * as geminiService from './services/geminiService';
 import { ChevronDownIcon, CloseIcon, InfoIcon, TrashIcon, BookOpenIcon, VolumeUpIcon, SaveIcon, SendIcon, MenuIcon, SearchIcon } from './components/Icons';
 import LoadingSpinner from './components/LoadingSpinner';
 import { grammarData, vocabData } from './teachMeData';
+import { useAuth } from './hooks/useAuth.ts';
+import LoginScreen from './components/LoginScreen.tsx';
+import { auth } from './firebaseConfig.ts';
+import { signOut } from 'firebase/auth';
+import { checkAndIncrementUsage } from './services/firestoreService.ts';
+import SubscriptionModal from './components/SubscriptionModal.tsx';
+import * as firestoreService from './services/firestoreService.ts';
+
 
 // Helper for localStorage
 const useStickyState = <T,>(defaultValue: T, key: string): [T, React.Dispatch<React.SetStateAction<T>>] => {
@@ -68,9 +76,12 @@ const pcmToWav = (pcmData: Int16Array, sampleRate: number) => {
 
 // User Profile Component
 const UserProfile: React.FC<{
-  profile: UserProfileData;
+  profile: { name: string; hobbies: string; bio: string; };
+  subscriptionStatus: SubscriptionStatus; 
   onProfileChange: (profile: UserProfileData) => void;
-}> = ({ profile, onProfileChange }) => {
+  onUpgradeClick: () => void;
+  usageData?: UsageData;
+}> = ({ profile, onProfileChange, onUpgradeClick, subscriptionStatus, usageData }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [localProfile, setLocalProfile] = useState(profile);
 
@@ -85,6 +96,12 @@ const UserProfile: React.FC<{
     setIsOpen(false);
   };
 
+  const handleSignOut = () => {
+    if (window.confirm('Are you sure you want to sign out?')) {
+        signOut(auth);
+    }
+  }
+
   return (
     <>
       <button
@@ -97,28 +114,62 @@ const UserProfile: React.FC<{
       
       {isOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4" role="dialog" aria-modal="true">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md animate-fade-in-down">
-                 <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md animate-fade-in-down flex flex-col max-h-[90vh]">
+                <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white">My Info</h2>
                     <button onClick={() => setIsOpen(false)} className="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200" aria-label="Close profile editor">
                         <CloseIcon className="w-6 h-6" />
                     </button>
                 </div>
-                <div className="p-6 space-y-4">
-                  <div>
-                    <label htmlFor="name-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Name</label>
-                    <input id="name-input" type="text" name="name" value={localProfile.name} onChange={handleChange} className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 dark:text-gray-100" />
-                  </div>
-                  <div>
-                    <label htmlFor="hobbies-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Hobbies</label>
-                    <input id="hobbies-input" type="text" name="hobbies" value={localProfile.hobbies} onChange={handleChange} placeholder="e.g., hiking, coding, music" className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 dark:text-gray-100" />
-                  </div>
-                  <div>
-                    <label htmlFor="bio-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Bio</label>
-                    <textarea id="bio-input" name="bio" rows={3} value={localProfile.bio} onChange={handleChange} className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 dark:text-gray-100"></textarea>
-                  </div>
+                <div className="overflow-y-auto">
+                    <div className="p-6 space-y-4">
+                      <div>
+                        <label htmlFor="name-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Name</label>
+                        <input id="name-input" type="text" name="name" value={localProfile.name} onChange={handleChange} className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 dark:text-gray-100" />
+                      </div>
+                      <div>
+                        <label htmlFor="hobbies-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Hobbies</label>
+                        <input id="hobbies-input" type="text" name="hobbies" value={localProfile.hobbies} onChange={handleChange} placeholder="e.g., hiking, coding, music" className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 dark:text-gray-100" />
+                      </div>
+                      <div>
+                        <label htmlFor="bio-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Bio</label>
+                        <textarea id="bio-input" name="bio" rows={3} value={localProfile.bio} onChange={handleChange} className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 dark:text-gray-100"></textarea>
+                      </div>
+                      <div className="border-t dark:border-gray-700 mt-4 pt-4">
+                        <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Account Type</h3>
+                        <p className={`text-lg font-semibold ${subscriptionStatus === 'subscriber' ? 'text-green-500' : 'text-blue-500'}`}>
+                            {subscriptionStatus === 'subscriber' ? 'Langcampus Pro' : 'Free Tier'}
+                        </p>
+                      </div>
+                    </div>
+                    {subscriptionStatus === 'free' && usageData && (
+                        <div className="px-6 pb-4">
+                            <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                                <h3 className="text-lg font-semibold text-center mb-2 text-gray-800 dark:text-gray-200">Today's Usage</h3>
+                                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-gray-600 dark:text-gray-300">
+                                    <p>Searches: {usageData.searches}/5</p>
+                                    <p>Messages: {usageData.messages}/20</p>
+                                    <p>Audio Plays: {usageData.audioPlays}/5</p>
+                                    <p>Lessons: {usageData.lessons}/10</p>
+                                    <p className="col-span-2 text-center">Quizzes: {usageData.quizzes}/10</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
-                 <div className="flex justify-end p-4 border-t dark:border-gray-700">
+                <div className="flex justify-between p-4 border-t dark:border-gray-700">
+                    <button onClick={handleSignOut} className="px-6 py-2 bg-red-500 text-white font-bold rounded-lg hover:bg-red-600 transition-colors">
+                        Sign Out
+                    </button>
+                    {subscriptionStatus === 'subscriber' ? (
+                        <button className="px-6 py-2 bg-gray-500 text-white font-bold rounded-lg cursor-not-allowed" disabled>
+                            You're a Pro!
+                        </button>
+                    ) : (
+                        <button onClick={onUpgradeClick} className="px-6 py-2 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600">
+                            Upgrade
+                        </button>
+                    )}
                     <button onClick={handleSaveAndClose} className="px-6 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition-colors">
                         Save and Close
                     </button>
@@ -293,7 +344,8 @@ const TeachMeModal: React.FC<{
     cache: { language: string; type: string; topic: string; content: string; } | null;
     setCache: (cache: { language: string; type: string; topic: string; content: string; } | null) => void;
     onShareQuizResults: (topic: string, score: number, questions: QuizQuestion[], userAnswers: string[]) => void;
-}> = ({ language, onClose, nativeLanguage, cache, setCache, onShareQuizResults }) => {
+    handleUsageCheck: (feature: UsageKey, action: () => void) => Promise<void>;
+}> = ({ language, onClose, nativeLanguage, cache, setCache, onShareQuizResults, handleUsageCheck }) => {
     const [activeTab, setActiveTab] = useState<'Grammar' | 'Vocabulary'>('Grammar');
     const [level, setLevel] = useState(1);
     const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
@@ -301,41 +353,34 @@ const TeachMeModal: React.FC<{
     const [isLoading, setIsLoading] = useState(false);
     const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[] | null>(null);
     const [showQuiz, setShowQuiz] = useState(false);
-    const isInitialRender = useRef(true);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
 
     useEffect(() => {
-        // This effect runs only once when the modal is first opened.
-        if (cache && cache.language === language) {
-            setActiveTab(cache.type as 'Grammar' | 'Vocabulary');
-            
-            const topicData = (cache.type === 'Grammar'
-                ? grammarData[language as keyof typeof grammarData]
-                : vocabData
-            )?.find(t => t.title === cache.topic);
+      // This effect runs whenever the modal is opened or the language changes.
+      // If a valid cache exists for the current language, it loads the lesson.
+      if (cache && cache.language === language) {
+          setActiveTab(cache.type as 'Grammar' | 'Vocabulary');
+          
+          const topicData = (cache.type === 'Grammar'
+              ? grammarData[language as keyof typeof grammarData]
+              : vocabData
+          )?.find(t => t.title === cache.topic);
 
-            if (topicData) {
-                setLevel(topicData.level);
-            }
-            setSelectedTopic(cache.topic);
-            setContent(cache.content);
-        }
-    }, []);
-
-     useEffect(() => {
-        // If the language prop changes while the modal is open,
-        // reset the state to avoid showing stale topics from the previous language.
-        if (!isInitialRender.current) {
-            setSelectedTopic(null);
-            setContent('');
-            setQuizQuestions(null);
-            setLevel(1);
-        } else {
-            isInitialRender.current = false;
-        }
-    }, [language]); // Dependency array includes 'language'
-
+          if (topicData) {
+              setLevel(topicData.level);
+          }
+          setSelectedTopic(cache.topic);
+          setContent(cache.content);
+      } 
+      // Otherwise, it ensures the modal's internal state is cleared.
+      else {
+          setSelectedTopic(null);
+          setContent('');
+          setQuizQuestions(null);
+          setLevel(1);
+      }
+    }, [language, cache]);
 
     const availableTopics = useMemo(() => {
         const data = activeTab === 'Grammar'
@@ -354,20 +399,22 @@ const TeachMeModal: React.FC<{
     }, [activeTab, level, language, searchQuery]);
 
     const handleTopicSelect = async (topic: string) => {
-        setSelectedTopic(topic);
-        setIsLoading(true);
-        setContent('');
-        setQuizQuestions(null);
-        try {
-            const nativeLanguageName = LANGUAGES.find(lang => lang.code === nativeLanguage)?.name || nativeLanguage;
-            const fetchedContent = await geminiService.getContent(topic, activeTab, language, nativeLanguageName);
-            setContent(fetchedContent);
-            setCache({ language, type: activeTab, topic, content: fetchedContent });
-        } catch (error) {
-            setContent('Sorry, there was an error loading the content. Please try again.');
-        } finally {
-            setIsLoading(false);
-        }
+        handleUsageCheck('lessons', async () => {
+            setSelectedTopic(topic);
+            setIsLoading(true);
+            setContent('');
+            setQuizQuestions(null);
+            try {
+                const nativeLanguageName = LANGUAGES.find(lang => lang.code === nativeLanguage)?.name || nativeLanguage;
+                const fetchedContent = await geminiService.getContent(topic, activeTab, language, nativeLanguageName);
+                setContent(fetchedContent);
+                setCache({ language, type: activeTab, topic, content: fetchedContent });
+            } catch (error) {
+                setContent('Sorry, there was an error loading the content. Please try again.');
+            } finally {
+                setIsLoading(false);
+            }
+        });
     };
 
     const handleShareAndClose = (topic: string, score: number, questions: QuizQuestion[], userAnswers: string[]) => {
@@ -377,16 +424,19 @@ const TeachMeModal: React.FC<{
 
     const handleQuizMe = async () => {
         if (!selectedTopic) return;
-        setIsLoading(true);
-        try {
-            const questions = await geminiService.generateQuiz(selectedTopic, activeTab, language);
-            setQuizQuestions(questions);
-            setShowQuiz(true);
-        } catch (error) {
-            alert('Failed to generate quiz. Please try again.');
-        } finally {
-            setIsLoading(false);
-        }
+        handleUsageCheck('quizzes', async () => {
+            setIsLoading(true);
+            try {
+                const nativeLanguageName = LANGUAGES.find(lang => lang.code === nativeLanguage)?.name || nativeLanguage;
+                const questions = await geminiService.generateQuiz(selectedTopic, activeTab, language, nativeLanguageName, level);
+                setQuizQuestions(questions);
+                setShowQuiz(true);
+            } catch (error) {
+                alert('Failed to generate quiz. Please try again.');
+            } finally {
+                setIsLoading(false);
+            }
+        });
     };
 
     return (
@@ -500,13 +550,15 @@ const ChatModal: React.FC<{
   setTeachMeCache: (cache: { language: string; type: string; topic: string; content: string; } | null) => void;
   onShareQuizResults: (topic: string, score: number, questions: QuizQuestion[], userAnswers: string[]) => void;
   userProfile: UserProfileData;
-}> = ({ partner, messages, onMessagesChange, onClose, onSaveChat, nativeLanguage, teachMeCache, setTeachMeCache, onShareQuizResults, userProfile }) => {
+  handleUsageCheck: (feature: UsageKey, action: () => void) => Promise<void>;
+}> = ({ partner, messages, onMessagesChange, onClose, onSaveChat, nativeLanguage, teachMeCache, setTeachMeCache, onShareQuizResults, userProfile, handleUsageCheck }) => {
     const [newMessage, setNewMessage] = useState('');
     const [isSending, setIsSending] = useState(false);
     const [correctionsEnabled, setCorrectionsEnabled] = useState(true);
     const [showTeachMe, setShowTeachMe] = useState(false);
     const chatHistoryRef = useRef<HTMLDivElement>(null);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
+    const isFetchingResponse = useRef(false);
 
     const getBotResponse = useCallback(async (currentMessages: Message[]) => {
       if (isSending) return;
@@ -521,7 +573,7 @@ const ChatModal: React.FC<{
       } finally {
         setIsSending(false);
       }
-    }, [partner, correctionsEnabled, userProfile, onMessagesChange, isSending]);
+    }, [partner, correctionsEnabled, userProfile, onMessagesChange]);
 
     useEffect(() => {
         chatHistoryRef.current?.scrollTo(0, chatHistoryRef.current.scrollHeight);
@@ -529,10 +581,16 @@ const ChatModal: React.FC<{
     
     useEffect(() => {
       const lastMessage = messages[messages.length - 1];
-      if (lastMessage?.sender === 'user' && !isSending) {
-        getBotResponse(messages);
+      if (lastMessage?.sender === 'user' && !isFetchingResponse.current) {
+        // Lock to prevent duplicate requests
+        isFetchingResponse.current = true;
+        
+        getBotResponse(messages).finally(() => {
+          // Unlock after the request is complete (success or fail)
+          isFetchingResponse.current = false;
+        });
       }
-    }, [messages, getBotResponse, isSending]);
+    }, [messages, getBotResponse]);
 
     useEffect(() => {
       if (timerRef.current) {
@@ -558,31 +616,34 @@ const ChatModal: React.FC<{
     const partnerLanguageCode = partnerLanguageObject.code;
 
     const handleSpeak = async (text: string) => {
-      try {
-        const audioContent = await geminiService.synthesizeSpeech(text, partnerLanguageCode);
-        const pcmData = base64ToArrayBuffer(audioContent);
-        // The Gemini TTS model returns signed 16-bit PCM audio data at a 24000 Hz sample rate.
-        const pcm16 = new Int16Array(pcmData);
-        const wavBlob = pcmToWav(pcm16, 24000);
-        const audioUrl = URL.createObjectURL(wavBlob);
-        const audio = new Audio(audioUrl);
-        audio.play();
-      } catch (error) {
-        console.error("Error synthesizing speech:", error);
-        // Fallback to browser's built-in speech synthesis
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = partnerLanguageCode;
-        window.speechSynthesis.speak(utterance);
-      }
+        handleUsageCheck('audioPlays', async () => {
+          try {
+            const audioContent = await geminiService.synthesizeSpeech(text, partnerLanguageCode);
+            const pcmData = base64ToArrayBuffer(audioContent);
+            // The Gemini TTS model returns signed 16-bit PCM audio data at a 24000 Hz sample rate.
+            const pcm16 = new Int16Array(pcmData);
+            const wavBlob = pcmToWav(pcm16, 24000);
+            const audioUrl = URL.createObjectURL(wavBlob);
+            const audio = new Audio(audioUrl);
+            audio.play();
+          } catch (error) {
+            console.error("Error synthesizing speech:", error);
+            // Fallback to browser's built-in speech synthesis
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = partnerLanguageCode;
+            window.speechSynthesis.speak(utterance);
+          }
+        });
     };
 
     const handleSendMessage = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!newMessage.trim() || isSending) return;
-
+      e.preventDefault();
+      if (!newMessage.trim() || isSending) return;
+      handleUsageCheck('messages', () => {
         const userMessage: Message = { sender: 'user', text: newMessage };
         onMessagesChange(prev => [...prev, userMessage]);
         setNewMessage('');
+      });
     };
 
     return (
@@ -659,6 +720,7 @@ const ChatModal: React.FC<{
                 cache={teachMeCache}
                 setCache={setTeachMeCache}
                 onShareQuizResults={onShareQuizResults}
+                handleUsageCheck={handleUsageCheck}
             />}
         </div>
     );
@@ -666,8 +728,7 @@ const ChatModal: React.FC<{
 
 
 // Main App Component
-const App: React.FC = () => {
-  const [userProfile, setUserProfile] = useStickyState<UserProfileData>({ name: '', hobbies: '', bio: '' }, 'userProfile');
+const AppContent: React.FC = () => {
   const [nativeLanguage, setNativeLanguage] = useStickyState<string>(LANGUAGES[0].code, 'nativeLanguage');
   const [targetLanguage, setTargetLanguage] = useStickyState<string>(LANGUAGES[1].code, 'targetLanguage');
   const [partners, setPartners] = useState<Partner[]>([]);
@@ -675,9 +736,29 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [currentPartner, setCurrentPartner] = useState<Partner | null>(null);
   const [currentChatMessages, setCurrentChatMessages] = useState<Message[]>([]);
-  const [savedChat, setSavedChat] = useStickyState<SavedChat | null>(null, 'savedChat');
   const [showTutorial, setShowTutorial] = useStickyState<boolean>(true, 'showTutorial');
   const [teachMeCache, setTeachMeCache] = useState<{ language: string; type: string; topic: string; content: string; } | null>(null);
+  const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [subscriptionModalReason, setSubscriptionModalReason] = useState<'limit' | 'manual'>('limit');
+  const { user } = useAuth();
+
+  // The logic to handle upgrading and checking usage
+  const handleUpgrade = () => {
+    // TODO: Integrate Stripe checkout link here
+    alert("Stripe integration coming soon!");
+    setShowSubscriptionModal(false);
+  };
+
+  const handleUsageCheck = async (feature: UsageKey, action: () => void) => {
+    if (!user) return;
+    const canProceed = await checkAndIncrementUsage(user.uid, feature);
+    if (canProceed) {
+      action();
+    } else {
+      setSubscriptionModalReason('limit'); // Set the reason here
+      setShowSubscriptionModal(true);
+    }
+  };
 
   useEffect(() => {
     // When the user changes their target language,
@@ -689,19 +770,21 @@ const App: React.FC = () => {
 
 
   const findPartners = async () => {
-    setIsLoadingPartners(true);
-    setError(null);
-    setPartners([]);
-    try {
-        const nativeLangName = LANGUAGES.find(l => l.code === nativeLanguage)?.name || nativeLanguage;
-        const targetLangName = LANGUAGES.find(l => l.code === targetLanguage)?.name || targetLanguage;
-        const generatedPartners = await geminiService.generatePartners(nativeLangName, targetLangName, userProfile.hobbies);
-        setPartners(generatedPartners);
-    } catch (err: any) {
-        setError(err.message || "An unknown error occurred.");
-    } finally {
-        setIsLoadingPartners(false);
-    }
+    handleUsageCheck('searches', async () => {
+        setIsLoadingPartners(true);
+        setError(null);
+        setPartners([]);
+        try {
+            const nativeLangName = LANGUAGES.find(l => l.code === nativeLanguage)?.name || nativeLanguage;
+            const targetLangName = LANGUAGES.find(l => l.code === targetLanguage)?.name || targetLanguage;
+            const generatedPartners = await geminiService.generatePartners(nativeLangName, targetLangName, userProfile.hobbies);
+            setPartners(generatedPartners);
+        } catch (err: any) {
+            setError(err.message || "An unknown error occurred.");
+        } finally {
+            setIsLoadingPartners(false);
+        }
+    });
   };
 
   const handleStartChat = (partner: Partner) => {
@@ -715,11 +798,25 @@ const App: React.FC = () => {
 
   const handleCloseChat = () => setCurrentPartner(null);
 
+  const handleProfileChange = (profile: { name: string; hobbies: string; bio: string; }) => {
+    if (user) {
+      // Corrected to use firestoreService
+      firestoreService.updateUserProfile(user.uid, profile);
+    }
+  };
+
   const handleSaveChat = (messages: Message[]) => {
-    if (currentPartner) {
-        setSavedChat({ partner: currentPartner, messages });
+    if (currentPartner && user) {
+        const chatToSave = { partner: currentPartner, messages };
+        firestoreService.saveChatInFirestore(user.uid, chatToSave);
         alert('Chat saved!');
     }
+  };
+  
+  const handleDeleteSavedChat = () => {
+      if (user && window.confirm('Are you sure you want to delete this saved chat?')) {
+          firestoreService.deleteChatFromFirestore(user.uid);
+      }
   };
   
   const handleResumeChat = () => {
@@ -729,12 +826,6 @@ const App: React.FC = () => {
     }
   };
   
-  const handleDeleteSavedChat = () => {
-      if (window.confirm('Are you sure you want to delete this saved chat?')) {
-          setSavedChat(null);
-      }
-  };
-
   const handleShareQuizResults = (topic: string, score: number, questions: QuizQuestion[], userAnswers: string[]) => {
     let quizSummary = `I just took a quiz on "${topic}" and my score was ${score}/${questions.length}.`;
     
@@ -759,6 +850,14 @@ const App: React.FC = () => {
     }
   };
 
+  const userProfile = {
+    name: user?.name || '',
+    hobbies: user?.hobbies || '',
+    bio: user?.bio || ''
+  };
+
+  const savedChat = user?.savedChat || null;
+
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
       <header className="bg-white dark:bg-gray-800 shadow-md p-4 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -772,7 +871,7 @@ const App: React.FC = () => {
            <button onClick={findPartners} disabled={isLoadingPartners} className="px-6 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
             {isLoadingPartners ? 'Searching...' : 'Find New Pals'}
           </button>
-           <UserProfile profile={userProfile} onProfileChange={setUserProfile} />
+          <UserProfile profile={userProfile} onProfileChange={handleProfileChange} onUpgradeClick={() => { setSubscriptionModalReason('manual'); setShowSubscriptionModal(true); }} subscriptionStatus={user?.subscription || 'free'} usageData={user?.usage} />
         </div>
       </header>
 
@@ -827,8 +926,10 @@ const App: React.FC = () => {
           setTeachMeCache={setTeachMeCache}
           onShareQuizResults={handleShareQuizResults}
           userProfile={userProfile}
+          handleUsageCheck={handleUsageCheck}
       />}
       {showTutorial && <TutorialModal onClose={() => setShowTutorial(false)} />}
+      {showSubscriptionModal && <SubscriptionModal onClose={() => setShowSubscriptionModal(false)} onSubscribe={handleUpgrade} reason={subscriptionModalReason} />}
     </div>
   );
 };
@@ -849,5 +950,16 @@ const LanguageSelector: React.FC<{
     </div>
 );
 
+const App: React.FC = () => {
+    const { user, loading } = useAuth();
+    if (loading) {
+        return (
+            <div className="flex justify-center items-center min-h-screen">
+                <LoadingSpinner size="lg" />
+            </div>
+        );
+    }
+    return user ? <AppContent /> : <LoginScreen />;
+};
 
 export default App;

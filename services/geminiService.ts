@@ -1,11 +1,11 @@
 import { Message, Partner, QuizQuestion, UserProfileData } from '../types';
 
 // Make sure this is the correct URL for your deployed Cloud Function.
-const PROXY_URL = "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiProxy"; // Replace if yours is different
-const TTS_PROXY_URL = "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiTTS";
+//const PROXY_URL = "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiProxy"; // Replace if yours is different
+//const TTS_PROXY_URL = "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiTTS";
 // Functions emulator addresses
-// const PROXY_URL = "http://127.0.0.1:5001/langcampus-exchange/us-central1/geminiProxy";
-// const TTS_PROXY_URL = "http://127.0.0.1:5001/langcampus-exchange/us-central1/geminiTTS";
+const PROXY_URL = "http://127.0.0.1:5001/langcampus-exchange/us-central1/geminiProxy";
+const TTS_PROXY_URL = "http://127.0.0.1:5001/langcampus-exchange/us-central1/geminiTTS";
 
 /**
  * A helper function to safely parse JSON from the AI,
@@ -117,6 +117,8 @@ export const getChatResponse = async (messages: Message[], partner: Partner, cor
   const userLastMessage = messages[messages.length - 1].text;
 
   const prompt = `
+    **Background Context:** You are an AI language exchange partner within a web application called "Langcampus Exchange". Your purpose is to help users practice their target language in a friendly and supportive way. Always be encouraging.
+
     You are an AI language exchange partner. Your name is ${partner.name}.
     Your native language is ${partner.nativeLanguage}.
     You are learning ${partner.learningLanguage}.
@@ -125,7 +127,8 @@ export const getChatResponse = async (messages: Message[], partner: Partner, cor
     You are talking to ${userProfile.name || 'a user'}.
     The user's native language is ${partner.learningLanguage}.
     The user's interests include: ${userProfile.hobbies || 'not specified'}.
-
+    The user's bio says: "${userProfile.bio || 'not specified'}".
+    
     Conversation History:
     ${conversationHistory}
 
@@ -217,39 +220,35 @@ export const getContent = async (topic: string, type: 'Grammar' | 'Vocabulary', 
   }
 };
 
-export const generateQuiz = async (topic: string, type: 'Grammar' | 'Vocabulary', language: string): Promise<QuizQuestion[]> => {
+export const generateQuiz = async (topic: string, type: 'Grammar' | 'Vocabulary', targetLanguage: string, nativeLanguage: string, level: number): Promise<QuizQuestion[]> => {
+  const questionLanguage = level === 1 ? nativeLanguage : targetLanguage;
+  
   const prompt = `
-    You are a language teacher creating a quiz.
+    You are a language teacher creating a quiz for a student whose native language is ${nativeLanguage}.
+    The student is learning ${targetLanguage}.
     Your task is to generate a multiple-choice quiz based on the provided topic.
 
-    Language: ${language}
     Topic: "${topic}"
+    Quiz Level: ${level}
     Number of Questions: 8
 
-    IMPORTANT INSTRUCTIONS:
-    1.  Your entire response MUST be a single, valid JSON array.
-    2.  Do NOT include any text, greetings, titles, answer keys, or explanations outside of the JSON array.
-    3.  Each element in the array must be a JSON object representing one question.
-    4.  Each question object must have exactly three properties:
-        - "question": A string for the question text.
-        - "options": An array of exactly 4 strings for the multiple-choice options.
-        - "correctAnswer": A string that exactly matches one of the strings in the "options" array.
+    **IMPORTANT INSTRUCTIONS:**
+    1.  The quiz QUESTIONS must be written in: **${questionLanguage}**.
+    2.  The multiple-choice OPTIONS and the CORRECT ANSWER must be written in: **${targetLanguage}**.
+    3.  Your entire response MUST be a single, valid JSON array.
+    4.  Do NOT include any text, greetings, titles, answer keys, or explanations outside of the JSON array.
+    5.  Each element in the array must be a JSON object representing one question with three properties: "question", "options" (an array of 4 strings), and "correctAnswer".
 
-    Example of a valid response format:
+    Example for a Level 1 quiz for an English speaker learning Spanish:
     [
       {
-        "question": "Which of these is a fruit?",
-        "options": ["Carrot", "Apple", "Broccoli", "Celery"],
-        "correctAnswer": "Apple"
-      },
-      {
-        "question": "What is the past tense of 'go'?",
-        "options": ["Goed", "Gone", "Went", "Going"],
-        "correctAnswer": "Went"
+        "question": "Which of these means 'the house'?",
+        "options": ["el libro", "la casa", "un gato", "la mesa"],
+        "correctAnswer": "la casa"
       }
     ]
 
-    Now, generate the JSON array for the quiz about "${topic}" in the ${language} language.
+    Now, generate the JSON array for the quiz about "${topic}".
   `;
 
   try {
