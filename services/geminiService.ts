@@ -4,8 +4,14 @@ import { Message, Partner, QuizQuestion, UserProfileData } from '../types';
 //const PROXY_URL = "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiProxy"; // Replace if yours is different
 //const TTS_PROXY_URL = "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiTTS";
 // Functions emulator addresses
-const PROXY_URL = "http://127.0.0.1:5001/langcampus-exchange/us-central1/geminiProxy";
-const TTS_PROXY_URL = "http://127.0.0.1:5001/langcampus-exchange/us-central1/geminiTTS";
+const PROXY_URL =
+  process.env.NODE_ENV === 'development'
+    ? "http://127.0.0.1:5001/langcampus-exchange/us-central1/geminiProxy"
+    : "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiProxy";
+const TTS_PROXY_URL =
+   process.env.NODE_ENV === 'development'
+    ? "http://127.0.0.1:5001/langcampus-exchange/us-central1/geminiTTS"
+    : "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiTTS";
 
 /**
  * A helper function to safely parse JSON from the AI,

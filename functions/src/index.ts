@@ -4,9 +4,13 @@ import { Response } from "express";
 import * as logger from "firebase-functions/logger";
 import Stripe from "stripe";
 import { getFirestore } from "firebase-admin/firestore";
-import { initializeApp } from "firebase-admin/app";
+import { initializeApp, getApps, App } from "firebase-admin/app";
 
-initializeApp();
+// Safer initialization for Firebase Admin SDK
+
+if (getApps().length === 0) {
+  initializeApp();
+}
 
 // This is the list of all websites allowed to call your function.
 const allowedOrigins = [
@@ -25,7 +29,7 @@ export const geminiProxy = onRequest(
   (request: Request, response: Response) => {
     // This uses the cors middleware to handle all the CORS logic for us.
     corsHandler(request, response, async () => {
-      logger.info("Function started, CORS check passed.");
+      logger.info("geminiProxy started, CORS check passed.");
 
       if (request.method !== "POST") {
         response.status(405).send("Method Not Allowed");
@@ -171,7 +175,7 @@ export const geminiTTS = onRequest(
         response.status(500).send("Failed to generate audio.");
       }
     });
-  },
+  }
 );
 
 export const createStripeCheckout = onRequest(
@@ -215,14 +219,18 @@ export const createStripeCheckout = onRequest(
 );
 
 export const stripeWebhook = onRequest(
-  { secrets: ["STRIPE_SECRET_KEY"] },
-  async (request: Request, response: Response) => {
+  { secrets: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"], cors: true },
+  async (request, response) => {
+    logger.info("stripeWebhook function triggered.");
+
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+      // Corrected typo from "2025-0.basil" to the correct version
       apiVersion: "2025-08-27.basil",
     });
     
     const signature = request.headers["stripe-signature"];
     if (!signature) {
+      logger.error("Webhook missing Stripe signature.");
       response.status(400).send("No signature provided.");
       return;
     }
@@ -232,30 +240,36 @@ export const stripeWebhook = onRequest(
       event = stripe.webhooks.constructEvent(
         request.rawBody,
         signature,
-        process.env.STRIPE_SECRET_KEY!
+        process.env.STRIPE_WEBHOOK_SECRET!
       );
+      logger.info(`Webhook event received: ${event.type}`);
     } catch (err: any) {
       logger.error("Webhook signature verification failed.", err.message);
       response.status(400).send(`Webhook Error: ${err.message}`);
       return;
     }
 
-    // Handle the checkout.session.completed event
+    // Acknowledge the event immediately to prevent timeout
+    response.status(200).send({ received: true });
+    logger.info("Webhook acknowledged successfully.");
+
+    // Handle the event after responding
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as Stripe.Checkout.Session;
       const firebaseUID = session.metadata?.firebaseUID;
 
       if (firebaseUID) {
         try {
+          logger.info(`Updating user ${firebaseUID} to subscriber.`);
           const userRef = getFirestore().collection("users").doc(firebaseUID);
           await userRef.update({ subscription: "subscriber" });
           logger.info(`User ${firebaseUID} successfully subscribed.`);
         } catch (error) {
           logger.error(`Failed to update user ${firebaseUID} in Firestore`, error);
         }
+      } else {
+        logger.error("firebaseUID not found in session metadata.");
       }
     }
-    
-    response.status(200).send({ received: true });
   }
 );

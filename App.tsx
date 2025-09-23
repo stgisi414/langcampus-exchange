@@ -881,7 +881,10 @@ const AppContent: React.FC = () => {
     try {
         const stripePromise = loadStripe(process.env.VITE_STRIPE_PUBLISHABLE_KEY!);
         //const functionUrl = "https://us-central1-langcampus-exchange.cloudfunctions.net/createStripeCheckout";
-        const functionUrl = "http://127.0.0.1:5001/langcampus-exchange/us-central1/createStripeCheckout";
+        const functionUrl =
+        process.env.NODE_ENV === 'development'
+          ? "http://127.0.0.1:5001/langcampus-exchange/us-central1/createStripeCheckout"
+          : "https://us-central1-langcampus-exchange.cloudfunctions.net/createStripeCheckout";
         
         const response = await fetch(functionUrl, {
             method: 'POST',
