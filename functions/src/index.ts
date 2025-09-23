@@ -1,6 +1,8 @@
 import cors from "cors";
-import { onRequest, Request } from "firebase-functions/v2/https";
-import { Response } from "express";
+// Import Request from functions with an alias, and Response from express, as that's what the v2 onRequest uses.
+import { onRequest, Request as FunctionsRequest } from "firebase-functions/v2/https";
+import { Response as ExpressResponse } from "express";
+import express from "express";
 import * as logger from "firebase-functions/logger";
 import Stripe from "stripe";
 import { getFirestore } from "firebase-admin/firestore";
@@ -16,13 +18,15 @@ const allowedOrigins = [
   "https://www.practicefor.fun",
   "http://127.0.0.1:5000",
   "http://localhost:5000",
+  "http://localhost:5173",
 ];
 
 const corsHandler = cors({ origin: allowedOrigins });
 
+// Use the correct, aliased types for Firebase onRequest handlers
 export const geminiProxy = onRequest(
   { secrets: ["GEMINI_API_KEY"] },
-  (request: Request, response: Response) => {
+  (request: FunctionsRequest, response: ExpressResponse) => {
     corsHandler(request, response, async () => {
       logger.info("geminiProxy started, CORS check passed.");
       if (request.method !== "POST") {
@@ -58,9 +62,28 @@ export const geminiProxy = onRequest(
   }
 );
 
+const voiceConfigMap: Record<string, any> = {
+    "en-US": {prebuiltVoiceConfig: {voiceName: "Kore"}},
+    "es-ES": {prebuiltVoiceConfig: {voiceName: "Puck"}},
+    "fr-FR": {prebuiltVoiceConfig: {voiceName: "Leda"}},
+    "de-DE": {prebuiltVoiceConfig: {voiceName: "Charon"}},
+    "ja-JP": {prebuiltVoiceConfig: {voiceName: "Aoede"}},
+    "ko-KR": {prebuiltVoiceConfig: {voiceName: "Orus"}},
+    "it-IT": {prebuiltVoiceConfig: {voiceName: "Fenrir"}},
+    "pt-BR": {prebuiltVoiceConfig: {voiceName: "Umbriel"}},
+    "ru-RU": {prebuiltVoiceConfig: {voiceName: "Iapetus"}},
+    "ar-XA": {prebuiltVoiceConfig: {voiceName: "Algieba"}},
+    "cmn-CN": {prebuiltVoiceConfig: {voiceName: "Achernar"}},
+    "hi-IN": {prebuiltVoiceConfig: {voiceName: "Alnilam"}},
+    "vi-VN": {prebuiltVoiceConfig: {voiceName: "Gacrux"}},
+    "pl-PL": {prebuiltVoiceConfig: {voiceName: "Pulcherrima"}},
+    "mn-MN": {prebuiltVoiceConfig: {voiceName: "Sadachbia"}},
+};
+
+// Use the correct, aliased types for Firebase onRequest handlers
 export const geminiTTS = onRequest(
   { secrets: ["GEMINI_API_KEY"] },
-  (request: Request, response: Response) => {
+  (request: FunctionsRequest, response: ExpressResponse) => {
     corsHandler(request, response, async () => {
       logger.info("TTS Function started, CORS check passed.");
       if (request.method !== "POST") {
@@ -74,23 +97,6 @@ export const geminiTTS = onRequest(
       if (!GEMINI_API_KEY) {
         return response.status(500).send("Internal Server Error: API key not configured.");
       }
-      const voiceConfigMap: Record<string, any> = {
-          "en-US": {prebuiltVoiceConfig: {voiceName: "Kore"}},
-          "es-ES": {prebuiltVoiceConfig: {voiceName: "Puck"}},
-          "fr-FR": {prebuiltVoiceConfig: {voiceName: "Leda"}},
-          "de-DE": {prebuiltVoiceConfig: {voiceName: "Charon"}},
-          "ja-JP": {prebuiltVoiceConfig: {voiceName: "Aoede"}},
-          "ko-KR": {prebuiltVoiceConfig: {voiceName: "Orus"}},
-          "it-IT": {prebuiltVoiceConfig: {voiceName: "Fenrir"}},
-          "pt-BR": {prebuiltVoiceConfig: {voiceName: "Umbriel"}},
-          "ru-RU": {prebuiltVoiceConfig: {voiceName: "Iapetus"}},
-          "ar-XA": {prebuiltVoiceConfig: {voiceName: "Algieba"}},
-          "cmn-CN": {prebuiltVoiceConfig: {voiceName: "Achernar"}},
-          "hi-IN": {prebuiltVoiceConfig: {voiceName: "Alnilam"}},
-          "vi-VN": {prebuiltVoiceConfig: {voiceName: "Gacrux"}},
-          "pl-PL": {prebuiltVoiceConfig: {voiceName: "Pulcherrima"}},
-          "mn-MN": {prebuiltVoiceConfig: {voiceName: "Sadachbia"}},
-      };
       try {
         let processedText = text;
         if (text.trim().length <= 2) {
@@ -139,11 +145,11 @@ export const geminiTTS = onRequest(
   }
 );
 
+// Use the correct, aliased types for Firebase onRequest handlers
 export const createStripeCheckout = onRequest(
   { cors: true, secrets: ["STRIPE_SECRET_KEY"] },
-  async (request: Request, response: Response) => {
+  async (request: FunctionsRequest, response: ExpressResponse) => {
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-      // Corrected: Using the exact apiVersion the compiler demands.
       apiVersion: "2025-08-27.basil",
     });
 
@@ -151,7 +157,7 @@ export const createStripeCheckout = onRequest(
 
     if (!userId || !userEmail) {
       response.status(400).send({ error: "Missing userId or userEmail" });
-      return; // Use return to exit the function, but not to return the response object.
+      return;
     }
 
     try {
@@ -178,14 +184,12 @@ export const createStripeCheckout = onRequest(
   }
 );
 
-export const stripeWebhook = onRequest(
-  // Remove `cors: true` to ensure we get the raw request body for verification.
-  { secrets: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"] },
-  async (request, response) => {
+const stripeWebhookApp = express();
+
+stripeWebhookApp.post("/", express.raw({type: 'application/json'}), async (request: express.Request, response: express.Response) => {
     logger.info("Stripe webhook function triggered.");
 
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-      // Use the exact apiVersion your project's Stripe types require.
       apiVersion: "2025-08-27.basil",
     });
 
@@ -198,9 +202,8 @@ export const stripeWebhook = onRequest(
 
     let event: Stripe.Event;
     try {
-      // Use request.rawBody to construct the event. This is crucial.
       event = stripe.webhooks.constructEvent(
-        request.rawBody,
+        request.body,
         signature,
         process.env.STRIPE_WEBHOOK_SECRET!
       );
@@ -211,7 +214,6 @@ export const stripeWebhook = onRequest(
       return;
     }
 
-    // Handle the specific event type.
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object as Stripe.Checkout.Session;
       const firebaseUID = session.metadata?.firebaseUID;
@@ -224,15 +226,16 @@ export const stripeWebhook = onRequest(
           logger.info(`Successfully updated user ${firebaseUID}.`);
         } catch (dbError) {
           logger.error(`Firestore update failed for user ${firebaseUID}`, dbError);
-          // The event was still received, so we don't send a 500 to Stripe.
         }
       } else {
         logger.warn("Webhook received checkout.session.completed event without a firebaseUID in metadata.");
       }
     }
 
-    // Acknowledge receipt of the event with a 200 OK response.
-    // This tells Stripe "I got it, don't send it again."
     response.status(200).send({ received: true });
-  }
+});
+
+export const stripeWebhook = onRequest(
+  { secrets: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"] },
+  stripeWebhookApp
 );

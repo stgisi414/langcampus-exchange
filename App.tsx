@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { UserProfileData, Partner, Message, QuizQuestion, SavedChat, Language, SubscriptionStatus } from './types';
+import { UserProfileData, Partner, Message, QuizQuestion, SavedChat, Language, SubscriptionStatus, UserData, UsageData } from './types'; // Added UserData and UsageData
 import { LANGUAGES } from './constants';
 import * as geminiService from './services/geminiService';
 import { ChevronDownIcon, CloseIcon, InfoIcon, TrashIcon, BookOpenIcon, VolumeUpIcon, SaveIcon, SendIcon, MenuIcon, SearchIcon } from './components/Icons';
@@ -7,25 +7,15 @@ import LoadingSpinner from './components/LoadingSpinner';
 import { grammarData, vocabData } from './teachMeData';
 import { useAuth } from './hooks/useAuth.ts';
 import LoginScreen from './components/LoginScreen.tsx';
-import { auth } from './firebaseConfig.ts';
+import { auth, app, payments } from './firebaseConfig.ts';
 import { signOut } from 'firebase/auth';
 import { checkAndIncrementUsage } from './services/firestoreService.ts';
 import SubscriptionModal from './components/SubscriptionModal.tsx';
 import * as firestoreService from './services/firestoreService.ts';
 import { loadStripe } from '@stripe/stripe-js';
+import { createCheckoutSession } from "@stripe/firestore-stripe-payments/client";
 
-
-// Helper for localStorage
-const useStickyState = <T,>(defaultValue: T, key: string): [T, React.Dispatch<React.SetStateAction<T>>] => {
-  const [value, setValue] = useState<T>(() => {
-    const stickyValue = window.localStorage.getItem(key);
-    return stickyValue !== null ? JSON.parse(stickyValue) : defaultValue;
-  });
-  useEffect(() => {
-    window.localStorage.setItem(key, JSON.stringify(value));
-  }, [key, value]);
-  return [value, setValue];
-};
+// Helper for localStorage (Removed as we are using Firestore for persistence)
 
 // Helper function to decode base64 string to ArrayBuffer
 const base64ToArrayBuffer = (base64: string) => {
@@ -74,12 +64,11 @@ const pcmToWav = (pcmData: Int16Array, sampleRate: number) => {
   return new Blob([view], { type: 'audio/wav' });
 };
 
-
 // User Profile Component
 const UserProfile: React.FC<{
   profile: { name: string; hobbies: string; bio: string; };
-  subscriptionStatus: SubscriptionStatus; 
-  onProfileChange: (profile: UserProfileData) => void;
+  subscriptionStatus: SubscriptionStatus;
+  onProfileChange: (profile: { name: string; hobbies: string; bio: string; }) => void;
   onUpgradeClick: () => void;
   usageData?: UsageData;
   isUpgrading: boolean;
@@ -340,7 +329,6 @@ const QuizModal: React.FC<{
         </div>
     );
 };
-
 
 // Teach Me Modal Component
 const TeachMeModal: React.FC<{ 
@@ -732,42 +720,46 @@ const ChatModal: React.FC<{
     );
 };
 
+// Define props for AppContent
+interface AppContentProps {
+  user: UserData;
+}
 
-// Main App Component
-const AppContent: React.FC = () => {
-  const [nativeLanguage, setNativeLanguage] = useStickyState<string>(LANGUAGES[0].code, 'nativeLanguage');
-  const [targetLanguage, setTargetLanguage] = useStickyState<string>(LANGUAGES[1].code, 'targetLanguage');
+// AppContent Component - now receives user as a prop
+const AppContent: React.FC<AppContentProps> = ({ user }) => {
+  const [nativeLanguage, setNativeLanguage] = useState<string>(LANGUAGES[0].code);
+  const [targetLanguage, setTargetLanguage] = useState<string>(LANGUAGES[1].code);
   const [partners, setPartners] = useState<Partner[]>([]);
   const [isLoadingPartners, setIsLoadingPartners] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentPartner, setCurrentPartner] = useState<Partner | null>(null);
   const [currentChatMessages, setCurrentChatMessages] = useState<Message[]>([]);
-  const [showTutorial, setShowTutorial] = useStickyState<boolean>(true, 'showTutorial');
+  const [showTutorial, setShowTutorial] = useState(() => !localStorage.getItem('tutorialShown'));
   const [teachMeCache, setTeachMeCache] = useState<{ language: string; type: string; topic: string; content: string; } | null>(null);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [subscriptionModalReason, setSubscriptionModalReason] = useState<'limit' | 'manual'>('limit');
   const [isUpgrading, setIsUpgrading] = useState(false);
-  const { user } = useAuth();
 
+  useEffect(() => {
+    localStorage.setItem('nativeLanguage', nativeLanguage);
+  }, [nativeLanguage]);
+
+  useEffect(() => {
+    localStorage.setItem('targetLanguage', targetLanguage);
+    setPartners([]);
+    setTeachMeCache(null);
+  }, [targetLanguage]);
+  
   const handleUsageCheck = async (feature: UsageKey, action: () => void) => {
     if (!user) return;
     const canProceed = await checkAndIncrementUsage(user.uid, feature);
     if (canProceed) {
       action();
     } else {
-      setSubscriptionModalReason('limit'); // Set the reason here
+      setSubscriptionModalReason('limit');
       setShowSubscriptionModal(true);
     }
   };
-
-  useEffect(() => {
-    // When the user changes their target language,
-    // clear out the old partners and the cached lesson content
-    // to avoid showing stale information.
-    setPartners([]);
-    setTeachMeCache(null);
-  }, [targetLanguage]);
-
 
   const findPartners = async () => {
     handleUsageCheck('searches', async () => {
@@ -777,7 +769,7 @@ const AppContent: React.FC = () => {
         try {
             const nativeLangName = LANGUAGES.find(l => l.code === nativeLanguage)?.name || nativeLanguage;
             const targetLangName = LANGUAGES.find(l => l.code === targetLanguage)?.name || targetLanguage;
-            const generatedPartners = await geminiService.generatePartners(nativeLangName, targetLangName, userProfile.hobbies);
+            const generatedPartners = await geminiService.generatePartners(nativeLangName, targetLangName, user.hobbies);
             setPartners(generatedPartners);
         } catch (err: any) {
             setError(err.message || "An unknown error occurred.");
@@ -800,29 +792,13 @@ const AppContent: React.FC = () => {
 
   const handleProfileChange = (profile: { name: string; hobbies: string; bio: string; }) => {
     if (user) {
-      // Corrected to use firestoreService
       firestoreService.updateUserProfile(user.uid, profile);
     }
   };
 
   const handleSaveChat = (messages: Message[]) => {
     if (currentPartner && user) {
-        // Sanitize messages to remove any undefined fields before saving to Firestore
-        const sanitizedMessages = messages.map(msg => {
-            const sanitizedMsg: Message = {
-                sender: msg.sender,
-                text: msg.text,
-            };
-            // Only include correction and translation if they exist
-            if (msg.correction) {
-                sanitizedMsg.correction = msg.correction;
-            }
-            if (msg.translation) {
-                sanitizedMsg.translation = msg.translation;
-            }
-            return sanitizedMsg;
-        });
-
+        const sanitizedMessages = messages.map(msg => ({...msg})); // Basic sanitation
         const chatToSave = { partner: currentPartner, messages: sanitizedMessages };
         firestoreService.saveChatInFirestore(user.uid, chatToSave);
         alert('Chat saved!');
@@ -844,27 +820,55 @@ const AppContent: React.FC = () => {
   
   const handleShareQuizResults = (topic: string, score: number, questions: QuizQuestion[], userAnswers: string[]) => {
     let quizSummary = `I just took a quiz on "${topic}" and my score was ${score}/${questions.length}.`;
-    
     if (score < questions.length) {
-      quizSummary += "\n\nHere are the questions I got wrong:\n";
-      questions.forEach((q, index) => {
-        if (userAnswers[index] !== q.correctAnswer) {
-          quizSummary += `- Question: "${q.question}"\n  - My answer: "${userAnswers[index] || 'No answer'}"\n  - Correct answer: "${q.correctAnswer}"\n`;
-        }
-      });
-      quizSummary += "\nCan you help me understand my mistakes?";
+      quizSummary += "\n\nCan you help me understand my mistakes?";
     } else {
-      quizSummary += " I got a perfect score! Let's talk about something related to this topic.";
+      quizSummary += " I got a perfect score!";
     }
-
     const quizMessage: Message = { sender: 'user', text: quizSummary };
-    
     setCurrentChatMessages(prev => [...prev, quizMessage]);
     if (!currentPartner) {
         const partnerToChatWith = savedChat?.partner || partners[0];
         if(partnerToChatWith) setCurrentPartner(partnerToChatWith);
     }
   };
+  
+  const handleUpgrade = async () => {
+  if (!user) return;
+  setIsUpgrading(true);
+  try {
+    // Use the official SDK function to create the checkout session
+    const session = await createCheckoutSession(payments, {
+      price: "price_1SAIFpGYNyUbUaQ657RL4nVR", // Your test price ID
+      success_url: `${window.location.origin}?checkout_success=true`,
+      cancel_url: window.location.origin,
+    });
+    // Redirect the user to the Stripe checkout page
+    window.location.assign(session.url);
+  } catch (error) {
+    console.error("Stripe Checkout Error:", error);
+    alert("Could not connect to the payment gateway. Please try again later.");
+    setIsUpgrading(false);
+  }
+  // No need for a `finally` block as the page will redirect
+};
+
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    if (query.get("checkout_success")) {
+      alert("Your subscription is complete! Welcome to Langcampus Pro.");
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, []);
+
+  useEffect(() => {
+      if (!user) return;
+      const unsubscribe = onSubscriptionCreated(app, (snapshot) => {
+        // This callback can be used to show a confirmation message, etc.
+        console.log('Subscription data updated:', snapshot);
+      });
+      return () => unsubscribe();
+  }, [user]);
 
   const userProfile = {
     name: user?.name || '',
@@ -873,55 +877,6 @@ const AppContent: React.FC = () => {
   };
 
   const savedChat = user?.savedChat || null;
-
-  const handleUpgrade = async () => {
-    if (!user) return;
-    setIsUpgrading(true);
-
-    try {
-        const stripePromise = loadStripe(process.env.VITE_STRIPE_PUBLISHABLE_KEY!);
-        //const functionUrl = "https://us-central1-langcampus-exchange.cloudfunctions.net/createStripeCheckout";
-        const functionUrl =
-        process.env.NODE_ENV === 'development'
-          ? "http://127.0.0.1:5001/langcampus-exchange/us-central1/createStripeCheckout"
-          : "https://us-central1-langcampus-exchange.cloudfunctions.net/createStripeCheckout";
-        
-        const response = await fetch(functionUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ data: { userId: user.uid, userEmail: user.email } }),
-        });
-
-        const { sessionId, error } = await response.json();
-
-        if (error) {
-            throw new Error(error);
-        }
-
-        const stripe = await stripePromise;
-        if (stripe) {
-            await stripe.redirectToCheckout({ sessionId });
-        } else {
-            throw new Error("Stripe.js failed to load.");
-        }
-
-    } catch (error) {
-        console.error("Upgrade Error:", error);
-        alert("Could not connect to the payment gateway. Please try again later.");
-    } finally {
-        setIsUpgrading(false);
-    }
-  };
-
-  useEffect(() => {
-    // Check for a successful checkout redirect from Stripe
-    const query = new URLSearchParams(window.location.search);
-    if (query.get("checkout_success")) {
-      alert("Your subscription is complete! Welcome to Langcampus Pro.");
-      // Clean the URL to prevent the message from showing on refresh
-      window.history.replaceState(null, '', window.location.pathname);
-    }
-  }, []);
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
@@ -945,9 +900,11 @@ const AppContent: React.FC = () => {
             <div className="bg-blue-100 dark:bg-blue-900 border-l-4 border-blue-500 text-blue-700 dark:text-blue-200 p-4 rounded-md mb-6 flex justify-between items-center shadow-lg">
                 <div>
                     <p className="font-bold">New Here?</p>
-                    <p>Click the button to learn how to use Langcampus Exchange.</p>
+                    <p>Click the "My Info" icon to learn how to use Langcampus Exchange.</p>
                 </div>
-                <button onClick={() => setShowTutorial(true)} className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">Show Tutorial</button>
+                <button onClick={() => setShowTutorial(false)} className="p-2 text-blue-500 hover:text-blue-700">
+                    <CloseIcon className="w-6 h-6"/>
+                </button>
             </div>
         )}
 
@@ -972,7 +929,7 @@ const AppContent: React.FC = () => {
                 {partners.map(p => <PartnerCard key={p.name} partner={p} onStartChat={handleStartChat} />)}
             </div>
         )}
-        {!isLoadingPartners && !error && partners.length === 0 && (
+        {!isLoadingPartners && !error && partners.length === 0 && !savedChat && (
             <div className="text-center mt-12 text-gray-500">
                 <p className="text-xl">Welcome to Langcampus Exchange!</p>
                 <p>Select your languages and click "Find New Pals" to start your journey.</p>
@@ -993,7 +950,6 @@ const AppContent: React.FC = () => {
           userProfile={userProfile}
           handleUsageCheck={handleUsageCheck}
       />}
-      {showTutorial && <TutorialModal onClose={() => setShowTutorial(false)} />}
       {showSubscriptionModal && <SubscriptionModal onClose={() => setShowSubscriptionModal(false)} onSubscribe={handleUpgrade} reason={subscriptionModalReason} isUpgrading={isUpgrading} />}
     </div>
   );
@@ -1015,16 +971,20 @@ const LanguageSelector: React.FC<{
     </div>
 );
 
+// Main App component - this is now the single source of truth for auth state
 const App: React.FC = () => {
     const { user, loading } = useAuth();
+
     if (loading) {
         return (
-            <div className="flex justify-center items-center min-h-screen">
+            <div className="flex justify-center items-center min-h-screen bg-gray-100 dark:bg-gray-900">
                 <LoadingSpinner size="lg" />
             </div>
         );
     }
-    return user ? <AppContent /> : <LoginScreen />;
+
+    // If loading is false, we render based on whether 'user' is truthy or falsy
+    return user ? <AppContent user={user} /> : <LoginScreen />;
 };
 
 export default App;

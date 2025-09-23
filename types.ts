@@ -1,3 +1,14 @@
+// This interface represents the structure of a subscription document
+// that the Stripe Extension creates in Firestore.
+export interface Subscription {
+  id: string;
+  status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'unpaid';
+  // Add other fields from the extension as needed
+  role: string;
+  // Timestamps can be included if you need them
+  // created: { seconds: number; nanoseconds: number; };
+}
+
 export interface UserProfileData {
   name: string;
   hobbies: string;
@@ -53,12 +64,16 @@ export interface UserData {
   email: string | null;
   displayName: string | null;
   photoURL: string | null;
-  subscription: SubscriptionStatus;
+  
+  // This field is added by the Stripe extension
+  stripeId?: string; 
+  
+  // This will be populated by our useAuth hook from the 'subscriptions' subcollection
+  activeSubscription: boolean; 
+
   usage: UsageData;
-  // Merged from UserProfileData
   name: string;
   hobbies: string;
   bio: string;
-  // Added for persistence
   savedChat: SavedChat | null;
 }
