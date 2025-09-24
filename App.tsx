@@ -893,23 +893,50 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   };
 
   const handleCancelSubscription = async () => {
+    // We still use the 'user' from state to check if someone is logged in.
     if (!user) return;
-    setIsCancelling(true); // <-- Set the new loading state
+    setIsCancelling(true);
 
-    const functionRef = httpsCallable(functions, 'ext-invertase-firestore-stripe-payments-createPortalLink');
+    // This is the key change: Get the currently signed-in user object from Firebase Auth.
+    const currentUser = auth.currentUser;
+
+    if (!currentUser) {
+        alert("Could not verify user. Please sign in again.");
+        setIsCancelling(false);
+        return;
+    }
 
     try {
-      const { data } = await functionRef({
-        returnUrl: window.location.origin
+      // The function URL for your new, reliable function
+      const functionUrl = "https://us-central1-langcampus-exchange.cloudfunctions.net/createStripePortalLink";
+
+      // Call getIdToken() on the correct object (auth.currentUser)
+      const idToken = await currentUser.getIdToken();
+
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${idToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          returnUrl: window.location.origin
+        })
       });
-      
-      window.location.assign((data as {url: string}).url);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create portal link.');
+      }
+
+      const { url } = await response.json();
+      window.location.assign(url);
 
     } catch (error) {
       console.error("Error creating portal link:", error);
       alert("An error occurred while trying to access your subscription details. Please try again later.");
     } finally {
-        setIsCancelling(false); // <-- Always reset the loading state
+        setIsCancelling(false);
     }
   };
 

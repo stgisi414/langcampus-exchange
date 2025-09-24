@@ -1,9 +1,11 @@
 import cors from "cors";
-// Import Request from functions with an alias, and Response from express, as that's what the v2 onRequest uses.
 import { onRequest, Request as FunctionsRequest } from "firebase-functions/v2/https";
 import { Response as ExpressResponse } from "express";
 import * as logger from "firebase-functions/logger";
+import Stripe from "stripe";
+import { getFirestore } from "firebase-admin/firestore";
 import { initializeApp, getApps } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 
 if (getApps().length === 0) {
   initializeApp();
@@ -137,6 +139,60 @@ export const geminiTTS = onRequest(
       } catch (error: any) {
         logger.error(`Error generating TTS for text "${text}" in language "${languageCode}":`, error.message);
         return response.status(500).send("Failed to generate audio.");
+      }
+    });
+  }
+);
+
+export const createStripePortalLink = onRequest(
+  { secrets: ["STRIPE_SECRET_KEY"] },
+  (request: FunctionsRequest, response: ExpressResponse) => {
+    corsHandler(request, response, async () => {
+      if (request.method !== 'POST') {
+        response.status(405).send('Method Not Allowed');
+        return;
+      }
+      
+      const authorization = request.headers.authorization;
+      if (!authorization || !authorization.startsWith('Bearer ')) {
+        response.status(403).send("Unauthorized: No token provided.");
+        return;
+      }
+
+      const idToken = authorization.split('Bearer ')[1];
+      
+      try {
+        const decodedToken = await getAuth().verifyIdToken(idToken);
+        const uid = decodedToken.uid;
+        
+        const db = getFirestore();
+        const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+            apiVersion: "2025-08-27.basil",
+        });
+
+        const customerDoc = await db.collection("customers").doc(uid).get();
+        const customerData = customerDoc.data();
+        if (!customerData || !customerData.stripeId) {
+          throw new Error("Stripe customer ID not found in Firestore.");
+        }
+        const stripeCustomerId = customerData.stripeId;
+
+        const { returnUrl } = request.body;
+        if (!returnUrl) {
+            response.status(400).send("Bad Request: Missing returnUrl.");
+            return;
+        }
+
+        const portalSession = await stripe.billingPortal.sessions.create({
+          customer: stripeCustomerId,
+          return_url: returnUrl,
+        });
+
+        response.status(200).send({ url: portalSession.url });
+
+      } catch (error: any) {
+        logger.error(`Error creating portal link:`, error);
+        response.status(500).send({ error: "Failed to create portal link." });
       }
     });
   }
