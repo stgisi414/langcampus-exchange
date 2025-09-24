@@ -7,13 +7,14 @@ import LoadingSpinner from './components/LoadingSpinner';
 import { grammarData, vocabData } from './teachMeData';
 import { useAuth } from './hooks/useAuth.ts';
 import LoginScreen from './components/LoginScreen.tsx';
-import { auth, app, payments } from './firebaseConfig.ts';
+import { auth, app, payments, functions } from './firebaseConfig.ts';
 import { signOut } from 'firebase/auth';
+import { httpsCallable } from "firebase/functions";
 import { checkAndIncrementUsage } from './services/firestoreService.ts';
 import SubscriptionModal from './components/SubscriptionModal.tsx';
 import * as firestoreService from './services/firestoreService.ts';
 import { loadStripe } from '@stripe/stripe-js';
-import { createCheckoutSession } from "@stripe/firestore-stripe-payments/client";
+import { createCheckoutSession, onCurrentUserSubscriptionUpdate } from "@invertase/firestore-stripe-payments";
 
 // Helper for localStorage (Removed as we are using Firestore for persistence)
 
@@ -70,9 +71,11 @@ const UserProfile: React.FC<{
   subscriptionStatus: SubscriptionStatus;
   onProfileChange: (profile: { name: string; hobbies: string; bio: string; }) => void;
   onUpgradeClick: () => void;
+  onCancelSubscription: () => void;
   usageData?: UsageData;
   isUpgrading: boolean;
-}> = ({ profile, onProfileChange, onUpgradeClick, subscriptionStatus, usageData, isUpgrading }) => {
+  isCancelling: boolean;
+}> = ({ profile, onProfileChange, onUpgradeClick, onCancelSubscription, subscriptionStatus, usageData, isUpgrading, isCancelling }) => { // <-- ADD isCancelling HERE
   const [isOpen, setIsOpen] = useState(false);
   const [localProfile, setLocalProfile] = useState(profile);
 
@@ -148,24 +151,30 @@ const UserProfile: React.FC<{
                         </div>
                     )}
                 </div>
-                <div className="flex justify-between p-4 border-t dark:border-gray-700">
-                    <button onClick={handleSignOut} className="px-6 py-2 bg-red-500 text-white font-bold rounded-lg hover:bg-red-600 transition-colors">
+                <div className="flex justify-between items-center p-4 border-t dark:border-gray-700">
+                    <button onClick={handleSignOut} className="px-4 py-2 bg-gray-500 text-white font-bold rounded-lg hover:bg-gray-600 transition-colors text-sm">
                         Sign Out
                     </button>
+
                     {subscriptionStatus === 'subscriber' ? (
-                        <button className="px-6 py-2 bg-gray-500 text-white font-bold rounded-lg cursor-not-allowed" disabled>
-                            You're a Pro!
+                        <button 
+                            onClick={onCancelSubscription}
+                            className="px-4 py-2 bg-red-500 text-white font-bold rounded-lg hover:bg-red-600 text-sm disabled:opacity-75"
+                            disabled={isCancelling} // <-- USE THE NEW STATE HERE
+                        >
+                            {isCancelling ? "Loading..." : "Manage Plan"}
                         </button>
                     ) : (
                         <button 
                             onClick={onUpgradeClick} 
-                            className="px-6 py-2 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 disabled:opacity-75"
+                            className="px-4 py-2 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 disabled:opacity-75 text-sm"
                             disabled={isUpgrading}
                         >
                             {isUpgrading ? "Redirecting..." : "Upgrade"}
                         </button>
                     )}
-                    <button onClick={handleSaveAndClose} className="px-6 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition-colors">
+
+                    <button onClick={handleSaveAndClose} className="px-4 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition-colors text-sm">
                         Save and Close
                     </button>
                 </div>
@@ -727,8 +736,8 @@ interface AppContentProps {
 
 // AppContent Component - now receives user as a prop
 const AppContent: React.FC<AppContentProps> = ({ user }) => {
-  const [nativeLanguage, setNativeLanguage] = useState<string>(LANGUAGES[0].code);
-  const [targetLanguage, setTargetLanguage] = useState<string>(LANGUAGES[1].code);
+  const [nativeLanguage, setNativeLanguage] = useState<string>(() => localStorage.getItem('nativeLanguage') || LANGUAGES[0].code);
+  const [targetLanguage, setTargetLanguage] = useState<string>(() => localStorage.getItem('targetLanguage') || LANGUAGES[1].code);
   const [partners, setPartners] = useState<Partner[]>([]);
   const [isLoadingPartners, setIsLoadingPartners] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -739,6 +748,7 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [subscriptionModalReason, setSubscriptionModalReason] = useState<'limit' | 'manual'>('limit');
   const [isUpgrading, setIsUpgrading] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('nativeLanguage', nativeLanguage);
@@ -752,7 +762,8 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   
   const handleUsageCheck = async (feature: UsageKey, action: () => void) => {
     if (!user) return;
-    const canProceed = await checkAndIncrementUsage(user.uid, feature);
+    // Pass the user's subscription status from the state to the check function
+    const canProceed = await checkAndIncrementUsage(user.uid, feature, user.subscription);
     if (canProceed) {
       action();
     } else {
@@ -798,7 +809,14 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
 
   const handleSaveChat = (messages: Message[]) => {
     if (currentPartner && user) {
-        const sanitizedMessages = messages.map(msg => ({...msg})); // Basic sanitation
+        // This new sanitization step ensures no 'undefined' values are sent to Firestore.
+        const sanitizedMessages = messages.map(msg => ({
+            sender: msg.sender,
+            text: msg.text,
+            correction: msg.correction || null, // Convert undefined to null
+            translation: msg.translation || null, // Convert undefined to null
+        }));
+        
         const chatToSave = { partner: currentPartner, messages: sanitizedMessages };
         firestoreService.saveChatInFirestore(user.uid, chatToSave);
         alert('Chat saved!');
@@ -819,14 +837,31 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   };
   
   const handleShareQuizResults = (topic: string, score: number, questions: QuizQuestion[], userAnswers: string[]) => {
-    let quizSummary = `I just took a quiz on "${topic}" and my score was ${score}/${questions.length}.`;
-    if (score < questions.length) {
-      quizSummary += "\n\nCan you help me understand my mistakes?";
+    // Start with a summary of the quiz results.
+    let quizSummary = `I just took a quiz on "${topic}" and my score was ${score}/${questions.length}. `;
+
+    // Find the questions the user answered incorrectly.
+    const incorrectAnswers = questions.map((q, index) => ({
+        question: q.question,
+        userAnswer: userAnswers[index],
+        correctAnswer: q.correctAnswer
+    })).filter((item, index) => userAnswers[index] !== item.correctAnswer);
+
+    // If there were mistakes, add them to the summary message.
+    if (incorrectAnswers.length > 0) {
+        quizSummary += "Can you help me understand my mistakes?\n\nHere's what I got wrong:\n";
+        incorrectAnswers.forEach((item, index) => {
+            quizSummary += `\n${index + 1}. Question: "${item.question}"\n   - I answered: "${item.userAnswer}"\n   - Correct answer: "${item.correctAnswer}"`;
+        });
     } else {
-      quizSummary += " I got a perfect score!";
+        quizSummary += "I got a perfect score!";
     }
+
+    // Create the message object to be added to the chat.
     const quizMessage: Message = { sender: 'user', text: quizSummary };
     setCurrentChatMessages(prev => [...prev, quizMessage]);
+
+    // If no chat is currently active, open one.
     if (!currentPartner) {
         const partnerToChatWith = savedChat?.partner || partners[0];
         if(partnerToChatWith) setCurrentPartner(partnerToChatWith);
@@ -834,24 +869,69 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   };
   
   const handleUpgrade = async () => {
-  if (!user) return;
-  setIsUpgrading(true);
-  try {
-    // Use the official SDK function to create the checkout session
-    const session = await createCheckoutSession(payments, {
-      price: "price_1SAIFpGYNyUbUaQ657RL4nVR", // Your test price ID
-      success_url: `${window.location.origin}?checkout_success=true`,
-      cancel_url: window.location.origin,
-    });
-    // Redirect the user to the Stripe checkout page
-    window.location.assign(session.url);
-  } catch (error) {
-    console.error("Stripe Checkout Error:", error);
-    alert("Could not connect to the payment gateway. Please try again later.");
-    setIsUpgrading(false);
-  }
-  // No need for a `finally` block as the page will redirect
-};
+      if (!user) return;
+      setIsUpgrading(true);
+
+      try {
+        const session = await createCheckoutSession(payments, {
+          price: "price_1SARF4GYNyUbUaQ6BrCx8E9k", 
+          success_url: `${window.location.origin}?checkout_success=true`,
+          cancel_url: window.location.origin,
+        });
+        
+        // ADD THIS LINE to see what's in the session object
+        console.log("Stripe session created:", session); 
+        
+        // The redirect line
+        window.location.assign(session.url);
+
+      } catch (error) {
+        console.error("Stripe Checkout Error:", error);
+        alert("Could not connect to the payment gateway. Please try again later.");
+        setIsUpgrading(false);
+      }
+  };
+
+  const handleCancelSubscription = async () => {
+    if (!user) return;
+    setIsCancelling(true);
+
+    try {
+      // This is your new function's URL
+      const functionUrl = 
+        process.env.NODE_ENV === 'development'
+          ? "http://127.0.0.1:5001/langcampus-exchange/us-central1/createStripePortalLink"
+          : "https://us-central1-langcampus-exchange.cloudfunctions.net/createStripePortalLink";
+
+      // Get the user's auth token to securely call the function
+      const idToken = await user.getIdToken();
+
+      const response = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${idToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          returnUrl: window.location.origin
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create portal link.');
+      }
+
+      const { url } = await response.json();
+      window.location.assign(url);
+
+    } catch (error) {
+      console.error("Error creating portal link:", error);
+      alert("An error occurred while trying to access your subscription details. Please try again later.");
+    } finally {
+        setIsCancelling(false);
+    }
+  };
 
   useEffect(() => {
     const query = new URLSearchParams(window.location.search);
@@ -860,15 +940,6 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
       window.history.replaceState(null, '', window.location.pathname);
     }
   }, []);
-
-  useEffect(() => {
-      if (!user) return;
-      const unsubscribe = onSubscriptionCreated(app, (snapshot) => {
-        // This callback can be used to show a confirmation message, etc.
-        console.log('Subscription data updated:', snapshot);
-      });
-      return () => unsubscribe();
-  }, [user]);
 
   const userProfile = {
     name: user?.name || '',
@@ -891,7 +962,16 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
            <button onClick={findPartners} disabled={isLoadingPartners} className="px-6 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed">
             {isLoadingPartners ? 'Searching...' : 'Find New Pals'}
           </button>
-          <UserProfile profile={userProfile} onProfileChange={handleProfileChange} onUpgradeClick={() => { setSubscriptionModalReason('manual'); setShowSubscriptionModal(true); }} subscriptionStatus={user?.subscription || 'free'} usageData={user?.usage} isUpgrading={isUpgrading} />
+          <UserProfile 
+            profile={userProfile} 
+            onProfileChange={handleProfileChange} 
+            onUpgradeClick={() => { setSubscriptionModalReason('manual'); setShowSubscriptionModal(true); }} 
+            onCancelSubscription={handleCancelSubscription}
+            subscriptionStatus={user?.subscription || 'free'} 
+            usageData={user?.usage} 
+            isUpgrading={isUpgrading}
+            isCancelling={isCancelling}
+          />
         </div>
       </header>
 

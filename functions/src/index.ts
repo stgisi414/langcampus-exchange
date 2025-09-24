@@ -2,10 +2,7 @@ import cors from "cors";
 // Import Request from functions with an alias, and Response from express, as that's what the v2 onRequest uses.
 import { onRequest, Request as FunctionsRequest } from "firebase-functions/v2/https";
 import { Response as ExpressResponse } from "express";
-import express from "express";
 import * as logger from "firebase-functions/logger";
-import Stripe from "stripe";
-import { getFirestore } from "firebase-admin/firestore";
 import { initializeApp, getApps } from "firebase-admin/app";
 
 if (getApps().length === 0) {
@@ -143,99 +140,4 @@ export const geminiTTS = onRequest(
       }
     });
   }
-);
-
-// Use the correct, aliased types for Firebase onRequest handlers
-export const createStripeCheckout = onRequest(
-  { cors: true, secrets: ["STRIPE_SECRET_KEY"] },
-  async (request: FunctionsRequest, response: ExpressResponse) => {
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-      apiVersion: "2025-08-27.basil",
-    });
-
-    const { userId, userEmail } = request.body.data;
-
-    if (!userId || !userEmail) {
-      response.status(400).send({ error: "Missing userId or userEmail" });
-      return;
-    }
-
-    try {
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
-        mode: "subscription",
-        line_items: [{
-          price: "price_1SAIFpGYNyUbUaQ657RL4nVR", //Test price
-          quantity: 1,
-        }],
-        success_url: `${request.headers.origin}?checkout_success=true`,
-        cancel_url: `${request.headers.origin}`,
-        customer_email: userEmail,
-        metadata: {
-            firebaseUID: userId,
-        }
-      });
-
-      response.status(200).send({ sessionId: session.id });
-    } catch (error) {
-      logger.error("Stripe Checkout Error:", error);
-      response.status(500).send({ error: "Failed to create Stripe session." });
-    }
-  }
-);
-
-const stripeWebhookApp = express();
-
-stripeWebhookApp.post("/", express.raw({type: 'application/json'}), async (request: express.Request, response: express.Response) => {
-    logger.info("Stripe webhook function triggered.");
-
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-      apiVersion: "2025-08-27.basil",
-    });
-
-    const signature = request.headers["stripe-signature"];
-    if (!signature) {
-      logger.error("Webhook Error: Missing Stripe signature.");
-      response.status(400).send("Webhook signature is missing.");
-      return;
-    }
-
-    let event: Stripe.Event;
-    try {
-      event = stripe.webhooks.constructEvent(
-        request.body,
-        signature,
-        process.env.STRIPE_WEBHOOK_SECRET!
-      );
-      logger.info(`Webhook event received successfully: ${event.type}`);
-    } catch (err: any) {
-      logger.error("Webhook signature verification failed.", err.message);
-      response.status(400).send(`Webhook Error: ${err.message}`);
-      return;
-    }
-
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object as Stripe.Checkout.Session;
-      const firebaseUID = session.metadata?.firebaseUID;
-
-      if (firebaseUID) {
-        try {
-          logger.info(`Updating user ${firebaseUID} subscription status to 'subscriber'.`);
-          const userRef = getFirestore().collection("users").doc(firebaseUID);
-          await userRef.update({ subscription: "subscriber" });
-          logger.info(`Successfully updated user ${firebaseUID}.`);
-        } catch (dbError) {
-          logger.error(`Firestore update failed for user ${firebaseUID}`, dbError);
-        }
-      } else {
-        logger.warn("Webhook received checkout.session.completed event without a firebaseUID in metadata.");
-      }
-    }
-
-    response.status(200).send({ received: true });
-});
-
-export const stripeWebhook = onRequest(
-  { secrets: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"] },
-  stripeWebhookApp
 );

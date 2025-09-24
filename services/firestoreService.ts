@@ -74,7 +74,13 @@ export const deleteChatFromFirestore = async (userId: string) => {
 };
 
 // Checks and increments usage, now aware that usage might need initialization
-export const checkAndIncrementUsage = async (userId: string, feature: UsageKey): Promise<boolean> => {
+export const checkAndIncrementUsage = async (userId: string, feature: UsageKey, subscriptionStatus: SubscriptionStatus): Promise<boolean> => {
+    // First, check if the user is a subscriber. If so, always allow the action.
+    if (subscriptionStatus === 'subscriber') {
+        return true;
+    }
+
+    // If they are a free user, proceed with the original limit check.
     const userRef = doc(db, "customers", userId);
     const docSnap = await getDoc(userRef);
 
@@ -84,16 +90,8 @@ export const checkAndIncrementUsage = async (userId: string, feature: UsageKey):
     }
 
     const userData = docSnap.data() as UserData;
-
-    // A better implementation would check the subscriptions subcollection or a custom claim.
-    // For now, we assume a "subscriber" role might be on the main document.
-    if (userData.subscription === 'subscriber' || (userData as any).stripeRole === 'subscriber') {
-        return true;
-    }
-
     const today = getTodayDateString();
     
-    // Initialize usage object if it doesn't exist
     const usage = userData.usage || {
         searches: 0, messages: 0, audioPlays: 0, lessons: 0, quizzes: 0, lastUsageDate: '1970-01-01'
     };
@@ -109,7 +107,6 @@ export const checkAndIncrementUsage = async (userId: string, feature: UsageKey):
             "usage.lastUsageDate": today,
         };
         await updateDoc(userRef, resetUsage);
-        // Update local copy to avoid a re-read
         Object.assign(usage, { searches: 0, messages: 0, audioPlays: 0, lessons: 0, quizzes: 0 });
     }
 
