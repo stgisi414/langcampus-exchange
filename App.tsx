@@ -894,42 +894,22 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
 
   const handleCancelSubscription = async () => {
     if (!user) return;
-    setIsCancelling(true);
+    setIsCancelling(true); // <-- Set the new loading state
+
+    const functionRef = httpsCallable(functions, 'ext-invertase-firestore-stripe-payments-createPortalLink');
 
     try {
-      // This is your new function's URL
-      const functionUrl = 
-        process.env.NODE_ENV === 'development'
-          ? "http://127.0.0.1:5001/langcampus-exchange/us-central1/createStripePortalLink"
-          : "https://us-central1-langcampus-exchange.cloudfunctions.net/createStripePortalLink";
-
-      // Get the user's auth token to securely call the function
-      const idToken = await user.getIdToken();
-
-      const response = await fetch(functionUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${idToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          returnUrl: window.location.origin
-        })
+      const { data } = await functionRef({
+        returnUrl: window.location.origin
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create portal link.');
-      }
-
-      const { url } = await response.json();
-      window.location.assign(url);
+      
+      window.location.assign((data as {url: string}).url);
 
     } catch (error) {
       console.error("Error creating portal link:", error);
       alert("An error occurred while trying to access your subscription details. Please try again later.");
     } finally {
-        setIsCancelling(false);
+        setIsCancelling(false); // <-- Always reset the loading state
     }
   };
 
