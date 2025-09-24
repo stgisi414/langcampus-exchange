@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { UserProfileData, Partner, Message, QuizQuestion, SavedChat, Language, SubscriptionStatus, UserData, UsageData } from './types'; // Added UserData and UsageData
 import { LANGUAGES } from './constants';
 import * as geminiService from './services/geminiService';
@@ -15,6 +16,10 @@ import SubscriptionModal from './components/SubscriptionModal.tsx';
 import * as firestoreService from './services/firestoreService.ts';
 import { loadStripe } from '@stripe/stripe-js';
 import { createCheckoutSession, onCurrentUserSubscriptionUpdate } from "@invertase/firestore-stripe-payments";
+import Footer from './components/Footer.tsx';
+import TermsOfService from './components/TermsOfService.tsx';
+import PrivacyPolicy from './components/PrivacyPolicy.tsx';
+
 
 // Helper for localStorage (Removed as we are using Firestore for persistence)
 
@@ -729,10 +734,14 @@ const ChatModal: React.FC<{
     );
 };
 
-// Define props for AppContent
-interface AppContentProps {
-  user: UserData;
-}
+const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  return (
+    <>
+      {children}
+      <Footer />
+    </>
+  );
+};
 
 // AppContent Component - now receives user as a prop
 const AppContent: React.FC<AppContentProps> = ({ user }) => {
@@ -874,7 +883,7 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
 
       try {
         const session = await createCheckoutSession(payments, {
-          price: "price_1SARF4GYNyUbUaQ6BrCx8E9k", 
+          price: "price_1SAjgiGYNyUbUaQ68m7HlTMu", 
           success_url: `${window.location.origin}?checkout_success=true`,
           cancel_url: window.location.origin,
         });
@@ -957,7 +966,7 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   const savedChat = user?.savedChat || null;
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans">
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans flex flex-col">
       <header className="bg-white dark:bg-gray-800 shadow-md p-4 flex flex-col md:flex-row justify-between items-center gap-4">
         <h1 className="text-3xl font-bold text-blue-600 dark:text-blue-400 flex items-center">
           <img src="/logo.png" alt="Langcampus Exchange Logo" className="h-16 w-16 mr-3" />
@@ -982,17 +991,20 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
         </div>
       </header>
 
-      <main className="p-4 sm:p-8">
+      <main className="p-4 sm:p-8 flex-grow">
         {showTutorial && (
-            <div className="bg-blue-100 dark:bg-blue-900 border-l-4 border-blue-500 text-blue-700 dark:text-blue-200 p-4 rounded-md mb-6 flex justify-between items-center shadow-lg">
-                <div>
-                    <p className="font-bold">New Here?</p>
-                    <p>Click the "My Info" icon to learn how to use Langcampus Exchange.</p>
-                </div>
-                <button onClick={() => setShowTutorial(false)} className="p-2 text-blue-500 hover:text-blue-700">
-                    <CloseIcon className="w-6 h-6"/>
-                </button>
-            </div>
+          <div className="bg-blue-100 dark:bg-blue-900 border-l-4 border-blue-500 text-blue-700 dark:text-blue-200 p-4 rounded-md mb-6 flex justify-between items-center shadow-lg">
+              <div>
+                  <p className="font-bold">New Here?</p>
+                  <p>Click the "My Info" icon to learn how to use Langcampus Exchange.</p>
+              </div>
+              <button onClick={() => {
+                  setShowTutorial(false);
+                  localStorage.setItem('tutorialShown', 'true');
+              }} className="p-2 text-blue-500 hover:text-blue-700">
+                  <CloseIcon className="w-6 h-6"/>
+              </button>
+          </div>
         )}
 
         {savedChat && (
@@ -1071,7 +1083,13 @@ const App: React.FC = () => {
     }
 
     // If loading is false, we render based on whether 'user' is truthy or falsy
-    return user ? <AppContent user={user} /> : <LoginScreen />;
+    return (
+    <Routes>
+      <Route path="/terms-of-service" element={<TermsOfService />} />
+      <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+      <Route path="/*" element={user ? <Layout><AppContent user={user} /></Layout> : <LoginScreen />} />
+    </Routes>
+  );
 };
 
 export default App;

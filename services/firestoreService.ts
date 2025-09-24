@@ -1,7 +1,7 @@
-import { doc, getDoc, updateDoc, increment } from "firebase/firestore";
+import { doc, getDoc, updateDoc, increment, setDoc } from "firebase/firestore";
 import { User } from "firebase/auth";
 import { db } from '../firebaseConfig.ts';
-import { UserData, UsageKey, SavedChat } from '../types.ts';
+import { UserData, UsageKey, SavedChat, SubscriptionStatus } from '../types.ts';
 
 const DAILY_LIMITS = {
   searches: 5,
@@ -21,38 +21,34 @@ const getTodayDateString = () => {
 };
 
 /**
- * Initializes our app-specific fields on a user's document in the 'customers' collection.
- * This is safe to call multiple times, as it only adds fields if they are missing.
- * We let the Stripe Extension create the document, and we enrich it with this function.
+ * Initializes or creates our app-specific fields on a user's document in the 'customers' collection.
+ * This function will now only add the 'usage' field if it doesn't already exist.
  */
 export const initializeUserProfile = async (uid: string, user: User) => {
-  const userRef = doc(db, "customers", uid); // Target 'customers' collection
+  const userRef = doc(db, "customers", uid);
   const docSnap = await getDoc(userRef);
 
-  if (docSnap.exists()) {
-    const data = docSnap.data();
-    // Check if our app-specific fields are missing, and if so, add them.
-    if (data.usage === undefined || data.name === undefined) {
-      await updateDoc(userRef, {
-        name: data.name || user.displayName || '',
-        hobbies: data.hobbies || '',
-        bio: data.bio || '',
-        savedChat: data.savedChat || null,
-        // Initialize usage stats for a new user
-        usage: data.usage || {
-          searches: 0,
-          messages: 0,
-          audioPlays: 0,
-          lessons: 0,
-          quizzes: 0,
-          lastUsageDate: getTodayDateString(),
-        },
-      });
-    }
+  if (!docSnap.exists() || !docSnap.data().usage) {
+    // If the document doesn't exist OR it exists but is missing the usage field,
+    // then we create/update it with the initial usage data.
+    await setDoc(userRef, {
+      name: docSnap.data()?.name || user.displayName || '',
+      hobbies: docSnap.data()?.hobbies || '',
+      bio: docSnap.data()?.bio || '',
+      savedChat: docSnap.data()?.savedChat || null,
+      usage: {
+        searches: 0,
+        messages: 0,
+        audioPlays: 0,
+        lessons: 0,
+        quizzes: 0,
+        lastUsageDate: getTodayDateString(),
+      },
+    }, { merge: true });
   }
-  // If the document doesn't exist yet, we do nothing. The `useAuth` hook's
-  // listener will call this function again once the extension creates the doc.
+  // If the document and the usage field already exist, we do nothing.
 };
+
 
 export const updateUserProfile = async (userId: string, profileData: { name: string; hobbies: string; bio: string; }) => {
   const userRef = doc(db, "customers", userId); // Target 'customers' collection
@@ -92,12 +88,13 @@ export const checkAndIncrementUsage = async (userId: string, feature: UsageKey, 
     const userData = docSnap.data() as UserData;
     const today = getTodayDateString();
     
+    // Initialize usage in memory if it's missing from the document
     const usage = userData.usage || {
         searches: 0, messages: 0, audioPlays: 0, lessons: 0, quizzes: 0, lastUsageDate: '1970-01-01'
     };
 
+    // If the last usage was before today, reset the counts in Firestore
     if (usage.lastUsageDate !== today) {
-        // Reset usage for the new day
         const resetUsage = {
             "usage.searches": 0,
             "usage.messages": 0,
@@ -107,7 +104,8 @@ export const checkAndIncrementUsage = async (userId: string, feature: UsageKey, 
             "usage.lastUsageDate": today,
         };
         await updateDoc(userRef, resetUsage);
-        Object.assign(usage, { searches: 0, messages: 0, audioPlays: 0, lessons: 0, quizzes: 0 });
+        // Also update our in-memory copy so the check below works correctly
+        Object.assign(usage, { searches: 0, messages: 0, audioPlays: 0, lessons: 0, quizzes: 0, lastUsageDate: today });
     }
 
     const currentUsage = usage[feature];
@@ -118,6 +116,7 @@ export const checkAndIncrementUsage = async (userId: string, feature: UsageKey, 
         return false;
     }
 
+    // Increment the specific feature's count in Firestore
     await updateDoc(userRef, {
         [`usage.${feature}`]: increment(1)
     });

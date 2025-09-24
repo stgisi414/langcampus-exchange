@@ -26,3 +26,6 @@ dist-ssr
 #api keys
 .local.env
 firebaseConfig.ts
+
+#custom
+manual_upgrade.md

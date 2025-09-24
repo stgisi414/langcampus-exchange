@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { signInWithPopup } from 'firebase/auth';
+import { signInWithPopup, AuthError } from 'firebase/auth';
 import { auth, googleProvider } from '../firebaseConfig.ts';
 import LoadingSpinner from './LoadingSpinner.tsx';
+import ErrorModal from './ErrorModal.tsx';
+import { InfoIcon } from './Icons.tsx'; // Import the InfoIcon
 
 const GoogleIcon = () => (
     <svg className="w-6 h-6 mr-3" viewBox="0 0 48 48">
@@ -15,46 +17,78 @@ const GoogleIcon = () => (
 const LoginScreen: React.FC = () => {
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showBrowserErrorModal, setShowBrowserErrorModal] = useState(false);
 
   const handleGoogleSignIn = async () => {
     setIsSigningIn(true);
     setError(null);
+    setShowBrowserErrorModal(false);
     try {
       await signInWithPopup(auth, googleProvider);
-    } catch (error) {
-      console.error("Error during sign-in:", error);
-      setError("Failed to sign in. Please try again.");
+    } catch (err) {
+      const error = err as AuthError;
+      console.error("Error during sign-in:", error.code, error.message);
+
+      if (error.code) { 
+        setShowBrowserErrorModal(true);
+      } else {
+        setError("An unknown error occurred during sign-in. Please try again.");
+      }
+      
       setIsSigningIn(false);
     }
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900 text-center p-4">
-        <img src="/logo.png" alt="Langcampus Exchange Logo" className="h-32 w-32 mb-4" />
-        <h1 className="text-4xl font-bold text-blue-600 dark:text-blue-400">Langcampus Exchange</h1>
-        <p className="mt-2 text-lg text-gray-600 dark:text-gray-300">Your AI-powered portal to language fluency.</p>
-        
-        <div className="mt-12">
-            <button
-              onClick={handleGoogleSignIn}
-              disabled={isSigningIn}
-              className="flex items-center justify-center px-6 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-wait"
-            >
-              {isSigningIn ? (
-                <>
-                  <LoadingSpinner size="sm" />
-                  <span className="ml-3">Signing In...</span>
-                </>
-              ) : (
-                <>
-                  <GoogleIcon />
-                  <span className="font-semibold text-gray-800 dark:text-gray-200">Sign in with Google</span>
-                </>
-              )}
-            </button>
-            {error && <p className="mt-4 text-red-500">{error}</p>}
-        </div>
-    </div>
+    <>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900 text-center p-4">
+          <img src="/logo.png" alt="Langcampus Exchange Logo" className="h-32 w-32 mb-4" />
+          <h1 className="text-4xl font-bold text-blue-600 dark:text-blue-400">Langcampus Exchange</h1>
+          <p className="mt-2 text-lg text-gray-600 dark:text-gray-300">Your AI-powered portal to language fluency.</p>
+          
+          <div className="mt-12 w-full max-w-sm">
+              <div className="bg-yellow-100 dark:bg-yellow-900 border-l-4 border-yellow-500 text-yellow-800 dark:text-yellow-200 p-4 rounded-md mb-6 text-left flex items-start">
+                  <InfoIcon className="w-6 h-6 mr-3 flex-shrink-0" />
+                  <div>
+                    <p className="font-bold">Browser Recommendation</p>
+                    <p className="text-sm">For the best experience, please use a standard browser like Chrome, Safari, or Edge. In-app browsers may be blocked by Google for security reasons.</p>
+                  </div>
+              </div>
+
+              <button
+                onClick={handleGoogleSignIn}
+                disabled={isSigningIn}
+                className="w-full flex items-center justify-center px-6 py-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-wait"
+              >
+                {isSigningIn ? (
+                  <>
+                    <LoadingSpinner size="sm" />
+                    <span className="ml-3">Signing In...</span>
+                  </>
+                ) : (
+                  <>
+                    <GoogleIcon />
+                    <span className="font-semibold text-gray-800 dark:text-gray-200">Sign in with Google</span>
+                  </>
+                )}
+              </button>
+              {error && <p className="mt-4 text-red-500">{error}</p>}
+          </div>
+      </div>
+
+      {showBrowserErrorModal && (
+        <ErrorModal
+          title="Unsupported Browser"
+          message={
+            <p>
+              It looks like you're using a browser that isn't supported for Google Sign-In. 
+              Please copy the website link and open it in a standard browser like Chrome or Safari to continue.
+            </p>
+          }
+          onClose={() => setShowBrowserErrorModal(false)}
+        />
+      )}
+    </>
   );
 };
 
