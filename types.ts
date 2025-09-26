@@ -59,6 +59,13 @@ export interface UsageData {
   lastUsageDate: string; // Stored as 'YYYY-MM-DD'
 }
 
+export interface TeachMeCache {
+  language: string;
+  type: string;
+  topic: string;
+  content: string;
+}
+
 export interface UserData {
   uid: string;
   email: string | null;
@@ -76,4 +83,5 @@ export interface UserData {
   hobbies: string;
   bio: string;
   savedChat: SavedChat | null;
+  teachMeCache: TeachMeCache | null; // Add this line
 }

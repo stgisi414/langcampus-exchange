@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { UserProfileData, Partner, Message, QuizQuestion, SavedChat, Language, SubscriptionStatus, UserData, UsageData } from './types'; // Added UserData and UsageData
+import { UserProfileData, Partner, Message, QuizQuestion, SavedChat, Language, SubscriptionStatus, UserData, UsageData, teachMeCache } from './types'; // Added UserData and UsageData
 import { LANGUAGES } from './constants';
 import * as geminiService from './services/geminiService';
 import { ChevronDownIcon, CloseIcon, InfoIcon, TrashIcon, BookOpenIcon, VolumeUpIcon, SaveIcon, SendIcon, MenuIcon, SearchIcon } from './components/Icons';
@@ -349,8 +349,8 @@ const TeachMeModal: React.FC<{
     language: string; 
     onClose: () => void; 
     nativeLanguage: string;
-    cache: { language: string; type: string; topic: string; content: string; } | null;
-    setCache: (cache: { language: string; type: string; topic: string; content: string; } | null) => void;
+    cache: TeachMeCache | null; 
+    setCache: (cache: TeachMeCache | null) => void; 
     onShareQuizResults: (topic: string, score: number, questions: QuizQuestion[], userAnswers: string[]) => void;
     handleUsageCheck: (feature: UsageKey, action: () => void) => Promise<void>;
 }> = ({ language, onClose, nativeLanguage, cache, setCache, onShareQuizResults, handleUsageCheck }) => {
@@ -554,8 +554,8 @@ const ChatModal: React.FC<{
   onClose: () => void;
   onSaveChat: (messages: Message[]) => void;
   nativeLanguage: string; 
-  teachMeCache: { language: string; type: string; topic: string; content: string; } | null;
-  setTeachMeCache: (cache: { language: string; type: string; topic: string; content: string; } | null) => void;
+  teachMeCache: TeachMeCache | null;
+  setTeachMeCache: (cache: TeachMeCache | null) => void;
   onShareQuizResults: (topic: string, score: number, questions: QuizQuestion[], userAnswers: string[]) => void;
   userProfile: UserProfileData;
   handleUsageCheck: (feature: UsageKey, action: () => void) => Promise<void>;
@@ -753,7 +753,6 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   const [currentPartner, setCurrentPartner] = useState<Partner | null>(null);
   const [currentChatMessages, setCurrentChatMessages] = useState<Message[]>([]);
   const [showTutorial, setShowTutorial] = useState(() => !localStorage.getItem('tutorialShown'));
-  const [teachMeCache, setTeachMeCache] = useState<{ language: string; type: string; topic: string; content: string; } | null>(null);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [subscriptionModalReason, setSubscriptionModalReason] = useState<'limit' | 'manual'>('limit');
   const [isUpgrading, setIsUpgrading] = useState(false);
@@ -766,8 +765,23 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   useEffect(() => {
     localStorage.setItem('targetLanguage', targetLanguage);
     setPartners([]);
-    setTeachMeCache(null);
-  }, [targetLanguage]);
+    if (user) {
+      firestoreService.deleteTeachMeCacheFromFirestore(user.uid);
+    }
+  }, [targetLanguage, user]);
+
+  const teachMeCache = user?.teachMeCache || null;
+  
+  // NEW: Define the setter function to call Firestore
+  const setTeachMeCache = (cache: TeachMeCache | null) => {
+    if (user) {
+      if (cache) {
+        firestoreService.saveTeachMeCacheInFirestore(user.uid, cache);
+      } else {
+        firestoreService.deleteTeachMeCacheFromFirestore(user.uid);
+      }
+    }
+  };
   
   const handleUsageCheck = async (feature: UsageKey, action: () => void) => {
     if (!user) return;

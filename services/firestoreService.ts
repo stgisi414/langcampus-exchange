@@ -1,7 +1,7 @@
 import { doc, getDoc, updateDoc, increment, setDoc } from "firebase/firestore";
 import { User } from "firebase/auth";
 import { db } from '../firebaseConfig.ts';
-import { UserData, UsageKey, SavedChat, SubscriptionStatus } from '../types.ts';
+import { UserData, UsageKey, SavedChat, SubscriptionStatus, TeachMeCache } from '../types.ts';
 
 const DAILY_LIMITS = {
   searches: 5,
@@ -29,13 +29,12 @@ export const initializeUserProfile = async (uid: string, user: User) => {
   const docSnap = await getDoc(userRef);
 
   if (!docSnap.exists() || !docSnap.data().usage) {
-    // If the document doesn't exist OR it exists but is missing the usage field,
-    // then we create/update it with the initial usage data.
     await setDoc(userRef, {
       name: docSnap.data()?.name || user.displayName || '',
       hobbies: docSnap.data()?.hobbies || '',
       bio: docSnap.data()?.bio || '',
       savedChat: docSnap.data()?.savedChat || null,
+      teachMeCache: docSnap.data()?.teachMeCache || null, // Add this line
       usage: {
         searches: 0,
         messages: 0,
@@ -46,7 +45,6 @@ export const initializeUserProfile = async (uid: string, user: User) => {
       },
     }, { merge: true });
   }
-  // If the document and the usage field already exist, we do nothing.
 };
 
 
@@ -67,6 +65,17 @@ export const saveChatInFirestore = async (userId: string, chat: SavedChat) => {
 export const deleteChatFromFirestore = async (userId: string) => {
   const userRef = doc(db, "customers", userId); // Target 'customers' collection
   await updateDoc(userRef, { savedChat: null });
+};
+
+export const saveTeachMeCacheInFirestore = async (userId: string, cache: TeachMeCache) => {
+  const userRef = doc(db, "customers", userId);
+  await updateDoc(userRef, { teachMeCache: cache });
+};
+
+// New function to clear the Teach Me cache
+export const deleteTeachMeCacheFromFirestore = async (userId: string) => {
+  const userRef = doc(db, "customers", userId);
+  await updateDoc(userRef, { teachMeCache: null });
 };
 
 // Checks and increments usage, now aware that usage might need initialization
