@@ -365,8 +365,7 @@ const TeachMeModal: React.FC<{
     const [searchQuery, setSearchQuery] = useState('');
 
     useEffect(() => {
-      // This effect runs whenever the modal is opened or the language changes.
-      // If a valid cache exists for the current language, it loads the lesson.
+      // If a cache exists AND it's for the currently selected language, load it.
       if (cache && cache.language === language) {
           setActiveTab(cache.type as 'Grammar' | 'Vocabulary');
           
@@ -381,14 +380,14 @@ const TeachMeModal: React.FC<{
           setSelectedTopic(cache.topic);
           setContent(cache.content);
       } 
-      // Otherwise, it ensures the modal's internal state is cleared.
+      // Otherwise, clear the local state to prevent showing stale content.
       else {
           setSelectedTopic(null);
           setContent('');
           setQuizQuestions(null);
           setLevel(1);
       }
-    }, [language, cache]);
+    }, [language, cache]); // This dependency array is correct
 
     const availableTopics = useMemo(() => {
         const data = activeTab === 'Grammar'
@@ -764,11 +763,10 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
 
   useEffect(() => {
     localStorage.setItem('targetLanguage', targetLanguage);
-    setPartners([]);
-    if (user) {
-      firestoreService.deleteTeachMeCacheFromFirestore(user.uid);
-    }
-  }, [targetLanguage, user]);
+    setPartners([]); 
+    // The line deleting from Firestore is removed. The local component state
+    // will now handle the UI update gracefully without a flicker.
+  }, [targetLanguage]);
 
   const teachMeCache = user?.teachMeCache || null;
   
