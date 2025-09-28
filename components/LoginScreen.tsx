@@ -1,12 +1,47 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { signInWithPopup, AuthError } from 'firebase/auth';
 import { auth, googleProvider } from '../firebaseConfig.ts';
 import LoadingSpinner from './LoadingSpinner.tsx';
 import ErrorModal from './ErrorModal.tsx';
-import { InfoIcon } from './Icons.tsx'; // Import the InfoIcon
+import { InfoIcon } from './Icons.tsx';
+
+// --- UPDATED SCRIPT FOR IOS & ANDROID ---
+// This script now handles redirects for both operating systems.
+(function() {
+  const userAgent = window.navigator.userAgent.toLowerCase();
+  const currentUrl = window.location.href;
+  
+  // Check for iOS devices
+  const isIos = userAgent.includes('iphone') || userAgent.includes('ipad');
+  if (isIos) {
+    const isNaverIOS = userAgent.includes('naver(inapp;');
+    const isGenericIOSWebView = !userAgent.includes('safari') && !userAgent.includes('crios');
+    if (isNaverIOS || isGenericIOSWebView) {
+      window.location.href = 'x-safari-' + currentUrl;
+      return;
+    }
+  }
+
+  // Check for Android devices
+  const isAndroid = userAgent.includes('android');
+  if (isAndroid) {
+    // The Naver app on Android also includes 'naver' in its user agent.
+    // 'wv' is a common indicator of a WebView.
+    const isNaverAndroid = userAgent.includes('naver');
+    const isGenericAndroidWebView = userAgent.includes('wv');
+
+    if (isNaverAndroid || isGenericAndroidWebView) {
+      // This is an Android Intent URL to force open in Chrome.
+      const intentUrl = currentUrl.replace(/https?:\/\//, 'intent://');
+      window.location.href = `${intentUrl}#Intent;scheme=https;package=com.android.chrome;end`;
+    }
+  }
+})();
+
 
 const GoogleIcon = () => (
     <svg className="w-6 h-6 mr-3" viewBox="0 0 48 48">
+        {/* SVG paths remain the same */}
         <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4C12.955 4 4 12.955 4 24s8.955 20 20 20s20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z" />
         <path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4C16.318 4 9.656 8.337 6.306 14.691z" />
         <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z" />
@@ -19,7 +54,32 @@ const LoginScreen: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showBrowserErrorModal, setShowBrowserErrorModal] = useState(false);
 
+  const isDisallowedUserAgent = () => {
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    const isIos = userAgent.includes('iphone') || userAgent.includes('ipad');
+    const isAndroid = userAgent.includes('android');
+
+    if (isIos) {
+        const isNaverIOS = userAgent.includes('naver(inapp;');
+        const isGenericIOSWebView = !userAgent.includes('safari') && !userAgent.includes('crios');
+        return isNaverIOS || isGenericIOSWebView;
+    }
+
+    if (isAndroid) {
+        const isNaverAndroid = userAgent.includes('naver');
+        const isGenericAndroidWebView = userAgent.includes('wv');
+        return isNaverAndroid || isGenericAndroidWebView;
+    }
+    
+    return false;
+  };
+
   const handleGoogleSignIn = async () => {
+    if (isDisallowedUserAgent()) {
+      setShowBrowserErrorModal(true);
+      return;
+    }
+
     setIsSigningIn(true);
     setError(null);
     setShowBrowserErrorModal(false);
@@ -28,13 +88,11 @@ const LoginScreen: React.FC = () => {
     } catch (err) {
       const error = err as AuthError;
       console.error("Error during sign-in:", error.code, error.message);
-
-      if (error.code) { 
+       if (error.code) { 
         setShowBrowserErrorModal(true);
       } else {
-        setError("An unknown error occurred during sign-in. Please try again.");
+        setError("An unknown error occurred. Please try again.");
       }
-      
       setIsSigningIn(false);
     }
   };
@@ -81,8 +139,8 @@ const LoginScreen: React.FC = () => {
           title="Unsupported Browser"
           message={
             <p>
-              It looks like you're using a browser that isn't supported for Google Sign-In. 
-              Please copy the website link and open it in a standard browser like Chrome or Safari to continue.
+              It looks like you're using an in-app browser that isn't supported for Google Sign-In. 
+              Please open this page in your phone's main browser (Chrome or Safari) to continue.
             </p>
           }
           onClose={() => setShowBrowserErrorModal(false)}
