@@ -363,6 +363,8 @@ const TeachMeModal: React.FC<{
     const [showQuiz, setShowQuiz] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const topicListRef = useRef<HTMLUListElement>(null);
+    const topicRefs = useRef<Map<string, HTMLButtonElement | null>>(new Map()); // Ref to hold topic button elements
 
     useEffect(() => {
       // If a cache exists AND it's for the currently selected language, load it.
@@ -379,6 +381,14 @@ const TeachMeModal: React.FC<{
           }
           setSelectedTopic(cache.topic);
           setContent(cache.content);
+
+          // Scroll to the selected topic
+          setTimeout(() => {
+            const topicElement = topicRefs.current.get(cache.topic);
+            if (topicElement) {
+              topicElement.scrollIntoView({ block: 'center' });
+            }
+          }, 0); // setTimeout ensures this runs after the component has re-rendered
       } 
       // Otherwise, clear the local state to prevent showing stale content.
       else {
@@ -404,6 +414,13 @@ const TeachMeModal: React.FC<{
             return data.filter(topic => topic.level === level);
         }
     }, [activeTab, level, language, searchQuery]);
+
+    const handleLevelChange = (lvl: number) => {
+        setLevel(lvl);
+        if (topicListRef.current) {
+            topicListRef.current.scrollTop = 0;
+        }
+    };
 
     const handleTopicSelect = async (topic: string) => {
         handleUsageCheck('lessons', async () => {
@@ -444,6 +461,25 @@ const TeachMeModal: React.FC<{
                 setIsLoading(false);
             }
         });
+    };
+
+    const currentIndex = useMemo(() => {
+        if (!selectedTopic) return -1;
+        return availableTopics.findIndex(t => t.title === selectedTopic);
+    }, [selectedTopic, availableTopics]);
+
+    const handlePreviousChapter = () => {
+        if (currentIndex > 0) {
+            const previousTopic = availableTopics[currentIndex - 1];
+            handleTopicSelect(previousTopic.title);
+        }
+    };
+
+    const handleNextChapter = () => {
+        if (currentIndex !== -1 && currentIndex < availableTopics.length - 1) {
+            const nextTopic = availableTopics[currentIndex + 1];
+            handleTopicSelect(nextTopic.title);
+        }
     };
 
     return (
@@ -500,7 +536,7 @@ const TeachMeModal: React.FC<{
                                     <p className="font-semibold mb-2 text-center">Select Level:</p>
                                     <div className="flex justify-center gap-2">
                                         {[1, 2, 3, 4, 5].map(lvl => (
-                                            <button key={lvl} onClick={() => setLevel(lvl)} className={`px-3 py-1 rounded-full text-sm ${level === lvl ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>
+                                            <button key={lvl} onClick={() => handleLevelChange(lvl)} className={`px-3 py-1 rounded-full text-sm ${level === lvl ? 'bg-blue-500 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}>
                                                 {lvl}
                                             </button>
                                         ))}
@@ -513,10 +549,14 @@ const TeachMeModal: React.FC<{
                            </div>
                         )}
 
-                        <ul className="space-y-2 overflow-y-auto flex-grow">
+                        <ul ref={topicListRef} className="space-y-2 overflow-y-auto flex-grow">
                            {availableTopics.length > 0 ? availableTopics.map(topic => (
                                 <li key={topic.title}>
-                                    <button onClick={() => handleTopicSelect(topic.title)} className={`w-full text-left p-2 rounded text-sm ${selectedTopic === topic.title ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+                                    <button
+                                      ref={el => topicRefs.current.set(topic.title, el)}
+                                      onClick={() => handleTopicSelect(topic.title)}
+                                      className={`w-full text-left p-2 rounded text-sm ${selectedTopic === topic.title ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                                    >
                                         {topic.title}
                                     </button>
                                 </li>
@@ -526,6 +566,24 @@ const TeachMeModal: React.FC<{
                     
                     {/* Right Side Content */}
                     <div className="w-full p-6 overflow-y-auto">
+                        {selectedTopic && (
+                            <div className="flex justify-between items-center mb-4">
+                                <button 
+                                    onClick={handlePreviousChapter} 
+                                    disabled={currentIndex <= 0 || isLoading}
+                                    className="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    &larr; Previous
+                                </button>
+                                <button 
+                                    onClick={handleNextChapter} 
+                                    disabled={currentIndex === -1 || currentIndex >= availableTopics.length - 1 || isLoading}
+                                    className="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm hover:bg-gray-300 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    Next &rarr;
+                                </button>
+                            </div>
+                        )}
                         {isLoading && <div className="flex justify-center items-center h-full"><LoadingSpinner /></div>}
                         {!isLoading && content && (
                             <div className="prose dark:prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: (window as any).marked.parse(content) }}></div>
@@ -768,12 +826,21 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     // will now handle the UI update gracefully without a flicker.
   }, [targetLanguage]);
 
-  const teachMeCache = user?.teachMeCache || null;
+  // Local state for optimistic UI updates on the cache.
+  const [teachMeCache, setTeachMeCacheState] = useState<TeachMeCache | null>(user?.teachMeCache || null);
+
+  // Keep local cache state in sync with the user data from Firestore.
+  useEffect(() => {
+      setTeachMeCacheState(user?.teachMeCache || null);
+  }, [user?.teachMeCache]);
   
   // NEW: Define the setter function to call Firestore
   const setTeachMeCache = (cache: TeachMeCache | null) => {
     if (user) {
+      // Optimistically update the local state for immediate UI feedback.
+      setTeachMeCacheState(cache);
       if (cache) {
+        // Persist the change to Firestore in the background.
         firestoreService.saveTeachMeCacheInFirestore(user.uid, cache);
       } else {
         firestoreService.deleteTeachMeCacheFromFirestore(user.uid);
