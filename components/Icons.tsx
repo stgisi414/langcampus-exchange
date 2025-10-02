@@ -69,3 +69,27 @@ export const WarningIcon: React.FC<IconProps> = ({ className }) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
     </svg>
 );
+
+export const UsersIcon: React.FC<IconProps> = ({ className }) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.37-5.514M13.5 14.886v-1.125a4.75 4.75 0 013.3-4.509 8.25 8.25 0 00-6.19-2.189 8.25 8.25 0 00-6.19 2.189 4.75 4.75 0 013.3 4.509v1.125M12 12.75a3 3 0 11-6 0 3 3 0 016 0zM19.5 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>
+);
+
+export const MicrophoneIcon: React.FC<IconProps> = ({ className }) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75V21a.75.75 0 01-1.5 0v-2.25m1.5 0h.008v.008H12v-.008zM12 5.25a4.5 4.5 0 014.5 4.5v1.5a4.5 4.5 0 01-9 0v-1.5a4.5 4.5 0 014.5-4.5zM3 13.5a9 9 0 0018 0" />
+    </svg>
+);
+
+export const StopIcon: React.FC<IconProps> = ({ className }) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+        <path fillRule="evenodd" d="M6 6a2 2 0 012-2h8a2 2 0 012 2v8a2 2 0 01-2 2H8a2 2 0 01-2-2V6z" clipRule="evenodd" />
+    </svg>
+);
+
+export const PlayIcon: React.FC<IconProps> = ({ className }) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+        <path fillRule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.38 2.802-1.636l10.864 6.136c1.267.71 1.267 2.548 0 3.257L7.302 20.983c-1.273.744-2.802-.209-2.802-1.636V5.653z" clipRule="evenodd" />
+    </svg>
+);

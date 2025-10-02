@@ -28,6 +28,8 @@ export interface Message {
   text: string;
   correction?: string;
   translation?: string;
+  audioUrl?: string; 
+  audioDuration?: number;
 }
 
 export interface QuizQuestion {
@@ -39,6 +41,16 @@ export interface QuizQuestion {
 export interface SavedChat {
   partner: Partner;
   messages: Message[];
+}
+
+export interface GroupChat {
+  id: string; // Unique ID for the group/websocket room
+  creatorId: string; // The UID of the person who started the group (the topic controller)
+  partner: Partner; // The bot partner's identity (for UI consistency)
+  topic: string | null; // The chosen topic for the group learning, null if not set
+  shareLink: string; // The URL to share (mock link for now)
+  members: string[]; // List of member UIDs
+  messages: Message[]; // Stored messages for the chat history
 }
 
 export interface Language {
@@ -83,5 +95,6 @@ export interface UserData {
   hobbies: string;
   bio: string;
   savedChat: SavedChat | null;
-  teachMeCache: TeachMeCache | null; // Add this line
+  teachMeCache: TeachMeCache | null;
+  activeGroupId: string | null;
 }
