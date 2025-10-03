@@ -117,7 +117,7 @@ export const generatePartners = async (nativeLanguage: string, targetLanguage: s
   }
 };
 
-export const getChatResponse = async (messages: Message[], partner: Partner, corrections: boolean, userProfile: UserProfileData, teachMe: teachMeCache): Promise<Message> => {
+export const getChatResponse = async (messages: Message[], partner: Partner, corrections: boolean, userProfile: UserProfileData): Promise<Message> => {
   if (!partner || !partner.name) {
     console.error("getChatResponse called with an invalid partner object.");
     return { sender: 'ai', text: "Sorry, there's a problem with my memory. Please try starting a new chat." };
