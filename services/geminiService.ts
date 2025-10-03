@@ -12,6 +12,10 @@ const TTS_PROXY_URL =
    process.env.NODE_ENV === 'development'
     ? "http://127.0.0.1:5001/langcampus-exchange/us-central1/geminiTTS"
     : "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiTTS";
+const TRANSCRIBE_PROXY_URL =
+  process.env.NODE_ENV === 'development'
+    ? "http://127.0.0.1:5001/langcampus-exchange/us-central1/transcribeAudio"
+    : "https://us-central1-langcampus-exchange.cloudfunctions.net/transcribeAudio";
 
 /**
  * A helper function to safely parse JSON from the AI,
@@ -270,5 +274,37 @@ export const generateQuiz = async (topic: string, type: 'Grammar' | 'Vocabulary'
   } catch (error) {
     console.error("Error generating quiz:", error);
     throw new Error("Failed to generate quiz. The AI may have returned an invalid format.");
+  }
+};
+
+export const transcribeAudio = async (audioBlob: Blob, languageCode: string): Promise<string> => {
+  try {
+    // Convert Blob to a base64 string
+    const reader = new FileReader();
+    const base64String = await new Promise<string>((resolve, reject) => {
+      reader.onload = () => resolve((reader.result as string).split(',')[1]);
+      reader.onerror = (error) => reject(error);
+      reader.readAsDataURL(audioBlob);
+    });
+
+    const response = await fetch(TRANSCRIBE_PROXY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ audioBytes: base64String, languageCode }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Error from transcription proxy function:", errorText);
+      throw new Error(`Transcription proxy request failed: ${errorText}`);
+    }
+
+    const data = await response.json();
+    return data.transcription || "";
+  } catch (error) {
+    console.error("Error calling the transcription proxy function:", error);
+    throw error;
   }
 };

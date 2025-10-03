@@ -101,3 +101,13 @@ export const getGroupBotResponse = (messages: Message[]): Message => {
     }
     return { sender: 'ai', text: 'Group chat initialized.' };
 };
+
+// Fetches a single group document by its ID.
+export const getGroupById = async (groupId: string): Promise<GroupChat | null> => {
+    const groupRef = doc(db, GROUPS_COLLECTION, groupId);
+    const docSnap = await getDoc(groupRef);
+    if (docSnap.exists()) {
+        return docSnap.data() as GroupChat;
+    }
+    return null;
+};

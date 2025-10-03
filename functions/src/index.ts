@@ -6,6 +6,7 @@ import Stripe from "stripe";
 import { getFirestore } from "firebase-admin/firestore";
 import { initializeApp, getApps } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
+import { SpeechClient } from "@google-cloud/speech";
 
 if (getApps().length === 0) {
   initializeApp();
@@ -21,6 +22,7 @@ const allowedOrigins = [
 ];
 
 const corsHandler = cors({ origin: allowedOrigins });
+const speechClient = new SpeechClient();
 
 // Use the correct, aliased types for Firebase onRequest handlers
 export const geminiProxy = onRequest(
@@ -40,7 +42,7 @@ export const geminiProxy = onRequest(
         return response.status(500).send("Internal Server Error: API key not configured.");
       }
       try {
-        const modelUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`;
+        const modelUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
         const geminiResponse = await fetch(modelUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -59,6 +61,51 @@ export const geminiProxy = onRequest(
       }
     });
   }
+);
+
+export const transcribeAudio = onRequest(
+    (request: FunctionsRequest, response: ExpressResponse) => {
+        corsHandler(request, response, async () => {
+            if (request.method !== "POST") {
+                return response.status(405).send("Method Not Allowed");
+            }
+
+            const { audioBytes, languageCode } = request.body;
+            if (!audioBytes) {
+                return response.status(400).send("Bad Request: Missing audioBytes");
+            }
+             if (!languageCode) {
+                return response.status(400).send("Bad Request: Missing languageCode");
+            }
+
+            try {
+                const audio = {
+                    content: audioBytes,
+                };
+                const config = {
+                    encoding: "WEBM_OPUS" as const,
+                    sampleRateHertz: 48000,
+                    languageCode: languageCode,
+                };
+                const requestPayload = {
+                    audio: audio,
+                    config: config,
+                };
+
+                const [operation] = await speechClient.longRunningRecognize(requestPayload);
+                const [transcriptionResponse] = await operation.promise();
+                
+                const transcription = transcriptionResponse.results
+                    ?.map((result) => result.alternatives?.[0].transcript)
+                    .join("\n");
+
+                return response.json({ transcription });
+            } catch (error) {
+                logger.error("Error transcribing audio:", error);
+                return response.status(500).send("Internal Server Error: Could not transcribe audio.");
+            }
+        });
+    }
 );
 
 const voiceConfigMap: Record<string, any> = {

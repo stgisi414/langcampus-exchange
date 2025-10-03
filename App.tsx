@@ -23,6 +23,8 @@ import { createCheckoutSession, onCurrentUserSubscriptionUpdate } from "@inverta
 import Footer from './components/Footer.tsx';
 import TermsOfService from './components/TermsOfService.tsx';
 import PrivacyPolicy from './components/PrivacyPolicy.tsx';
+import GroupJoinPage from './components/GroupJoinPage.tsx';
+import GroupNotFound from './components/GroupNotFound.tsx';
 
 // Helper for localStorage (Removed as we are using Firestore for persistence)
 
@@ -1026,7 +1028,10 @@ const ChatModal: React.FC<ChatModalProps> = ({
              setIsSending(true);
 
              try {
+                // 1. Upload the audio and get the public URL for playback
                 const audioUrl = await storageService.uploadAudioMessage(audioBlob, identifier, currentUserId);
+                
+                // 2. Create the voice message object for immediate display
                 const voiceMessage: Message = { 
                     sender: 'user', 
                     text: '(Voice Message)', 
@@ -1034,7 +1039,27 @@ const ChatModal: React.FC<ChatModalProps> = ({
                     audioDuration: duration
                 };
                 
+                // 3. Send the voice message object to be displayed
                 await onSendVoiceMessage(voiceMessage);
+
+                // 4. Transcribe the audio to text
+                const transcription = await geminiService.transcribeAudio(audioBlob, partnerLanguageCode);
+
+                // 5. If transcription is successful, send it as a new text message to the AI
+                if (transcription) {
+                    const textMessage: Message = { sender: 'user', text: transcription };
+                    // Add the transcribed message to the current chat history for context
+                    const updatedMessages = [...messages, voiceMessage, textMessage];
+                    
+                    // In a solo chat, get the bot's response to the transcription
+                    if (!groupChat) {
+                        getBotResponse(updatedMessages);
+                    } else {
+                        // In a group chat, you might just add the transcription as a message
+                        // Or have a bot respond there too. For now, let's just log it.
+                        console.log("Group chat transcription:", transcription);
+                    }
+                }
 
              } catch (error) {
                  console.error("Failed to send voice message:", error);
@@ -1678,11 +1703,15 @@ const App: React.FC = () => {
         );
     }
 
-    // If loading is false, we render based on whether 'user' is truthy or falsy
     return (
     <Routes>
       <Route path="/terms-of-service" element={<TermsOfService />} />
       <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+      
+      {/* ADD a new route for joining groups */}
+      <Route path="/group/:groupId" element={user ? <GroupJoinPage /> : <LoginScreen />} />
+
+      {/* The main route */}
       <Route path="/*" element={user ? <Layout><AppContent user={user} /></Layout> : <LoginScreen />} />
     </Routes>
   );
