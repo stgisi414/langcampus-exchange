@@ -51,7 +51,7 @@ export interface GroupChat {
   partner: Partner; // The bot partner's identity (for UI consistency)
   topic: string | null; // The chosen topic for the group learning, null if not set
   shareLink: string; // The URL to share (mock link for now)
-  members: string[]; // List of member UIDs
+  members: { [key: string]: boolean }; // Stored as a map for efficient lookups
   messages: Message[]; // Stored messages for the chat history
 }
 

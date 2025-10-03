@@ -1,4 +1,4 @@
-import { doc, setDoc, updateDoc, onSnapshot, arrayUnion, arrayRemove, deleteDoc, getDoc } from "firebase/firestore"; 
+import { doc, setDoc, updateDoc, onSnapshot, arrayUnion, arrayRemove, deleteDoc, getDoc, deleteField } from "firebase/firestore";
 import { db } from '../firebaseConfig.ts';
 import { GroupChat, Message, Partner, UserProfileData } from '../types.ts';
 import * as geminiService from './geminiService';
@@ -22,7 +22,7 @@ export const createGroupInFirestore = async (
         partner,
         topic: null,
         shareLink,
-        members: [creatorId],
+        members: { [creatorId]: true }, // Changed to a map
         messages: [initialMessage],
     };
 
@@ -64,26 +64,26 @@ export const updateGroupTopic = async (groupId: string, topic: string): Promise<
     await updateDoc(groupRef, { topic });
 };
 
-// 5. Handles user joining (adds them to the members array)
+// 5. Handles user joining (adds them to the members map)
 export const joinGroup = async (groupId: string, userId: string): Promise<void> => {
     const groupRef = doc(db, GROUPS_COLLECTION, groupId);
     const userRef = doc(db, "customers", userId);
     
-    // Atomically update the members array and set the user's activeGroupId
+    // Atomically update the members map and set the user's activeGroupId
     await updateDoc(groupRef, {
-        members: arrayUnion(userId)
+        [`members.${userId}`]: true
     });
     await updateDoc(userRef, { activeGroupId: groupId });
 };
 
-// 6. Handles user leaving (removes them from the members array and clears activeGroupId)
+// 6. Handles user leaving (removes them from the members map and clears activeGroupId)
 export const leaveGroup = async (groupId: string, userId: string): Promise<void> => {
     const groupRef = doc(db, GROUPS_COLLECTION, groupId);
     const userRef = doc(db, "customers", userId);
     
-    // 1. Remove the user from the group members array
+    // 1. Remove the user from the group members map
     await updateDoc(groupRef, {
-        members: arrayRemove(userId)
+        [`members.${userId}`]: deleteField()
     });
     // 2. Clear the user's activeGroupId
     await updateDoc(userRef, { activeGroupId: null });
@@ -94,7 +94,7 @@ export const leaveGroup = async (groupId: string, userId: string): Promise<void>
     
     if (groupSnap.exists()) {
         const groupData = groupSnap.data() as GroupChat;
-        if (groupData.members.length === 0) {
+        if (Object.keys(groupData.members).length === 0) { // Changed to check map size
             // Group is empty, clean up the document.
             await deleteDoc(groupRef);
         }

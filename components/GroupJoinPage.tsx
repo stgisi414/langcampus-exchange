@@ -41,22 +41,20 @@ const GroupJoinPage: React.FC = () => {
           return;
         }
 
-        if (groupData.members.includes(currentUser.uid)) {
+        if (groupData.members[currentUser.uid]) { // Changed to check map key
           // User is already a member, just go home.
           navigate('/');
           return;
         }
 
-        if (groupData.members.length >= 3) {
+        if (Object.keys(groupData.members).length >= 3) { // Changed to check map size
           setError("This group is full.");
           return;
         }
 
         // --- Automatic Join ---
-        // If we reach here, the user is logged in, the group exists, and it's not full.
-        // We will automatically join them to the group.
         await groupService.joinGroup(groupId, currentUser.uid);
-        navigate('/'); // On success, redirect to the homepage. The main app will see the active group and open the chat.
+        navigate('/'); 
 
       } catch (e) {
         console.error("Error checking or joining group:", e);
