@@ -1,4 +1,4 @@
-import { Message, Partner, QuizQuestion, UserProfileData, teachMeCache } from '../types';
+import { Message, Partner, QuizQuestion, UserProfileData } from '../types';
 
 // Make sure this is the correct URL for your deployed Cloud Function.
 //const PROXY_URL = "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiProxy"; // Replace if yours is different
