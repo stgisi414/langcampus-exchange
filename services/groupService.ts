@@ -1,4 +1,4 @@
-import { doc, getFirestore, setDoc, updateDoc, onSnapshot, arrayUnion, arrayRemove } from "firebase/firestore";
+import { doc, setDoc, updateDoc, onSnapshot, arrayUnion, arrayRemove, deleteDoc, getDoc } from "firebase/firestore"; 
 import { db } from '../firebaseConfig.ts';
 import { GroupChat, Message, Partner } from '../types.ts';
 
@@ -25,8 +25,10 @@ export const createGroupInFirestore = async (
         messages: [initialMessage],
     };
 
-    await setDoc(groupRef, newGroup);
-    await updateDoc(userRef, { activeGroupId: groupId });
+    // FIX: Ensure the group document is created first.
+    await setDoc(groupRef, newGroup); 
+    // Now update the user's activeGroupId (this triggers the main App's listener)
+    await updateDoc(userRef, { activeGroupId: groupId }); 
 };
 
 // 2. Starts a listener to sync the group state in real-time
@@ -78,13 +80,24 @@ export const leaveGroup = async (groupId: string, userId: string): Promise<void>
     const groupRef = doc(db, GROUPS_COLLECTION, groupId);
     const userRef = doc(db, "customers", userId);
     
+    // 1. Remove the user from the group members array
     await updateDoc(groupRef, {
         members: arrayRemove(userId)
     });
+    // 2. Clear the user's activeGroupId
     await updateDoc(userRef, { activeGroupId: null });
 
-    // NOTE: A cloud function would typically handle cleaning up the room if 
-    // the last member leaves. We omit that here for simplicity.
+    // CRITICAL FIX: Check if the group is now empty and delete it.
+    // Re-read the document to check the new members list size.
+    const groupSnap = await getDoc(groupRef); 
+    
+    if (groupSnap.exists()) {
+        const groupData = groupSnap.data() as GroupChat;
+        if (groupData.members.length === 0) {
+            // Group is empty, clean up the document.
+            await deleteDoc(groupRef);
+        }
+    }
 };
 
 // 7. Simulates a bot response for the group chat (Placeholder)

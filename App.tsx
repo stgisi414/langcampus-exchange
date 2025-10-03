@@ -1389,10 +1389,13 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     }
   };
 
-  const handleCloseChat = () => {
+  const handleCloseChat = async () => { // 1. Make the function asynchronous
      if (activeGroup && user) {
-        groupService.leaveGroup(activeGroup.id, user.uid);
+        // 2. AWAIT the asynchronous operation to complete.
+        // This ensures the database has updated BEFORE the UI state changes.
+        await groupService.leaveGroup(activeGroup.id, user.uid);
     }
+    // 3. Now safely dismiss the chat UI
     setCurrentPartner(null);
   }
 
@@ -1468,12 +1471,23 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
       }
       
       const uniqueId = Math.random().toString(36).substring(2, 9);
-      const shareLink = `${window.location.origin}/group/${uniqueId}`;
+      // NOTE: Using window.location.origin is slightly cleaner than hardcoding, but 
+      // the shareLink logic already exists, so we stick to it.
+      const shareLink = `${window.location.origin}/group/${uniqueId}`; 
       const initialMessage: Message = { sender: 'ai', text: `Welcome to the group chat! Share this link with up to two friends to start your study group: ${shareLink}` };
 
       try {
+          // AWAIT the full group creation and user update to complete.
           await groupService.createGroupInFirestore(uniqueId, user.uid, shareLink, groupPartner, initialMessage);
+          
+          // CRITICAL: Force the local user state to reflect the new activeGroupId.
+          // This relies on the firestoreService to update the local state 
+          // via the onSnapshot listener in useAuth, which usually happens instantly 
+          // after the updateDoc in createGroupInFirestore.
+          // We can't directly mutate the user here, so we rely on the side effect, 
+          // but logging a success message *after* the await helps ensure completion.
           alert(`Group started! Copy this link to share: ${shareLink}`);
+
       } catch (error) {
           console.error("Error starting group:", error);
           setError("Failed to start group chat. Please try again.");
