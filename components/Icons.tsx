@@ -72,7 +72,7 @@ export const WarningIcon: React.FC<IconProps> = ({ className }) => (
 
 export const UsersIcon: React.FC<IconProps> = ({ className }) => (
     <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.37-5.514M13.5 14.886v-1.125a4.75 4.75 0 013.3-4.509 8.25 8.25 0 00-6.19-2.189 8.25 8.25 0 00-6.19 2.189 4.75 4.75 0 013.3 4.509v1.125M12 12.75a3 3 0 11-6 0 3 3 0 016 0zM19.5 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/>
     </svg>
 );
 

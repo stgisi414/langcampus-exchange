@@ -203,10 +203,18 @@ export const getChatResponse = async (messages: Message[], partner: Partner, cor
 
     return {
       sender: 'ai',
-      text: responseText,
-      correction: aiResponse.correction || undefined,
-      translation: aiResponse.translation || undefined,
+      text: responseText
     };
+
+    if (aiResponse.correction) {
+      responseMessage.correction = aiResponse.correction;
+    }
+    if (aiResponse.translation) {
+      responseMessage.translation = aiResponse.translation;
+    }
+
+    return responseMessage;
+
   } catch (error) {
     console.error("Error getting chat response:", error);
     return { sender: 'ai', text: "Sorry, I'm having trouble connecting right now." };

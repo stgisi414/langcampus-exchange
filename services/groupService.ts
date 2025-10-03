@@ -105,14 +105,15 @@ export const getGroupBotResponse = async (
     messages: Message[],
     partner: Partner,
     userProfile: UserProfileData,
-    correctionsEnabled: boolean
+    correctionsEnabled: boolean,
+    teachMeCache: TeachMeCache | null
 ): Promise<Message> => {
     const lastUserMessage = messages.findLast(m => m.sender === 'user');
     
     if (lastUserMessage) {
         try {
             // This now calls the actual Gemini service for a real response
-            const aiResponse = await geminiService.getChatResponse(messages, partner, correctionsEnabled, userProfile);
+            const aiResponse = await geminiService.getChatResponse(messages, partner, correctionsEnabled, userProfile, teachMeCache);
             return aiResponse;
         } catch (error) {
             console.error("Error getting group bot response:", error);

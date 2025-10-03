@@ -592,6 +592,10 @@ const TeachMeModal: React.FC<{
     userAnswers: string[],
   ) => void;
   handleUsageCheck: (feature: UsageKey, action: () => void) => Promise<void>;
+  isGroupChat: boolean;
+  userIsGroupCreator: boolean;
+  groupTopic: string | null;
+  onSetGroupTopic?: (topic: string) => void;
 }> = ({
   language,
   onClose,
@@ -600,6 +604,10 @@ const TeachMeModal: React.FC<{
   setCache,
   onShareQuizResults,
   handleUsageCheck,
+  isGroupChat,
+  userIsGroupCreator,
+  groupTopic,
+  onSetGroupTopic,
 }) => {
   const [activeTab, setActiveTab] = useState<"Grammar" | "Vocabulary">(
     "Grammar",
@@ -615,13 +623,42 @@ const TeachMeModal: React.FC<{
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const topicListRef = useRef<HTMLUListElement>(null);
-  const topicRefs = useRef<Map<string, HTMLButtonElement | null>>(new Map()); // Ref to hold topic button elements
+  const topicRefs = useRef<Map<string, HTMLButtonElement | null>>(new Map());
+
+  const isHost = isGroupChat && userIsGroupCreator;
+  const isMember = isGroupChat && !userIsGroupCreator;
 
   useEffect(() => {
-    // If a cache exists AND it's for the currently selected language, load it.
-    if (cache && cache.language === language) {
-      setActiveTab(cache.type as "Grammar" | "Vocabulary");
+    const fetchContentForTopic = async (topic: string, type: "Grammar" | "Vocabulary") => {
+      setIsLoading(true);
+      setContent("");
+      try {
+        const nativeLanguageName =
+          LANGUAGES.find((lang) => lang.code === nativeLanguage)?.name ||
+          nativeLanguage;
+        const fetchedContent = await geminiService.getContent(
+          topic,
+          type,
+          language,
+          nativeLanguageName,
+        );
+        setContent(fetchedContent);
+      } catch (error) {
+        setContent("Sorry, there was an error loading the topic content.");
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
+    if (isGroupChat && groupTopic) {
+      // Priority 1: If in a group chat and a topic is set, load that topic for everyone.
+      if (selectedTopic !== groupTopic) {
+        setSelectedTopic(groupTopic);
+        fetchContentForTopic(groupTopic, activeTab);
+      }
+    } else if (!isGroupChat && cache && cache.language === language) {
+      // Priority 2: If in a solo chat, load from the personal cache.
+      setActiveTab(cache.type as "Grammar" | "Vocabulary");
       const topicData = (
         cache.type === "Grammar"
           ? grammarData[language as keyof typeof grammarData]
@@ -633,23 +670,17 @@ const TeachMeModal: React.FC<{
       }
       setSelectedTopic(cache.topic);
       setContent(cache.content);
-
-      // Scroll to the selected topic
       setTimeout(() => {
-        const topicElement = topicRefs.current.get(cache.topic);
-        if (topicElement) {
-          topicElement.scrollIntoView({ block: "center" });
-        }
-      }, 0); // setTimeout ensures this runs after the component has re-rendered
-    }
-    // Otherwise, clear the local state to prevent showing stale content.
-    else {
+        topicRefs.current.get(cache.topic)?.scrollIntoView({ block: "center" });
+      }, 0);
+    } else {
+      // Otherwise, clear the state.
       setSelectedTopic(null);
       setContent("");
       setQuizQuestions(null);
-      setLevel(1);
     }
-  }, [language, cache]); // This dependency array is correct
+  }, [language, cache, isGroupChat, groupTopic, activeTab, nativeLanguage, selectedTopic]);
+
 
   const availableTopics = useMemo(() => {
     const data =
@@ -677,31 +708,38 @@ const TeachMeModal: React.FC<{
   };
 
   const handleTopicSelect = async (topic: string) => {
-    handleUsageCheck("lessons", async () => {
-      setSelectedTopic(topic);
-      setIsLoading(true);
-      setContent("");
-      setQuizQuestions(null);
-      try {
-        const nativeLanguageName =
-          LANGUAGES.find((lang) => lang.code === nativeLanguage)?.name ||
-          nativeLanguage;
-        const fetchedContent = await geminiService.getContent(
-          topic,
-          activeTab,
-          language,
-          nativeLanguageName,
-        );
-        setContent(fetchedContent);
-        setCache({ language, type: activeTab, topic, content: fetchedContent });
-      } catch (error) {
-        setContent(
-          "Sorry, there was an error loading the content. Please try again.",
-        );
-      } finally {
-        setIsLoading(false);
-      }
-    });
+    if (isHost && onSetGroupTopic) {
+      onSetGroupTopic(topic);
+      return;
+    }
+
+    if (!isGroupChat) {
+        handleUsageCheck("lessons", async () => {
+        setSelectedTopic(topic);
+        setIsLoading(true);
+        setContent("");
+        setQuizQuestions(null);
+        try {
+            const nativeLanguageName =
+            LANGUAGES.find((lang) => lang.code === nativeLanguage)?.name ||
+            nativeLanguage;
+            const fetchedContent = await geminiService.getContent(
+            topic,
+            activeTab,
+            language,
+            nativeLanguageName,
+            );
+            setContent(fetchedContent);
+            setCache({ language, type: activeTab, topic, content: fetchedContent });
+        } catch (error) {
+            setContent(
+            "Sorry, there was an error loading the content. Please try again.",
+            );
+        } finally {
+            setIsLoading(false);
+        }
+        });
+    }
   };
 
   const handleShareAndClose = (
@@ -715,7 +753,9 @@ const TeachMeModal: React.FC<{
   };
 
   const handleQuizMe = async () => {
-    if (!selectedTopic) return;
+    const finalTopic = groupTopic || selectedTopic;
+    if (!finalTopic) return;
+
     handleUsageCheck("quizzes", async () => {
       setIsLoading(true);
       try {
@@ -723,7 +763,7 @@ const TeachMeModal: React.FC<{
           LANGUAGES.find((lang) => lang.code === nativeLanguage)?.name ||
           nativeLanguage;
         const questions = await geminiService.generateQuiz(
-          selectedTopic,
+          finalTopic,
           activeTab,
           language,
           nativeLanguageName,
@@ -740,9 +780,11 @@ const TeachMeModal: React.FC<{
   };
 
   const currentIndex = useMemo(() => {
-    if (!selectedTopic) return -1;
-    return availableTopics.findIndex((t) => t.title === selectedTopic);
-  }, [selectedTopic, availableTopics]);
+    const currentDisplayTopic = groupTopic || selectedTopic;
+    if (!currentDisplayTopic) return -1;
+    return availableTopics.findIndex((t) => t.title === currentDisplayTopic);
+  }, [selectedTopic, availableTopics, groupTopic]);
+
 
   const handlePreviousChapter = () => {
     if (currentIndex > 0) {
@@ -774,8 +816,8 @@ const TeachMeModal: React.FC<{
             >
               <MenuIcon className="w-6 h-6" />
             </button>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-              Teach Me: {language}
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+              {isGroupChat ? `Group Topic: ${language}` : `Teach Me: ${language}`}
             </h2>
           </div>
           <button
@@ -787,7 +829,6 @@ const TeachMeModal: React.FC<{
           </button>
         </div>
         <div className="flex-grow flex relative overflow-hidden">
-          {/* Overlay for mobile view */}
           {isMenuOpen && (
             <div
               onClick={() => setIsMenuOpen(false)}
@@ -796,9 +837,8 @@ const TeachMeModal: React.FC<{
             ></div>
           )}
 
-          {/* Left Side Menu (Topics) */}
           <div
-            className={`absolute top-0 left-0 h-full w-4/5 max-w-sm bg-white dark:bg-gray-800 z-20 transform transition-transform p-4 flex flex-col md:static md:w-1/3 md:translate-x-0 md:border-r md:dark:border-gray-700 ${isMenuOpen ? "translate-x-0" : "-translate-x-full"}`}
+             className={`absolute top-0 left-0 h-full w-4/5 max-w-sm bg-white dark:bg-gray-800 z-20 transform transition-transform p-4 flex-col md:static md:w-1/3 md:translate-x-0 md:border-r md:dark:border-gray-700 ${isMenuOpen ? "translate-x-0 flex" : "-translate-x-full hidden md:flex"}`}
           >
             <div className="flex justify-between items-center mb-4 md:hidden">
               <h3 className="text-lg font-bold">Topics</h3>
@@ -811,7 +851,7 @@ const TeachMeModal: React.FC<{
               </button>
             </div>
 
-            <div className="relative mb-4">
+            {(isHost || !isGroupChat) && <div className="relative mb-4">
               <input
                 type="text"
                 placeholder="Search lessons..."
@@ -820,9 +860,9 @@ const TeachMeModal: React.FC<{
                 className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-full bg-gray-100 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            </div>
+            </div>}
 
-            {searchQuery.trim() === "" ? (
+            {(isHost || !isGroupChat) && searchQuery.trim() === "" ? (
               <>
                 <div className="flex border-b dark:border-gray-600 mb-4">
                   <button
@@ -857,7 +897,7 @@ const TeachMeModal: React.FC<{
               </>
             ) : (
               <div className="text-center mb-2">
-                <p className="font-semibold">Search Results</p>
+                <p className="font-semibold">{isGroupChat ? 'Current Topic' : 'Search Results'}</p>
               </div>
             )}
 
@@ -865,29 +905,34 @@ const TeachMeModal: React.FC<{
               ref={topicListRef}
               className="space-y-2 overflow-y-auto flex-grow"
             >
-              {availableTopics.length > 0 ? (
+              {(isHost || !isGroupChat) && availableTopics.length > 0 ? (
                 availableTopics.map((topic) => (
                   <li key={topic.title}>
                     <button
                       ref={(el) => topicRefs.current.set(topic.title, el)}
                       onClick={() => handleTopicSelect(topic.title)}
-                      className={`w-full text-left p-2 rounded text-sm ${selectedTopic === topic.title ? "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100" : "hover:bg-gray-100 dark:hover:bg-gray-700"}`}
+                      className={`w-full text-left p-2 rounded text-sm ${(groupTopic || selectedTopic) === topic.title ? "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100" : "hover:bg-gray-100 dark:hover:bg-gray-700"}`}
                     >
                       {topic.title}
                     </button>
                   </li>
                 ))
               ) : (
-                <p className="text-gray-500 text-center p-4">
-                  No topics found.
-                </p>
+                isMember && (groupTopic || selectedTopic) ? (
+                    <li>
+                        <button className="w-full text-left p-2 rounded text-sm bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100">
+                            {groupTopic || selectedTopic}
+                        </button>
+                    </li>
+                ) : (
+                    <p className="text-gray-500 text-center p-4">No topics found.</p>
+                )
               )}
             </ul>
           </div>
 
-          {/* Right Side Content */}
           <div className="w-full p-6 overflow-y-auto">
-            {selectedTopic && (
+            {(isHost || !isGroupChat) && (groupTopic || selectedTopic) && (
               <div className="flex justify-between items-center mb-4">
                 <button
                   onClick={handlePreviousChapter}
@@ -922,15 +967,18 @@ const TeachMeModal: React.FC<{
                 }}
               ></div>
             )}
-            {!isLoading && !content && (
+             {!isLoading && !content && !isGroupChat && (
               <p className="text-gray-500">Select a topic to begin learning.</p>
+            )}
+             {!isLoading && !content && isGroupChat && (
+              <p className="text-gray-500">{isHost ? "Select a topic for the group." : "Waiting for the host to select a topic."}</p>
             )}
           </div>
         </div>
         <div className="flex justify-end p-4 border-t dark:border-gray-700">
           <button
             onClick={handleQuizMe}
-            disabled={!selectedTopic || isLoading}
+            disabled={!(groupTopic || selectedTopic) || isLoading}
             className="px-6 py-2 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
             Quiz Me!
@@ -940,7 +988,7 @@ const TeachMeModal: React.FC<{
       {showQuiz && quizQuestions && (
         <QuizModal
           questions={quizQuestions}
-          topic={selectedTopic!}
+          topic={(groupTopic || selectedTopic)!}
           onClose={() => setShowQuiz(false)}
           onShareQuizResults={handleShareAndClose}
         />
@@ -1348,8 +1396,11 @@ const ChatModal: React.FC<ChatModalProps> = ({
 
   const getBotResponse = useCallback(
     async (currentMessages: Message[]) => {
-      if (isSending) return;
-      setIsSending(true);
+      // The `isSending` state is set by the functions that call this (`handleTextSubmit`),
+      // and `isFetchingResponse` prevents this from running multiple times simultaneously.
+      // We don't need to check or set `isSending` here.
+      // if (isSending) return;  // This was the cause of the bug.
+      // setIsSending(true);
       try {
         const aiResponse = await geminiService.getChatResponse(
           currentMessages,
@@ -1375,9 +1426,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
       correctionsEnabled,
       userProfile,
       teachMeCache, // <-- FIX: Add teachMeCache to dependencies
-      onMessagesChange,
-      isSending,
-      setIsSending,
+      onMessagesChange
     ],
   );
 
@@ -1755,6 +1804,10 @@ const ChatModal: React.FC<ChatModalProps> = ({
           setCache={setTeachMeCache}
           onShareQuizResults={onShareQuizResults}
           handleUsageCheck={handleUsageCheck}
+          isGroupChat={!!groupChat}
+          userIsGroupCreator={userIsGroupCreator}
+          groupTopic={groupChat?.topic || null}
+          onSetGroupTopic={onSetGroupTopic}
         />
       )}
     </div>
@@ -1898,7 +1951,17 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
                 const currentMessages = updatedGroup ? updatedGroup.messages : [userMessage];
                 
                 // Pass all necessary arguments to getGroupBotResponse
-                const botResponse = await groupService.getGroupBotResponse(currentMessages, activeGroup.partner, userProfile, true);
+                const groupTeachMeCache: TeachMeCache | null = activeGroup.topic
+                ? {
+                    topic: activeGroup.topic,
+                    language: currentPartner?.nativeLanguage || targetLanguage,
+                    type: 'Grammar', // Type can be generic as the topic provides context
+                    content: '', // Content is not needed for the prompt
+                  }
+                : null;
+
+                const botResponse = await groupService.getGroupBotResponse(currentMessages, activeGroup.partner, userProfile, true, groupTeachMeCache);
+
                 await groupService.addMessageToGroup(activeGroup.id, botResponse);
                 
                 setIsSending(false); // End typing indicator
@@ -1922,8 +1985,20 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
         // Group Chat Logic
         await groupService.addMessageToGroup(activeGroup.id, userMessage);
         // Simulate bot response immediately after user sends message
-        const newMessages = [...(activeGroup.messages || []), userMessage];
-        const botResponse = groupService.getGroupBotResponse(newMessages);
+        const updatedGroup = await groupService.getGroupById(activeGroup.id);
+        const currentMessages = updatedGroup ? updatedGroup.messages : [userMessage];
+        // FIX: Create a specific cache object for the group context
+        // This ensures the bot knows about the group's topic, not the user's individual cache.
+        const groupTeachMeCache: TeachMeCache | null = activeGroup.topic
+        ? {
+            topic: activeGroup.topic,
+            language: currentPartner?.nativeLanguage || targetLanguage,
+            type: 'Grammar', // Type can be generic as the topic provides context
+            content: '', // Content is not needed for the prompt
+          }
+        : null;
+
+        const botResponse = await groupService.getGroupBotResponse(currentMessages, activeGroup.partner, userProfile, true, groupTeachMeCache);
         await groupService.addMessageToGroup(activeGroup.id, botResponse);
       } else {
         // Single Chat Logic
@@ -2362,6 +2437,8 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
           onShareQuizResults={handleShareQuizResults}
           userProfile={userProfile}
           handleUsageCheck={handleUsageCheck}
+          isGroupChat={!!activeGroup}
+          groupTopic={activeGroup?.topic || null}
           groupChat={activeGroup}
           onStartGroup={handleStartGroup}
           userIsGroupCreator={user?.uid === activeGroup?.creatorId}

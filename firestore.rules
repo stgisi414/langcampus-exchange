@@ -17,37 +17,39 @@ service cloud.firestore {
     // --- Group Chats Rules ---
     match /groupChats/{groupId} {
       allow read, create: if request.auth != null;
-      // FIX: Only the creator is allowed to delete the group chat.
       allow delete: if request.auth != null && request.auth.uid == resource.data.creatorId;
       allow update: if request.auth != null && (
-        // Condition 1: Joining a group (Adding a member. MUST ONLY change 'members'. Max size 3.)
+        // Condition 1: Joining a group
         (
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members']) &&
-          !resource.data.members.keys().hasAny([request.auth.uid]) && // Was NOT a member
-          request.resource.data.members.keys().hasAny([request.auth.uid]) && // Is NOW a member
+          !resource.data.members.keys().hasAny([request.auth.uid]) &&
+          request.resource.data.members.keys().hasAny([request.auth.uid]) &&
           request.resource.data.members.size() <= 3
-       
-         ) ||
-        // Condition 2: Leaving a group (Removing the current user as member. MUST ONLY change 'members'.)
+        ) ||
+        // Condition 2: Leaving a group
         (
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members']) &&
-          !request.resource.data.members.keys().hasAny([request.auth.uid]) && // Is NO LONGER a member
-          resource.data.members.keys().hasAny([request.auth.uid]) // WAS a member
+          !request.resource.data.members.keys().hasAny([request.auth.uid]) &&
+          resource.data.members.keys().hasAny([request.auth.uid])
         ) ||
-        // Condition 3: Updating the topic (only creator, MUST ONLY change 'topic')
+        // Condition 3: Updating the topic
         (
           request.auth.uid == resource.data.creatorId &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['topic']) &&
           request.resource.data.topic != resource.data.topic
         ) ||
-        // FIX for permission error: Relaxing the affectedKeys() check allows the write.
-        // The security is maintained by checking array size and senderId.
-        // Condition 4: Adding a message (only members can add exactly one message, and it must be from the authenticated user)
+        // Condition 4: Adding a message
         (
-          request.auth.uid in resource.data.members && // 1. Must be a member
-          request.resource.data.messages.size() == resource.data.messages.size() + 1 && // 2. Must add exactly one message
-          // 3. CRITICAL SECURITY CHECK: The newly added message's senderId must match the authenticated user's UID.
-          request.resource.data.messages[request.resource.data.messages.size() - 1].senderId == request.auth.uid
+          request.auth.uid in resource.data.members &&
+          request.resource.data.messages.size() == resource.data.messages.size() + 1 &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['messages']) &&
+          (
+            // EITHER the new message is from the authenticated user...
+            ('senderId' in request.resource.data.messages[request.resource.data.messages.size() - 1] &&
+             request.resource.data.messages[request.resource.data.messages.size() - 1].senderId == request.auth.uid) ||
+            // OR the new message is from the AI.
+            (request.resource.data.messages[request.resource.data.messages.size() - 1].sender == 'ai')
+          )
         )
       );
     }
