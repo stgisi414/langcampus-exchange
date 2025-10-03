@@ -76,27 +76,26 @@ export const joinGroup = async (groupId: string, userId: string): Promise<void> 
     await updateDoc(userRef, { activeGroupId: groupId });
 };
 
-// 6. Handles user leaving (removes them from the members map and clears activeGroupId)
+// 6. Handles user leaving. If the creator leaves, the group is deleted.
 export const leaveGroup = async (groupId: string, userId: string): Promise<void> => {
     const groupRef = doc(db, GROUPS_COLLECTION, groupId);
     const userRef = doc(db, "customers", userId);
     
-    // 1. Remove the user from the group members map
-    await updateDoc(groupRef, {
-        [`members.${userId}`]: deleteField()
-    });
-    // 2. Clear the user's activeGroupId
+    // Always clear the user's activeGroupId first.
     await updateDoc(userRef, { activeGroupId: null });
 
-    // CRITICAL FIX: Check if the group is now empty and delete it.
-    // Re-read the document to check the new members list size.
     const groupSnap = await getDoc(groupRef); 
     
     if (groupSnap.exists()) {
         const groupData = groupSnap.data() as GroupChat;
-        if (Object.keys(groupData.members).length === 0) { // Changed to check map size
-            // Group is empty, clean up the document.
+        // If the user leaving is the creator, delete the whole group.
+        if (groupData.creatorId === userId) {
             await deleteDoc(groupRef);
+        } else {
+            // Otherwise, just remove the user from the members map.
+            await updateDoc(groupRef, {
+                [`members.${userId}`]: deleteField()
+            });
         }
     }
 };

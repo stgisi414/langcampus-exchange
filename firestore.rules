@@ -17,14 +17,8 @@ service cloud.firestore {
     // --- Group Chats Rules ---
     match /groupChats/{groupId} {
       allow read, create: if request.auth != null;
-
-      // FIX: Allow the creator to delete OR allow any authenticated user to delete 
-      // the document if it has become empty after a member leaves (size == 0).
-      allow delete: if request.auth != null && (
-        request.auth.uid == resource.data.creatorId ||
-        resource.data.members.size() == 0
-      );
-
+      // FIX: Only the creator is allowed to delete the group chat.
+      allow delete: if request.auth != null && request.auth.uid == resource.data.creatorId;
       allow update: if request.auth != null && (
         // Condition 1: Joining a group (Adding a member. MUST ONLY change 'members'. Max size 3.)
         (
@@ -32,7 +26,8 @@ service cloud.firestore {
           !resource.data.members.keys().hasAny([request.auth.uid]) && // Was NOT a member
           request.resource.data.members.keys().hasAny([request.auth.uid]) && // Is NOW a member
           request.resource.data.members.size() <= 3
-        ) ||
+       
+         ) ||
         // Condition 2: Leaving a group (Removing the current user as member. MUST ONLY change 'members'.)
         (
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members']) &&

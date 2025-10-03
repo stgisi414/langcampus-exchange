@@ -75,6 +75,10 @@ const base64ToArrayBuffer = (base64: string) => {
   return bytes.buffer;
 };
 
+interface AppContentProps {
+  user: UserData;
+}
+
 // Helper function to convert raw PCM audio data to a playable WAV Blob
 const pcmToWav = (pcmData: Int16Array, sampleRate: number) => {
   const numChannels = 1;
@@ -1984,14 +1988,16 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   };
 
   const handleCloseChat = async () => {
-    // 1. Make the function asynchronous
+    // Make the function asynchronous
     if (activeGroup && user) {
-      // 2. AWAIT the asynchronous operation to complete.
+      // Await the asynchronous operation to complete.
       // This ensures the database has updated BEFORE the UI state changes.
       await groupService.leaveGroup(activeGroup.id, user.uid);
     }
-    // 3. Now safely dismiss the chat UI
+    // Now, it's safe to dismiss the chat UI
     setCurrentPartner(null);
+    // Also explicitly clear the local activeGroup state
+    setActiveGroup(null);
   };
 
   const handleProfileChange = (profile: {

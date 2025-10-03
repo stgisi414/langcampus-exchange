@@ -117,7 +117,7 @@ export const generatePartners = async (nativeLanguage: string, targetLanguage: s
   }
 };
 
-export const getChatResponse = async (messages: Message[], partner: Partner, corrections: boolean, userProfile: UserProfileData): Promise<Message> => {
+export const getChatResponse = async (messages: Message[], partner: Partner, corrections: boolean, userProfile: UserProfileData, teachMeCache: TeachMeCache | null): Promise<Message> => {
   if (!partner || !partner.name) {
     console.error("getChatResponse called with an invalid partner object.");
     return { sender: 'ai', text: "Sorry, there's a problem with my memory. Please try starting a new chat." };
@@ -125,6 +125,12 @@ export const getChatResponse = async (messages: Message[], partner: Partner, cor
 
   const conversationHistory = messages.map(m => `${m.sender === 'user' ? 'Me' : partner.name}: ${m.text}`).join('\n');
   const userLastMessage = messages[messages.length - 1].text;
+
+  const teachMeTopicInfo = teachMeCache?.topic
+    ? `The user is currently studying the topic "${teachMeCache.topic}" in the "Teach Me" module.`
+    : "";
+
+    console.log("teach me topic info: " + teachMeTopicInfo);
 
   const prompt = `
     **Background Context:** You are an AI language exchange partner within a web application called "Langcampus Exchange". Your purpose is to help users practice their target language in a friendly and supportive way. Always be encouraging.
@@ -139,6 +145,8 @@ export const getChatResponse = async (messages: Message[], partner: Partner, cor
     The user's interests include: ${userProfile?.hobbies || 'not specified'}.
     The user's bio says: "${userProfile?.bio || 'not specified'}".
     
+    ${teachMeTopicInfo} 
+
     Conversation History:
     ${conversationHistory}
 
@@ -147,7 +155,7 @@ export const getChatResponse = async (messages: Message[], partner: Partner, cor
     **Your Task:**
     Your main goal is to help the user practice your native language (${partner.nativeLanguage}). Therefore, you should primarily respond in ${partner.nativeLanguage}.
     
-    **EXCEPTION:** If the user's last message is clearly in their native language (${partner.learningLanguage}), it means they might be confused or asking for help. In this case, **you should respond in their native language (${partner.learningLanguage})** to be helpful and explain things clearly.
+    **EXCEPTION:** If the user's last message is in their native language (${partner.learningLanguage}), it means they might be confused or asking for help. In this case, **you should respond in their native language (${partner.learningLanguage})** to be helpful and explain things clearly.
     
     ${corrections ? `The user wants corrections. If their last message contains errors in your native language (${partner.nativeLanguage}), provide a simple correction.` : ''}
 
@@ -175,8 +183,6 @@ export const getChatResponse = async (messages: Message[], partner: Partner, cor
       "correction": "",
       "translation": ""
     }
-
-    Just do a great job and if all else fails the user is learning about this topic (${teachMe.topic}) in the Langcampus Exchange Teach Me Grammar or Vocabulary module.
 
     Now, generate the JSON object for your response based on my last message.
   `;
