@@ -25,6 +25,8 @@ export interface Partner {
 
 export interface Message {
   sender: 'user' | 'ai';
+  senderId?: string; // Add this to track the user's ID
+  senderName?: string; // Add this to display the user's name
   text: string;
   correction?: string;
   translation?: string;
