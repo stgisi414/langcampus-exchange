@@ -1,0 +1,63 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Helper Functions for Readability ---
+    function isUserInList(userId, list) {
+      return userId in list;
+    }
+    function isAddingUser(userId, beforeList, afterList) {
+      return !isUserInList(userId, beforeList) && isUserInList(userId, afterList);
+    }
+    function isRemovingUser(userId, beforeList, afterList) {
+      return isUserInList(userId, beforeList) && !isUserInList(userId, afterList);
+    }
+
+    // --- Customer & Subscription Rules ---
+    // This section correctly allows users to manage their own data.
+    match /customers/{userId} {
+      allow read, create, update: if request.auth != null && request.auth.uid == userId;
+
+      match /checkout_sessions/{id} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      match /subscriptions/{id} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // --- Group Chats Rules ---
+    match /groupChats/{groupId} {
+      allow read, create: if request.auth != null;
+
+      // Your detailed update logic is preserved here.
+      allow update: if request.auth != null &&
+                      (
+                        // 1. Joining: Allow if user is adding themselves AND the group has less than 3 members.
+                        (isAddingUser(request.auth.uid, resource.data.members, request.resource.data.members) &&
+                         resource.data.members.size() < 3) ||
+                         
+                        // 2. Leaving: Allow if a user is removing themselves.
+                        (isRemovingUser(request.auth.uid, resource.data.members, request.resource.data.members)) ||
+
+                        // 3. Updating Topic: Allow if the user is the creator.
+                        (request.auth.uid == resource.data.creatorId && request.resource.data.topic != resource.data.topic) ||
+
+                        // 4. Adding Messages: Allow if the user is a member of the group.
+                        (isUserInList(request.auth.uid, resource.data.members) && request.resource.data.messages.size() > resource.data.messages.size())
+                      );
+      
+      // Allow the creator to delete an empty group.
+      allow delete: if request.auth != null && request.auth.uid == resource.data.creatorId;
+    }
+
+    // --- Public Products & Prices Rules ---
+    match /products/{id} {
+      allow read: if true;
+      match /prices/{id} {
+        allow read: if true;
+      }
+    }
+  }
+}

@@ -22,7 +22,6 @@ const allowedOrigins = [
 ];
 
 const corsHandler = cors({ origin: allowedOrigins });
-const speechClient = new SpeechClient();
 
 // Use the correct, aliased types for Firebase onRequest handlers
 export const geminiProxy = onRequest(
@@ -42,7 +41,7 @@ export const geminiProxy = onRequest(
         return response.status(500).send("Internal Server Error: API key not configured.");
       }
       try {
-        const modelUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${GEMINI_API_KEY}`;
+        const modelUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`;
         const geminiResponse = await fetch(modelUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -71,14 +70,14 @@ export const transcribeAudio = onRequest(
             }
 
             const { audioBytes, languageCode } = request.body;
-            if (!audioBytes) {
-                return response.status(400).send("Bad Request: Missing audioBytes");
-            }
-             if (!languageCode) {
-                return response.status(400).send("Bad Request: Missing languageCode");
+            if (!audioBytes || !languageCode) {
+                return response.status(400).send("Bad Request: Missing audioBytes or languageCode");
             }
 
             try {
+                // Initialize the client here, just before it's needed.
+                const speechClient = new SpeechClient();
+
                 const audio = {
                     content: audioBytes,
                 };

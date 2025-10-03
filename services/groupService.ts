@@ -1,6 +1,7 @@
 import { doc, setDoc, updateDoc, onSnapshot, arrayUnion, arrayRemove, deleteDoc, getDoc } from "firebase/firestore"; 
 import { db } from '../firebaseConfig.ts';
-import { GroupChat, Message, Partner } from '../types.ts';
+import { GroupChat, Message, Partner, UserProfileData } from '../types.ts';
+import * as geminiService from './geminiService';
 
 const GROUPS_COLLECTION = 'groupChats';
 
@@ -100,18 +101,26 @@ export const leaveGroup = async (groupId: string, userId: string): Promise<void>
     }
 };
 
-// 7. Simulates a bot response for the group chat (Placeholder)
-export const getGroupBotResponse = (messages: Message[]): Message => {
+// 7. Gets a real AI response for the group chat
+export const getGroupBotResponse = async (
+    messages: Message[],
+    partner: Partner,
+    userProfile: UserProfileData,
+    correctionsEnabled: boolean
+): Promise<Message> => {
     const lastUserMessage = messages.findLast(m => m.sender === 'user');
     
     if (lastUserMessage) {
-        // This is a placeholder for a real AI call (geminiService.getChatResponse)
-        const responseText = `(Bot echo): I see that ${lastUserMessage.text} was just sent to the group.`;
-        return {
-            sender: 'ai',
-            text: responseText,
-        };
+        try {
+            // This now calls the actual Gemini service for a real response
+            const aiResponse = await geminiService.getChatResponse(messages, partner, correctionsEnabled, userProfile);
+            return aiResponse;
+        } catch (error) {
+            console.error("Error getting group bot response:", error);
+            return { sender: 'ai', text: "Sorry, I'm having trouble connecting right now." };
+        }
     }
+    // Default message if there's no user message to respond to
     return { sender: 'ai', text: 'Group chat initialized.' };
 };
 
