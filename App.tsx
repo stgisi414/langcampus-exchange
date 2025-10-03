@@ -872,7 +872,7 @@
     };
 
     // Chat Modal Component
-    const ChatModal: React.FC<{
+    interface ChatModalProps {
       partner: Partner;
       messages: Message[];
       onMessagesChange: React.Dispatch<React.SetStateAction<Message[]>>;
@@ -891,9 +891,27 @@
       onSetGroupTopic: (topic: string) => void;
       onSendTextMessage: (messageText: string) => Promise<void>;
       onSendVoiceMessage: (voiceMessage: Message) => Promise<void>; 
-    }> = ({ partner, messages, onMessagesChange, onClose, onSaveChat, nativeLanguage, teachMeCache, setTeachMeCache, onShareQuizResults, userProfile, handleUsageCheck, groupChat, onStartGroup, userIsGroupCreator, onShareGroupLink, onSetGroupTopic, onSendTextMessage, onSendVoiceMessage }) => {
-        const [newMessage, setNewMessage] = useState('');
-        const [isSending, setIsSending] = useState(false);
+      // Add props for controlled input
+      newMessage: string;
+      setNewMessage: React.Dispatch<React.SetStateAction<string>>;
+      isSending: boolean;
+      onTextSubmit: (e: React.FormEvent) => void;
+    }
+
+const ChatModal: React.FC<ChatModalProps> = ({ 
+    partner, messages, onMessagesChange, onClose, onSaveChat, nativeLanguage, teachMeCache, setTeachMeCache, onShareQuizResults, userProfile, handleUsageCheck, groupChat, onStartGroup, userIsGroupCreator, onShareGroupLink, onSetGroupTopic, onSendTextMessage, onSendVoiceMessage, 
+    newMessage, setNewMessage, isSending, onTextSubmit // <-- Corrected destructuring
+}) => {
+        // Implement local submit handler
+        const handleTextSubmit = (e: React.FormEvent) => {
+            e.preventDefault();
+            if (!newMessage.trim() || isSending) return;
+            
+            // Use the prop function that includes the usage check and dispatch logic
+            onSendTextMessage(newMessage); 
+            // Clear the input using the setter from the parent
+            setNewMessage('');
+        };
         const [isRecording, setIsRecording] = useState(false);
         const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
         const [audioDuration, setAudioDuration] = useState(0);
@@ -1220,7 +1238,7 @@
                             />
                         ) : (
                             // 2. Text Input State (Default)
-                            <form onSubmit={handleSendMessage} className="flex-grow flex items-center gap-3">
+                            <form onSubmit={onTextSubmit} className="flex-grow flex items-center gap-3">
                                 <input
                                     type="text"
                                     value={newMessage}
@@ -1365,20 +1383,27 @@
         }
       };
 
-      const handleSendTextMessage = async (messageText: string) => { 
-            if (!messageText.trim()) return;
+      const handleTextSubmit = async (e: React.FormEvent) => {
+            e.preventDefault();
+            if (!newMessage.trim() || isSending) return;
+            
+            // Capture the message to be sent and reset input immediately (optimistic UI)
+            const messageToSend = newMessage;
+            setNewMessage('');
             
             handleUsageCheck('messages', async () => {
-                const userMessage: Message = { sender: 'user', text: messageText };
+                const userMessage: Message = { sender: 'user', text: messageToSend };
                 
                 if (activeGroup) {
+                    // Group Chat Logic
                     await groupService.addMessageToGroup(activeGroup.id, userMessage);
                     // Simulate bot response immediately after user sends message
-                    const newMessages = [...activeGroup.messages, userMessage];
+                    const newMessages = [...(activeGroup.messages || []), userMessage];
                     const botResponse = groupService.getGroupBotResponse(newMessages);
                     await groupService.addMessageToGroup(activeGroup.id, botResponse);
+                    
                 } else {
-                    // Existing single chat logic
+                    // Single Chat Logic
                     setCurrentChatMessages(prev => [...prev, userMessage]);
                 }
             });
@@ -1547,31 +1572,6 @@
           }
       };
       
-      const handleSendMessage = async (e: React.FormEvent) => {
-          e.preventDefault();
-          if (!newMessage.trim() || isSending) return;
-          
-          handleUsageCheck('messages', async () => {
-              const userMessage: Message = { sender: 'user', text: newMessage };
-              
-              if (activeGroup) {
-                  // ADDED: Use group service to push message to Firestore
-                  await groupService.addMessageToGroup(activeGroup.id, userMessage);
-                  // UI update via Firestore listener
-                  
-                  // Simulate bot response immediately after user sends message
-                  const newMessages = [...activeGroup.messages, userMessage];
-                  const botResponse = groupService.getGroupBotResponse(newMessages);
-                  await groupService.addMessageToGroup(activeGroup.id, botResponse);
-                  
-              } else {
-                  // Existing single chat logic
-                  setCurrentChatMessages(prev => [...prev, userMessage]);
-              }
-              setNewMessage('');
-          });
-      };
-      
       const handleUpgrade = async () => {
           if (!user) return;
           setIsUpgrading(true);
@@ -1732,27 +1732,30 @@
           </main>
 
           {currentPartner && <ChatModal 
-              partner={currentPartner} 
-              messages={currentChatMessages}
-              onMessagesChange={setCurrentChatMessages}
-              onClose={handleCloseChat} 
-              onSaveChat={handleSaveChat}
-              nativeLanguage={nativeLanguage}
-              teachMeCache={teachMeCache}
-              setTeachMeCache={setTeachMeCache}
-              onShareQuizResults={handleShareQuizResults}
-              userProfile={userProfile}
-              handleUsageCheck={handleUsageCheck}
-              groupChat={activeGroup} // USE activeGroup state
-              onStartGroup={handleStartGroup}
-              userIsGroupCreator={user?.uid === activeGroup?.creatorId} // Check creatorId against activeGroup
-              onShareGroupLink={handleShareGroupLink}
-              onSetGroupTopic={handleSetGroupTopic}
-              // MODIFIED handleSendMessage to use the one defined in AppContent (which now has group logic)
-              onSendMessage={handleSendMessage}
-              onSendTextMessage={handleSendTextMessage} 
-              onSendVoiceMessage={handleSendVoiceMessage} 
-          />}
+                partner={currentPartner} 
+                messages={currentChatMessages}
+                onMessagesChange={setCurrentChatMessages}
+                onClose={handleCloseChat} 
+                onSaveChat={handleSaveChat}
+                nativeLanguage={nativeLanguage}
+                teachMeCache={teachMeCache}
+                setTeachMeCache={setTeachMeCache}
+                onShareQuizResults={handleShareQuizResults}
+                userProfile={userProfile}
+                handleUsageCheck={handleUsageCheck}
+                groupChat={activeGroup} // USE activeGroup state
+                onStartGroup={handleStartGroup}
+                userIsGroupCreator={user?.uid === activeGroup?.creatorId} // Check creatorId against activeGroup
+                onShareGroupLink={handleShareGroupLink}
+                onSetGroupTopic={handleSetGroupTopic}
+                // Pass controlled state and handler
+                newMessage={newMessage} 
+                setNewMessage={setNewMessage}
+                isSending={isSending}
+                onTextSubmit={handleTextSubmit} // <-- Use the newly defined submit handler
+                onSendTextMessage={handleSendTextMessage} 
+                onSendVoiceMessage={handleSendVoiceMessage} 
+            />}
           {showSubscriptionModal && <SubscriptionModal onClose={() => setShowSubscriptionModal(false)} onSubscribe={handleUpgrade} reason={subscriptionModalReason} isUpgrading={isUpgrading} />}
         </div>
       );
