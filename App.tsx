@@ -1356,6 +1356,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
           partner,
           correctionsEnabled,
           userProfile,
+          teachMeCache, // <-- FIX: Pass teachMeCache here
         );
         onMessagesChange((prev) => [...prev, aiResponse]);
       } catch (error) {
@@ -1373,6 +1374,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
       partner,
       correctionsEnabled,
       userProfile,
+      teachMeCache, // <-- FIX: Add teachMeCache to dependencies
       onMessagesChange,
       isSending,
       setIsSending,
@@ -1848,21 +1850,16 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     };
   }, [user?.activeGroupId]); // Re-run when the user's active group ID changes
 
-  // Local state for optimistic UI updates on the cache.
-  const [teachMeCache, setTeachMeCacheState] = useState<TeachMeCache | null>(
-    user?.teachMeCache || null,
-  );
+  // FIX: Treat the user prop as the single source of truth for teachMeCache, 
+  // as it is already kept in sync with Firestore via the useAuth hook.
+  // This eliminates the race condition/stale data on page load.
+  const teachMeCache = user?.teachMeCache || null;
 
-  // Keep local cache state in sync with the user data from Firestore.
-  useEffect(() => {
-    setTeachMeCacheState(user?.teachMeCache || null);
-  }, [user?.teachMeCache]);
-
-  // NEW: Define the setter function to call Firestore
+  // NEW: Define the setter function to ONLY call Firestore (the source of truth)
+  // The 'user' prop updates automatically via the useAuth listener, which 
+  // then updates the 'teachMeCache' variable declared above.
   const setTeachMeCache = (cache: TeachMeCache | null) => {
     if (user) {
-      // Optimistically update the local state for immediate UI feedback.
-      setTeachMeCacheState(cache);
       if (cache) {
         // Persist the change to Firestore in the background.
         firestoreService.saveTeachMeCacheInFirestore(user.uid, cache);
@@ -1880,32 +1877,38 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     setNewMessage('');
 
     await handleUsageCheck('messages', async () => {
-        setIsSending(true);
         const userMessage: Message = {
             sender: 'user',
             text: messageToSend,
-            senderId: user.uid,
+            senderId: user.uid, // This field is required by the fixed Firestore rule
             senderName: user.displayName || 'User'
         };
 
         if (activeGroup) {
-            // Add the user's message to Firestore
+            // 1. Add the user's message to Firestore immediately.
+            // This is the call that required the Firestore rule fix above.
             await groupService.addMessageToGroup(activeGroup.id, userMessage);
 
-            // If the bot is mentioned, get a response
+            // 2. CHECK: Only proceed to send/show typing if the bot is mentioned.
             if (messageToSend.toLowerCase().startsWith('@bot')) {
+                setIsSending(true); // Start typing indicator ONLY if @bot is present
+
                 const updatedGroup = await groupService.getGroupById(activeGroup.id);
+                // Use the updated messages or default to the user's message for context
                 const currentMessages = updatedGroup ? updatedGroup.messages : [userMessage];
                 
+                // Pass all necessary arguments to getGroupBotResponse
                 const botResponse = await groupService.getGroupBotResponse(currentMessages, activeGroup.partner, userProfile, true);
                 await groupService.addMessageToGroup(activeGroup.id, botResponse);
+                
+                setIsSending(false); // End typing indicator
             }
         } else {
-            // For solo chats, just update the local state.
-            // The useEffect hook will automatically trigger the bot's response.
+            // For solo chats, always send a response.
+            setIsSending(true); // Always set for solo chat as a response is expected
             setCurrentChatMessages(prev => [...prev, userMessage]);
+            // isSending is reset inside the asynchronous getBotResponse (via finally block)
         }
-        setIsSending(false);
     });
   };
 
