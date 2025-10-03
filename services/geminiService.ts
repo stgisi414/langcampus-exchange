@@ -176,6 +176,8 @@ export const getChatResponse = async (messages: Message[], partner: Partner, cor
       "translation": ""
     }
 
+    Just do a great job and if all else fails the user is learning about this topic (`userProfileData.teachMeCache.topic`) in the Langcampus Exchange Teach Me Grammar or Vocabulary module.
+
     Now, generate the JSON object for your response based on my last message.
   `;
 
