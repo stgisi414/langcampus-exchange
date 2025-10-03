@@ -1,4 +1,4 @@
-import { Message, Partner, QuizQuestion, UserProfileData } from '../types';
+import { Message, Partner, QuizQuestion, UserProfileData, TeachMeCache } from '../types';
 
 // Make sure this is the correct URL for your deployed Cloud Function.
 //const PROXY_URL = "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiProxy"; // Replace if yours is different
@@ -117,7 +117,7 @@ export const generatePartners = async (nativeLanguage: string, targetLanguage: s
   }
 };
 
-export const getChatResponse = async (messages: Message[], partner: Partner, corrections: boolean, userProfile: UserProfileData): Promise<Message> => {
+export const getChatResponse = async (messages: Message[], partner: Partner, corrections: boolean, userProfile: UserProfileData, teachMe: TeachMeCache): Promise<Message> => {
   if (!partner || !partner.name) {
     console.error("getChatResponse called with an invalid partner object.");
     return { sender: 'ai', text: "Sorry, there's a problem with my memory. Please try starting a new chat." };
@@ -176,7 +176,7 @@ export const getChatResponse = async (messages: Message[], partner: Partner, cor
       "translation": ""
     }
 
-    Just do a great job and if all else fails the user is learning about this topic (`userProfileData.teachMeCache.topic`) in the Langcampus Exchange Teach Me Grammar or Vocabulary module.
+    Just do a great job and if all else fails the user is learning about this topic (${teachMe.topic}) in the Langcampus Exchange Teach Me Grammar or Vocabulary module.
 
     Now, generate the JSON object for your response based on my last message.
   `;
