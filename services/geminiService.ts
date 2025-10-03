@@ -117,7 +117,7 @@ export const generatePartners = async (nativeLanguage: string, targetLanguage: s
   }
 };
 
-export const getChatResponse = async (messages: Message[], partner: Partner, corrections: boolean, userProfile: UserProfileData, teachMe: TeachMeCache): Promise<Message> => {
+export const getChatResponse = async (messages: Message[], partner: Partner, corrections: boolean, userProfile: UserProfileData): Promise<Message> => {
   if (!partner || !partner.name) {
     console.error("getChatResponse called with an invalid partner object.");
     return { sender: 'ai', text: "Sorry, there's a problem with my memory. Please try starting a new chat." };
@@ -134,10 +134,10 @@ export const getChatResponse = async (messages: Message[], partner: Partner, cor
     You are learning ${partner.learningLanguage}.
     Your interests include: ${partner.interests.join(', ')}.
 
-    You are talking to ${userProfile.name || 'a user'}.
+    You are talking to ${userProfile?.name || 'a user'}.
     The user's native language is ${partner.learningLanguage}.
-    The user's interests include: ${userProfile.hobbies || 'not specified'}.
-    The user's bio says: "${userProfile.bio || 'not specified'}".
+    The user's interests include: ${userProfile?.hobbies || 'not specified'}.
+    The user's bio says: "${userProfile?.bio || 'not specified'}".
     
     Conversation History:
     ${conversationHistory}
@@ -309,4 +309,26 @@ export const transcribeAudio = async (audioBlob: Blob, languageCode: string): Pr
     console.error("Error calling the transcription proxy function:", error);
     throw error;
   }
+};
+
+export const getGroupBotResponse = async (
+    messages: Message[],
+    partner: Partner,
+    userProfile: UserProfileData,
+    correctionsEnabled: boolean
+): Promise<Message> => {
+    const lastUserMessage = messages.findLast(m => m.sender === 'user');
+    
+    if (lastUserMessage) {
+        try {
+            // This now calls the actual Gemini service for a real response
+            const aiResponse = await geminiService.getChatResponse(messages, partner, correctionsEnabled, userProfile);
+            return aiResponse;
+        } catch (error) {
+            console.error("Error getting group bot response:", error);
+            return { sender: 'ai', text: "Sorry, I'm having trouble connecting right now." };
+        }
+    }
+    // Default message if there's no user message to respond to
+    return { sender: 'ai', text: 'Group chat initialized.' };
 };
