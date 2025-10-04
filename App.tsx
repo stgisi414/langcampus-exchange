@@ -1341,10 +1341,6 @@ const ChatModal: React.FC<ChatModalProps> = ({
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [nudgeCount, setNudgeCount] = useState(0);
 
-  const getBotResponse = useCallback(
-    async (currentMessages: Message[]) => {
-      // The `isSending` state is set by the functions that call this (`handleTextSubmit`),
-      // and `isFetchingResponse` prevents this from running multiple times simultaneously.
   useEffect(() => {
     // 1. Clear any existing timer when dependencies change (new message, sending status, etc.)
     if (inactivityTimerRef.current) {
