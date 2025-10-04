@@ -1336,7 +1336,10 @@ const ChatModal: React.FC<ChatModalProps> = ({
       // and `isFetchingResponse` prevents this from running multiple times simultaneously.
       // We don't need to check or set `isSending` here.
       // if (isSending) return;  // This was the cause of the bug.
-      // setIsSending(true);
+      
+      // FIX 1: Explicitly set isSending to true when the bot starts fetching
+      setIsSending(true);
+
       try {
         const aiResponse = await geminiService.getChatResponse(
           currentMessages,
@@ -1355,6 +1358,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
         };
         onMessagesChange((prev) => [...prev, errorMessage]);
       } finally {
+        // FIX 1: Clear sending state after response
         setIsSending(false);
       }
     },
@@ -1365,8 +1369,9 @@ const ChatModal: React.FC<ChatModalProps> = ({
       teachMeCache,
       onMessagesChange,
       groupChat,
+      setIsSending, // Must include to satisfy linter
     ],
-  );  
+  );
 
   useEffect(() => {
     chatHistoryRef.current?.scrollTo(0, chatHistoryRef.current.scrollHeight);
@@ -1376,12 +1381,14 @@ const ChatModal: React.FC<ChatModalProps> = ({
     const lastMessage = messages[messages.length - 1];
     if (
       lastMessage?.sender === "user" &&
-      !isSending &&
+      // FIX 2: Removed !isSending check which prevented the immediate response from firing 
+      // after the user clicked send.
       !groupChat
     ) {
       getBotResponse(messages);
     }
-  }, [messages, getBotResponse, groupChat, isSending]);
+  // FIX 2: Removed isSending from dependency array to allow it to run on message change
+  }, [messages, getBotResponse, groupChat]); 
 
   useEffect(() => {
     if (inactivityTimerRef.current) {
@@ -1389,9 +1396,12 @@ const ChatModal: React.FC<ChatModalProps> = ({
     }
     if (!groupChat) {
       const lastMessage = messages[messages.length - 1];
-      if (lastMessage && lastMessage.sender === 'ai' && !isSending) {
+      // FIX 4: Removed redundant `&& !isSending` check from here.
+      if (lastMessage && lastMessage.sender === 'ai') { 
         inactivityTimerRef.current = setTimeout(async () => {
-          if (isSending) return;
+          // This check inside the timeout is kept to prevent multiple nudges
+          if (isSending) return; 
+          
           setIsSending(true);
           try {
             const nudgeResponse = await geminiService.getNudgeResponse(
@@ -1419,7 +1429,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
         clearTimeout(inactivityTimerRef.current);
       }
     };
-  }, [messages, groupChat, partner, userProfile, onMessagesChange, isSending, setIsSending, getBotResponse]);
+  }, [messages, groupChat, partner, userProfile, onMessagesChange, setIsSending]); 
 
   const startTimer = useCallback(() => {
     setAudioDuration(0);
@@ -1494,14 +1504,9 @@ const ChatModal: React.FC<ChatModalProps> = ({
     const lastMessage = messages[messages.length - 1];
     if (
       lastMessage?.sender === "user" &&
-      !isFetchingResponse.current &&
       !groupChat
     ) {
-      isFetchingResponse.current = true;
-
-      getBotResponse(messages).finally(() => {
-        isFetchingResponse.current = false;
-      });
+      getBotResponse(messages);
     }
   }, [messages, getBotResponse, groupChat]);
 
@@ -1690,10 +1695,11 @@ const ChatModal: React.FC<ChatModalProps> = ({
                   }
               }
           } else {
-              setIsSending(true);
-              const soloTextMessage: Message = { sender: "user", text: transcription, timestamp: Date.now() }; // Add timestamp
-              onMessagesChange((prev) => [...prev, soloTextMessage]);
-          }
+            // Solo Chat: Set isSending first to disable input/clear timer
+            setIsSending(true);
+            // Then add user message. The useEffect will detect this change and call getBotResponse.
+            setCurrentChatMessages(prev => [...prev, userMessage]);
+        }
       }
     });
     setRecordedBlob(null);
@@ -1949,7 +1955,6 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   const unsubscribeGroupRef = useRef<(() => void) | null>(null); // For unsubscribing from Firestore listener
   const [newMessage, setNewMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const isFetchingResponse = useRef(false);
 
   useEffect(() => {
     localStorage.setItem("nativeLanguage", nativeLanguage);
