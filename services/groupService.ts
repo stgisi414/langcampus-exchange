@@ -2,6 +2,7 @@ import { doc, setDoc, updateDoc, onSnapshot, arrayUnion, arrayRemove, deleteDoc,
 import { db } from '../firebaseConfig.ts';
 import { GroupChat, Message, Partner, UserProfileData, TeachMeCache } from '../types.ts';
 import * as geminiService from './geminiService';
+import { deleteAudioMessage } from './storageService.ts';
 
 const GROUPS_COLLECTION = 'groupChats';
 
@@ -90,6 +91,16 @@ export const leaveGroup = async (groupId: string, userId: string): Promise<void>
         const groupData = groupSnap.data() as GroupChat;
         // If the user leaving is the creator, delete the whole group.
         if (groupData.creatorId === userId) {
+            
+            // --- NEW AUDIO CLEANUP LOGIC ---
+            const audioUrlsToDelete = groupData.messages
+                .map(m => m.audioUrl)
+                .filter((url: string | undefined): url is string => !!url); // Filter out undefined/null
+            
+            const deletePromises = audioUrlsToDelete.map(url => deleteAudioMessage(url));
+            await Promise.all(deletePromises);
+            // --- END NEW AUDIO CLEANUP LOGIC ---
+
             await deleteDoc(groupRef);
         } else {
             // Otherwise, just remove the user from the members map.

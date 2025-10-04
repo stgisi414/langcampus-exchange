@@ -2,6 +2,7 @@ import { doc, getDoc, updateDoc, increment, setDoc } from "firebase/firestore";
 import { User } from "firebase/auth";
 import { db } from '../firebaseConfig.ts';
 import { UserData, UsageKey, SavedChat, SubscriptionStatus, TeachMeCache } from '../types.ts';
+import { deleteAudioMessage } from './storageService.ts';
 
 const DAILY_LIMITS = {
   searches: 5,
@@ -63,7 +64,20 @@ export const saveChatInFirestore = async (userId: string, chat: SavedChat) => {
 };
 
 export const deleteChatFromFirestore = async (userId: string) => {
-  const userRef = doc(db, "customers", userId); // Target 'customers' collection
+  const userRef = doc(db, "customers", userId);
+  const docSnap = await getDoc(userRef);
+  
+  if (docSnap.exists() && docSnap.data()?.savedChat?.messages) {
+    // 1. Get audio URLs from saved chat messages
+    const messages = docSnap.data()!.savedChat.messages;
+    const audioUrlsToDelete = messages.map((m: any) => m.audioUrl).filter((url: string | undefined) => !!url);
+    
+    // 2. Delete the files from storage concurrently
+    const deletePromises = audioUrlsToDelete.map((url: string) => deleteAudioMessage(url));
+    await Promise.all(deletePromises);
+  }
+
+  // 3. Clear the chat document field
   await updateDoc(userRef, { savedChat: null });
 };
 

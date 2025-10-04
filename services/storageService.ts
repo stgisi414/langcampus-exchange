@@ -1,6 +1,6 @@
 // stgisi414/langcampus-exchange/langcampus-exchange-d72c797a2a7bb28fccb9bc66a4ef358f7d981029/services/storageService.ts
 
-import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 import { app } from '../firebaseConfig'; // Assuming storage uses the initialized app
 
 // Initialize Firebase Storage
@@ -31,4 +31,19 @@ export const uploadAudioMessage = async (audioBlob: Blob, identifier: string, us
     // Get the public download URL
     const downloadURL = await getDownloadURL(snapshot.ref);
     return downloadURL;
+};
+
+/**
+ * Deletes an audio file from Firebase Storage using its full URL.
+ * @param audioUrl The public URL of the uploaded audio file.
+ */
+export const deleteAudioMessage = async (audioUrl: string): Promise<void> => {
+    try {
+        const fileRef = ref(storage, audioUrl);
+        await deleteObject(fileRef);
+    } catch (error) {
+        // Log the error but don't re-throw. We want the chat deletion to succeed
+        // even if the file is already gone or there's a permission error.
+        console.warn("Error deleting audio file from Storage:", audioUrl, error);
+    }
 };

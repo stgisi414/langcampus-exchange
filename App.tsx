@@ -1301,6 +1301,7 @@ interface ChatModalProps {
   onTextSubmit: (e: React.FormEvent, correctionsEnabled: boolean) => void;
   nudgeCount: number;
   onAddNudge: (response: Message, messagesSnapshot: Message[]) => void;
+  onTranscribeAndRespond: (audioBlob: Blob, languageCode: string, messagesSnapshot: Message[]) => Promise<void>;
 }
 
 const ChatModal: React.FC<ChatModalProps> = ({
@@ -1330,6 +1331,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
   onTextSubmit,
   nudgeCount,
   onAddNudge,
+  onTranscribeAndRespond,
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
@@ -1387,16 +1389,6 @@ const ChatModal: React.FC<ChatModalProps> = ({
                 );
               }
               
-              onMessagesChange(prevMessages => {
-                let didAddNudge = false;
-                // Check if the conversation length is still the same (user hasn't sent a message yet)
-                if (prevMessages.length === messages.length) { 
-                  didAddNudge = true; // Set flag inside setter for atomic check
-                  return [...prevMessages, {...response, timestamp: Date.now()}]; 
-                }
-                return prevMessages; // User sent a message, so don't add the nudge
-              });
-
               onAddNudge(response, messages);
             } catch (error) {
               console.error("Failed to get AI response:", error);
@@ -1617,8 +1609,10 @@ const ChatModal: React.FC<ChatModalProps> = ({
     const currentUserId = auth.currentUser?.uid;
     const identifier = groupChat?.id || partner?.name;
     if (!identifier || !currentUserId) return;
+
+    const messagesSnapshot = [...messages];
+
     await handleUsageCheck("messages", async () => {
-      let transcription = "";
       try {
         const audioUrl = await storageService.uploadAudioMessage(audioBlob, identifier, currentUserId);
         const voiceMessage: Message = {
@@ -1628,7 +1622,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
           audioDuration: duration,
           senderId: currentUserId,
           senderName: user.displayName || 'User',
-          timestamp: Date.now() // Add timestamp
+          timestamp: Date.now()
         };
         await onSendVoiceMessage(voiceMessage);
       } catch (error) {
@@ -1636,42 +1630,28 @@ const ChatModal: React.FC<ChatModalProps> = ({
         alert("Failed to send voice message. Please try again.");
         return;
       }
-      try {
-          transcription = await geminiService.transcribeAudio(audioBlob, partnerLanguageCode);
-      } catch (error) {
-          console.error("Transcription Failed:", error);
-          transcription = "";
-      }
-      if (transcription) {
-          const isBotMention = transcription.toLowerCase().startsWith('@bot');
-          const userTranscriptionMessage: Message = {
-            sender: "user",
-            text: `(Transcription: ${transcription})`,
-            senderId: currentUserId,
-            senderName: user.displayName || 'User',
-            timestamp: Date.now() // Add timestamp
-          };
-          if (activeGroup) {
-              await groupService.addMessageToGroup(activeGroup.id, userTranscriptionMessage);
-              if (isBotMention) {
-                  setIsSending(true);
-                  try {
-                      const rawContextMessage: Message = { sender: "user", text: transcription, senderId: currentUserId, senderName: user.displayName || 'User', timestamp: Date.now() }; // Add timestamp
-                      const updatedGroup = await groupService.getGroupById(activeGroup.id);
-                      const currentMessages = updatedGroup ? [...updatedGroup.messages, rawContextMessage] : [userTranscriptionMessage, rawContextMessage];
-                      const groupTeachMeCache: TeachMeCache | null = activeGroup.topic
-                      ? { topic: activeGroup.topic, language: partnerLanguageObject.name, type: 'Grammar', content: '', } : null;
-                      const botResponse = await groupService.getGroupBotResponse(currentMessages, activeGroup.partner, userProfile, true, groupTeachMeCache);
-                      await groupService.addMessageToGroup(activeGroup.id, {...botResponse, timestamp: Date.now()}); // Add timestamp
-                  } catch (error) {
-                      console.error("Bot Reply Failed:", error);
-                  } finally {
-                      setIsSending(false);
-                  }
+
+      if (groupChat) {
+          await groupService.addMessageToGroup(groupChat.id, userTranscriptionMessage);
+          if (isBotMention) {
+              setIsSending(true);
+              try {
+                  const rawContextMessage: Message = { sender: "user", text: transcription, senderId: currentUserId, senderName: user.displayName || 'User', timestamp: Date.now() }; // Add timestamp
+                  const updatedGroup = await groupService.getGroupById(groupChat.id);
+                  const currentMessages = updatedGroup ? [...updatedGroup.messages, rawContextMessage] : [userTranscriptionMessage, rawContextMessage];
+                  const groupTeachMeCache: TeachMeCache | null = groupChat.topic
+                  ? { topic: groupChat.topic, language: partnerLanguageObject.name, type: 'Grammar', content: '', } : null;
+                  const botResponse = await groupService.getGroupBotResponse(currentMessages, groupChat.partner, userProfile, true, groupTeachMeCache);
+                  await groupService.addMessageToGroup(groupChat.id, {...botResponse, timestamp: Date.now()}); // Add timestamp
+              } catch (error) {
+                  console.error("Bot Reply Failed:", error);
+              } finally {
+                  setIsSending(false);
               }
-          } else {
-               setCurrentChatMessages(prev => [...prev, userMessage]);
           }
+      } else {
+           // **Solo Chat Logic:** Transcribe and get AI response.
+          await onTranscribeAndRespond(audioBlob, partnerLanguageCode, messagesSnapshot);
       }
     });
     setRecordedBlob(null);
@@ -1708,7 +1688,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
             )}
             {!groupChat && (
               <button
-                onClick={() => onSaveChat(messages)}
+                onClick={() => onSaveChat(messages, true)} // <-- ADDED: Pass 'true' to show alert
                 className="p-1 sm:p-2 rounded-full text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                 aria-label="Save chat"
               >
@@ -2132,10 +2112,91 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     });
   };
 
+  // NEW FUNCTION: Handles the transcription and AI response for solo chat
+  const handleTranscribeAndRespond = async (
+    audioBlob: Blob, 
+    languageCode: string, 
+    messagesSnapshot: Message[]
+  ): Promise<void> => {
+    if (!currentPartner || !user)
+      return;
+    setIsSending(true);
+    let transcription = "";
+    
+    try {
+        // FIX: The problem in the user's snippet was a variable name typo (transcription2, error2, etc.), 
+        // but the core issue is the argument type. Assuming the user corrects the inner variable names
+        // to transcription and error, the logic below uses the correctly typed local variable 'audioBlob'.
+        transcription = await geminiService.transcribeAudio(audioBlob, languageCode);
+    } catch (error) {
+        console.error("Transcription Failed:", error);
+        transcription = "";
+    }
+
+    if (transcription) {
+        const userTranscriptionMessage: Message = {
+            sender: "user",
+            text: `(Transcription: ${transcription})`,
+            senderId: user.uid,
+            senderName: user.displayName || 'User',
+            timestamp: Date.now()
+        };
+        
+        // 1. Build context: Placeholder message already sent. We include it and the transcription message for the AI.
+        const messagesContext = [
+            ...messagesSnapshot, 
+            {
+                sender: 'user', 
+                text: '(Voice Message)', 
+                senderId: user.uid, 
+                senderName: user.displayName || 'User',
+                timestamp: Date.now() - 1, // Ensure placeholder order
+            } as Message,
+            userTranscriptionMessage
+        ];
+
+        try {
+            const aiResponse = await geminiService.getChatResponse(
+                messagesContext,
+                currentPartner,
+                true, // Corrections on for transcription/voice
+                userProfile,
+                teachMeCache,
+                false // Not a group chat
+            );
+            
+            // 2. Atomic update: Add both the transcription and the AI reply
+            setCurrentChatMessages((prev) => {
+                const newMessages = [...prev, userTranscriptionMessage, { ...aiResponse, timestamp: Date.now() }];
+                
+                // IMPORTANT: Automatically save the chat after a voice message exchange
+                if (currentPartner) {
+                    handleSaveChat(newMessages, false); // <--- Implicit save for cleanup later
+                }
+                
+                return newMessages;
+            });
+        
+        } catch (error) {
+             console.error("AI Response Failed after Transcription:", error);
+             const errorMessage: Message = { sender: "ai", text: "Sorry, the AI failed to respond to the transcribed message.", timestamp: Date.now() };
+             setCurrentChatMessages((prev) => [...prev, userTranscriptionMessage, errorMessage]);
+        }
+
+    } else {
+        // If transcription fails, we only append the AI error message. The placeholder is already in the chat.
+        const errorMessage: Message = { sender: "ai", text: "Transcription failed. Could you please type your message instead?", timestamp: Date.now() };
+        setCurrentChatMessages((prev) => [...prev, errorMessage]);
+    }
+    
+    setIsSending(false);
+  };
+
   const handleSendVoiceMessage = async (voiceMessage: Message) => {
     if (activeGroup) {
       await groupService.addMessageToGroup(activeGroup.id, voiceMessage);
     } else {
+      // Single Chat Logic: Now only sends the placeholder message to state
       setCurrentChatMessages((prev) => [...prev, voiceMessage]);
     }
   };
@@ -2217,28 +2278,32 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     }
   };
 
-  const handleSaveChat = (messages: Message[]) => {
+  const handleSaveChat = (messages: Message[], showAlert: boolean = true) => {
     if (currentPartner && user) {
-      const sanitizedMessages = messages.map((msg) => ({
-        sender: msg.sender,
-        senderId: msg.senderId || null, // <-- ADDED: Preserve senderId for proper rendering/identification
-        senderName: msg.senderName || null, // <-- ADDED: Preserve senderName 
-        text: msg.text,
-        correction: msg.correction || null,
-        translation: msg.translation || null,
-        audioUrl: msg.audioUrl || null, // <-- ADDED: For complete saving of voice messages
-        audioDuration: msg.audioDuration || null, // <-- ADDED
-        timestamp: msg.timestamp || null, // <-- ADDED: For consistent message order
-      }));
+        const sanitizedMessages = messages.map((msg) => ({
+            sender: msg.sender,
+            senderId: msg.senderId || null, 
+            senderName: msg.senderName || null, 
+            text: msg.text,
+            correction: msg.correction || null,
+            translation: msg.translation || null,
+            audioUrl: msg.audioUrl || null, // <-- Saved for cleanup
+            audioDuration: msg.audioDuration || null,
+            timestamp: msg.timestamp || null, 
+        }));
 
-      const chatToSave = {
-        partner: currentPartner,
-        messages: sanitizedMessages,
-      };
-      firestoreService.saveChatInFirestore(user.uid, chatToSave);
-      alert("Chat saved!");
+        const chatToSave = {
+            partner: currentPartner,
+            messages: sanitizedMessages,
+        };
+        firestoreService.saveChatInFirestore(user.uid, chatToSave);
+        
+        // Only show alert if explicitly requested by the user action
+        if (showAlert) { 
+            alert("Chat saved!");
+        }
     }
-  };
+};
 
   const handleDeleteSavedChat = () => {
     if (
@@ -2685,6 +2750,7 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
           onTextSubmit={handleTextSubmit}
           onSendTextMessage={handleSendTextMessage}
           onSendVoiceMessage={handleSendVoiceMessage}
+          onTranscribeAndRespond={handleTranscribeAndRespond}
           nudgeCount={nudgeCount} 
           onAddNudge={handleAddNudge}
         />
