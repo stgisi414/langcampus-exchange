@@ -685,16 +685,22 @@ const TeachMeModal: React.FC<{
   const isMember = isGroupChat && !userIsGroupCreator;
 
   useEffect(() => {
-    const fetchContentForTopic = async (topic: string, type: "Grammar" | "Vocabulary") => {
+    // This helper is inside the useEffect and needs to be redefined to handle TeachMeType
+    const fetchContentForTopic = async (topic: string, type: TeachMeType) => {
       setIsLoading(true);
       setContent("");
       try {
         const nativeLanguageName =
           LANGUAGES.find((lang) => lang.code === nativeLanguage)?.name ||
           nativeLanguage;
+        
+        // Only 'Grammar' and 'Vocabulary' are valid types for geminiService.getContent
+        // We default 'Conversation' to 'Grammar' for the gemini call
+        const contentType: 'Grammar' | 'Vocabulary' = (type === 'Conversation' ? 'Grammar' : type) as 'Grammar' | 'Vocabulary';
+
         const fetchedContent = await geminiService.getContent(
           topic,
-          type,
+          contentType, // Use the sanitized type
           language,
           nativeLanguageName,
         );
@@ -706,35 +712,67 @@ const TeachMeModal: React.FC<{
       }
     };
 
+    // PRIORITY 1: Handle Group Topic Synchronization
     if (isGroupChat && groupTopic) {
-      // Priority 1: If in a group chat and a topic is set, load that topic for everyone.
       if (selectedTopic !== groupTopic) {
-        setSelectedTopic(groupTopic);
-        fetchContentForTopic(groupTopic, activeTab);
+        // Find topic list to correctly set the tab
+        const allTopics = [
+            ...(grammarData[language as keyof typeof grammarData] || []), 
+            ...vocabData, 
+            ...(conversationData[language as keyof typeof conversationData] || [])
+        ];
+        
+        const topicToLoad = allTopics.find(t => t.title === groupTopic);
+        
+        if (topicToLoad) {
+            let newType: TeachMeType;
+            if (topicToLoad.tags.includes('conversation')) {
+                newType = 'Conversation';
+            } else if (vocabData.some(v => v.title === groupTopic)) {
+                newType = 'Vocabulary';
+            } else {
+                newType = 'Grammar';
+            }
+            
+            setActiveTab(newType);
+            setLevel(topicToLoad.level);
+            setSelectedTopic(groupTopic);
+            fetchContentForTopic(groupTopic, newType);
+        }
+      } else if (selectedTopic && !content && !isLoading) {
+          // Re-fetch content if a topic is selected but content is somehow cleared (e.g., manual clear)
+          fetchContentForTopic(selectedTopic, activeTab);
       }
-    } else if (!isGroupChat && cache && cache.language === language) {
-      // Priority 2: If in a solo chat, load from the personal cache.
-      setActiveTab(cache.type as "Grammar" | "Vocabulary");
-      const topicData = (
-        cache.type === "Grammar"
-          ? grammarData[language as keyof typeof grammarData]
-          : vocabData
-      )?.find((t) => t.title === cache.topic);
+    } 
+    
+    // PRIORITY 2: Handle Initial Solo Cache Loading - CRITICAL FIX: Only run if no topic is currently selected
+    else if (!isGroupChat && cache && cache.language === language && !selectedTopic) {
+      // The cache loading is now restricted to initial load by !selectedTopic
+      setActiveTab(cache.type);
+      
+      // Use the correct topic list for loading level info (Fixed logic to include Conversation)
+      const topicList = cache.type === "Grammar" 
+          ? grammarData[language as keyof typeof grammarData] 
+          : (cache.type === "Conversation" 
+              ? conversationData[language as keyof typeof conversationData] 
+              : vocabData);
+      
+      const topicData = topicList?.find((t) => t.title === cache.topic);
 
       if (topicData) {
         setLevel(topicData.level);
       }
       setSelectedTopic(cache.topic);
       setContent(cache.content);
+      
       setTimeout(() => {
         topicRefs.current.get(cache.topic)?.scrollIntoView({ block: "center" });
       }, 0);
-    } else {
-      // Otherwise, clear the state.
-      setSelectedTopic(null);
-      setContent("");
-      setQuizQuestions(null);
+    } else if (!isGroupChat && selectedTopic && !content && !isLoading) {
+        // Case: Solo mode, topic selected but content cleared/missing. Re-fetch it.
+        fetchContentForTopic(selectedTopic, activeTab);
     }
+
   }, [language, cache, isGroupChat, groupTopic, activeTab, nativeLanguage, selectedTopic]);
 
   const handleTabChange = (newTab: TeachMeType) => {
@@ -748,7 +786,7 @@ const TeachMeModal: React.FC<{
   };
 
   const availableTopics = useMemo(() => {
-    // FIX: Implement logic to handle flat array (Vocabulary) vs. keyed object (Grammar/Conversation)
+    // FIX: Ensure the Conversation data is correctly referenced by its language key
     let data: { title: string; level: number; tags: string[] }[] = [];
     const languageKey = language as keyof typeof grammarData; 
 
@@ -931,9 +969,9 @@ const TeachMeModal: React.FC<{
             </div>
 
             {/* NEW: Container to manage vertical space and scrolling */}
-            <div className="flex flex-col flex-grow overflow-y-auto">
+            <div className="flex flex-col flex-grow">
             
-              {(isHost || !isGroupChat) && <div className="relative mb-4 flex-none"> {/* flex-none: prevents shrinking */}
+              {(isHost || !isGroupChat) && <div className="relative mb-4 flex-none flex-shrink-0">
                 <input
                   type="text"
                   placeholder="Search lessons..."
@@ -946,7 +984,7 @@ const TeachMeModal: React.FC<{
 
               {(isHost || !isGroupChat) && searchQuery.trim() === "" ? (
                 <>
-                  <div className="flex overflow-x-auto border-b dark:border-gray-600 mb-4 pb-2">
+                  <div className="flex overflow-x-auto border-b dark:border-gray-600 mb-4 pb-2 flex-shrink-0">  
                     <button
                       onClick={() => handleTabChange("Grammar")} // <-- USE handleTabChange
                       className={`flex-none px-4 py-2 text-center text-sm ${activeTab === "Grammar" ? "border-b-2 border-blue-500 text-blue-500 font-semibold" : "text-gray-500"}`}
@@ -966,7 +1004,7 @@ const TeachMeModal: React.FC<{
                       Conversation
                     </button>
                   </div>
-                  <div className="mb-4 flex-none">
+                  <div className="mb-4 flex-none flex-shrink-0">
                     <p className="font-semibold mb-2 text-center">
                       Select Level:
                     </p>
@@ -992,9 +1030,36 @@ const TeachMeModal: React.FC<{
               {/* FIX: Removed redundant overflow-y-auto flex-grow from UL. It fills the remaining space. */}
               <ul
                 ref={topicListRef}
-                className="space-y-2" 
+                className="space-y-2 flex-grow overflow-y-auto"
               >
-                {/* ... (Topic list mapping content remains unchanged) */}
+                {availableTopics.length > 0 ? (
+                  availableTopics.map((topic) => (
+                    <li key={topic.title}>
+                      <button
+                        ref={(el) => topicRefs.current.set(topic.title, el)}
+                        onClick={() => handleTopicSelect(topic.title)}
+                        className={`w-full text-left p-2 rounded text-sm transition-colors 
+                                   ${(groupTopic || selectedTopic) === topic.title
+                                     ? "bg-blue-500 text-white"
+                                     : "hover:bg-gray-100 dark:hover:bg-gray-700"}
+                                   ${isMember && (groupTopic !== topic.title) ? "opacity-50 cursor-not-allowed" : ""}
+                                   `}
+                        disabled={isMember && (groupTopic !== topic.title)}
+                      >
+                        <span className="font-semibold">{topic.title}</span>
+                        <span className="text-xs ml-2 text-gray-500 dark:text-gray-400">
+                           Lvl {topic.level}
+                        </span>
+                      </button>
+                    </li>
+                  ))
+                ) : (
+                  !isLoading && searchQuery.trim() !== "" && (
+                    <p className="text-gray-500 text-center p-4">
+                      No topics found matching "{searchQuery}".
+                    </p>
+                  )
+                )}
               </ul>
             </div> {/* END: New scrolling wrapper */}
           </div>
