@@ -1381,14 +1381,12 @@ const ChatModal: React.FC<ChatModalProps> = ({
     const lastMessage = messages[messages.length - 1];
     if (
       lastMessage?.sender === "user" &&
-      // FIX 2: Removed !isSending check which prevented the immediate response from firing 
-      // after the user clicked send.
+      // REMOVED: !isSending (This was the deadlock)
       !groupChat
     ) {
       getBotResponse(messages);
     }
-  // FIX 2: Removed isSending from dependency array to allow it to run on message change
-  }, [messages, getBotResponse, groupChat]); 
+  }, [messages, getBotResponse, groupChat]);
 
   useEffect(() => {
     if (inactivityTimerRef.current) {
@@ -1396,13 +1394,14 @@ const ChatModal: React.FC<ChatModalProps> = ({
     }
     if (!groupChat) {
       const lastMessage = messages[messages.length - 1];
-      // FIX 4: Removed redundant `&& !isSending` check from here.
-      if (lastMessage && lastMessage.sender === 'ai') { 
+      
+      // FIX: Only set the timer if the last message is from AI AND we are NOT sending.
+      if (lastMessage && lastMessage.sender === 'ai' && !isSending) { 
         inactivityTimerRef.current = setTimeout(async () => {
-          // This check inside the timeout is kept to prevent multiple nudges
-          if (isSending) return; 
           
-          setIsSending(true);
+          if (isSending) return; // Final safety check inside the timeout
+          
+          setIsSending(true); // Start "typing..." state for the nudge
           try {
             const nudgeResponse = await geminiService.getNudgeResponse(
               messages,
@@ -1429,7 +1428,8 @@ const ChatModal: React.FC<ChatModalProps> = ({
         clearTimeout(inactivityTimerRef.current);
       }
     };
-  }, [messages, groupChat, partner, userProfile, onMessagesChange, setIsSending]); 
+    // Dependencies now correctly ensure the timer effect runs only when relevant message or state changes occur.
+  }, [messages, groupChat, partner, userProfile, onMessagesChange, isSending]);
 
   const startTimer = useCallback(() => {
     setAudioDuration(0);
@@ -1695,11 +1695,8 @@ const ChatModal: React.FC<ChatModalProps> = ({
                   }
               }
           } else {
-            // Solo Chat: Set isSending first to disable input/clear timer
-            setIsSending(true);
-            // Then add user message. The useEffect will detect this change and call getBotResponse.
-            setCurrentChatMessages(prev => [...prev, userMessage]);
-        }
+               setCurrentChatMessages(prev => [...prev, userMessage]);
+          }
       }
     });
     setRecordedBlob(null);
@@ -2073,7 +2070,9 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
                 }
             }
         } else {
-            setIsSending(true);
+            // FIX: For solo chat, simply add the user message. 
+            // The ChatModal's useEffect will detect this, trigger the bot response, 
+            // and the bot's logic will correctly manage the isSending state.
             setCurrentChatMessages(prev => [...prev, userMessage]);
         }
     });
