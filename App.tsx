@@ -1298,7 +1298,8 @@ interface ChatModalProps {
   setNewMessage: React.Dispatch<React.SetStateAction<string>>;
   isSending: boolean;
   setIsSending: React.Dispatch<React.SetStateAction<boolean>>;
-  onTextSubmit: (e: React.FormEvent) => void;
+  onTextSubmit: (e: React.FormEvent, correctionsEnabled: boolean) => void;
+
 }
 
 const ChatModal: React.FC<ChatModalProps> = ({
@@ -1344,81 +1345,32 @@ const ChatModal: React.FC<ChatModalProps> = ({
     async (currentMessages: Message[]) => {
       // The `isSending` state is set by the functions that call this (`handleTextSubmit`),
       // and `isFetchingResponse` prevents this from running multiple times simultaneously.
-      // We don't need to check or set `isSending` here.
-      // if (isSending) return;  // This was the cause of the bug.
-      
-      // FIX 1: Explicitly set isSending to true when the bot starts fetching
-      setIsSending(true);
-
-      try {
-        const aiResponse = await geminiService.getChatResponse(
-          currentMessages,
-          partner,
-          correctionsEnabled,
-          userProfile,
-          teachMeCache,
-          !!groupChat
-        );
-        onMessagesChange((prev) => [...prev, aiResponse]);
-      } catch (error) {
-        console.error(error);
-        const errorMessage: Message = {
-          sender: "ai",
-          text: "Sorry, I encountered an error. Please try again.",
-        };
-        onMessagesChange((prev) => [...prev, errorMessage]);
-      } finally {
-        // FIX 1: Clear sending state after response
-        setIsSending(false);
-      }
-    },
-    [
-      partner,
-      correctionsEnabled,
-      userProfile,
-      teachMeCache,
-      onMessagesChange,
-      groupChat,
-      setIsSending, // Must include to satisfy linter
-    ],
-  );
-
   useEffect(() => {
-    chatHistoryRef.current?.scrollTo(0, chatHistoryRef.current.scrollHeight);
-  }, [messages]);
-
-  useEffect(() => {
-    const lastMessage = messages[messages.length - 1];
-    if (
-      lastMessage?.sender === "user" &&
-      // REMOVED: !isSending (This was the deadlock)
-      !groupChat
-    ) {
-      getBotResponse(messages);
-    }
-  }, [messages, getBotResponse, groupChat]);
-
-  useEffect(() => {
+    // 1. Clear any existing timer when dependencies change (new message, sending status, etc.)
     if (inactivityTimerRef.current) {
       clearTimeout(inactivityTimerRef.current);
     }
+
+    // 2. Only run this logic for solo chats
     if (!groupChat) {
       const lastMessage = messages[messages.length - 1];
       const isInitialChat = messages.length === 0;
 
-      // Check if we should set a timer (not sending and either initial chat OR last message was from AI)
-      const shouldSetTimer = !isSending && (isInitialChat || lastMessage?.sender === 'ai');
+      // Determine if a timer should be set:
+      // - Not currently waiting for an AI response (!isSending)
+      // - AND (The chat is empty OR the last message was from the AI - ensuring it's the user's turn to speak)
+      const shouldSetTimer = !isSending && (isInitialChat || (lastMessage && lastMessage.sender === 'ai'));
 
       if (shouldSetTimer) {
-        // The first AI-initiated message is the welcome, subsequent ones are nudges.
+        // 8 seconds for the first AI-initiated message (the welcome), 60 seconds for subsequent nudges
         const TIMEOUT_DURATION = isInitialChat ? 8000 : 60000;
         const MAX_AI_INITIATED_MESSAGES = 3; // Welcome (1) + 2 Nudges (2)
 
-        // FIX 2: Check the nudge count before setting the timer for subsequent nudges
+        // Only set the timer if we are within the maximum number of AI-initiated messages
         if (isInitialChat || nudgeCount < MAX_AI_INITIATED_MESSAGES) {
           inactivityTimerRef.current = setTimeout(async () => {
             
-            if (isSending) return; // Final safety check inside the timeout
+            if (isSending) return; // Final safety check
             
             setIsSending(true); 
             try {
@@ -1437,12 +1389,12 @@ const ChatModal: React.FC<ChatModalProps> = ({
               }
               
               onMessagesChange(prevMessages => {
-                // Ensure no message was sent while waiting for the timer
+                // Check if the conversation length is still the same (user hasn't sent a message yet)
                 if (prevMessages.length === messages.length) { 
                   setNudgeCount(prev => prev + 1); // Increment the counter
                   return [...prevMessages, {...response, timestamp: Date.now()}]; 
                 }
-                return prevMessages;
+                return prevMessages; // User sent a message, so don't add the nudge
               });
             } catch (error) {
               console.error("Failed to get AI response:", error);
@@ -1454,12 +1406,12 @@ const ChatModal: React.FC<ChatModalProps> = ({
       }
     }
 
+    // Cleanup function to clear the timer when the component unmounts or dependencies change
     return () => {
       if (inactivityTimerRef.current) {
         clearTimeout(inactivityTimerRef.current);
       }
     };
-    // Include nudgeCount in dependencies to re-evaluate max nudge limit
   }, [messages, groupChat, partner, userProfile, onMessagesChange, isSending, nudgeCount]);
 
   const startTimer = useCallback(() => {
@@ -1530,16 +1482,6 @@ const ChatModal: React.FC<ChatModalProps> = ({
   useEffect(() => {
     chatHistoryRef.current?.scrollTo(0, chatHistoryRef.current.scrollHeight);
   }, [messages]);
-
-  useEffect(() => {
-    const lastMessage = messages[messages.length - 1];
-    if (
-      lastMessage?.sender === "user" &&
-      !groupChat
-    ) {
-      getBotResponse(messages);
-    }
-  }, [messages, getBotResponse, groupChat]);
 
   const partnerLanguageObject =
     LANGUAGES.find(
@@ -1885,7 +1827,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
             />
           ) : (
             <form
-              onSubmit={onTextSubmit}
+              onSubmit={(e) => onTextSubmit(e, correctionsEnabled)}
               className="flex-grow flex items-center gap-2 sm:gap-3"
             >
               <input
@@ -2061,12 +2003,12 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     }
   };
 
-  const handleTextSubmit = async (e: React.FormEvent) => {
+  const handleTextSubmit = async (e: React.FormEvent, correctionsEnabled: boolean) => {
     e.preventDefault();
     if (!newMessage.trim() || isSending) return;
 
     const messageToSend = newMessage;
-    setNewMessage('');
+    setNewMessage(''); // Clear input instantly
 
     await handleUsageCheck('messages', async () => {
         const userMessage: Message = {
@@ -2074,12 +2016,12 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
             text: messageToSend,
             senderId: user.uid,
             senderName: user.displayName || 'User',
-            timestamp: Date.now() // Add timestamp
+            timestamp: Date.now() 
         };
 
         if (activeGroup) {
+            // Group Chat Logic (Remains the same - not subject to this bug)
             await groupService.addMessageToGroup(activeGroup.id, userMessage);
-
             if (messageToSend.toLowerCase().startsWith('@bot')) {
                 setIsSending(true);
 
@@ -2096,17 +2038,43 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
                 : null;
 
                 try {
-                  const botResponse = await groupService.getGroupBotResponse(currentMessages, activeGroup.partner, userProfile, true, groupTeachMeCache);
-                  await groupService.addMessageToGroup(activeGroup.id, {...botResponse, timestamp: Date.now()}); // Add timestamp
+                  const botResponse = await groupService.getGroupBotResponse(currentMessages, activeGroup.partner, userProfile, correctionsEnabled, groupTeachMeCache);
+                  await groupService.addMessageToGroup(activeGroup.id, {...botResponse, timestamp: Date.now()}); 
                 } finally {
                   setIsSending(false);
                 }
             }
         } else {
-            // FIX: For solo chat, simply add the user message. 
-            // The ChatModal's useEffect will detect this, trigger the bot response, 
-            // and the bot's logic will correctly manage the isSending state.
-            setCurrentChatMessages(prev => [...prev, userMessage]);
+            // SOLO CHAT LOGIC (Atomic Update to prevent loop)
+            setIsSending(true); // Start sending visual feedback
+
+            try {
+                // 1. Calculate the *next* state: current messages + user message
+                const messagesWithUserMessage = [...currentChatMessages, userMessage];
+
+                // 2. Fetch AI response based on the new context
+                const aiResponse = await geminiService.getChatResponse(
+                    messagesWithUserMessage,
+                    currentPartner!,
+                    correctionsEnabled, // Pass the correct status
+                    userProfile,
+                    teachMeCache,
+                    false // Not a group chat
+                );
+                
+                // 3. Update state once with both messages
+                setCurrentChatMessages((prev) => [...prev, userMessage, { ...aiResponse, timestamp: Date.now() }]); // Ensure AI response has timestamp for consistency
+            } catch (error) {
+                console.error("Solo Chat Response Error:", error);
+                const errorMessage: Message = {
+                    sender: "ai",
+                    text: "Sorry, I encountered an error. Please try again.",
+                    timestamp: Date.now()
+                };
+                setCurrentChatMessages((prev) => [...prev, userMessage, errorMessage]);
+            } finally {
+                setIsSending(false);
+            }
         }
     });
   };
@@ -2192,14 +2160,15 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     });
   };
 
-  const handleStartChat = (partner: Partner) => {
+  const handleStartChat = async (partner: Partner) => {
     setCurrentPartner(partner);
 
     // If a saved chat exists for this partner, resume it.
     if (savedChat && savedChat.partner.name === partner.name) {
       setCurrentChatMessages(savedChat.messages);
     } else {
-      // FIX 1: Start new chats with an empty array to trigger the delayed welcome message (nudge logic)
+      // FIX: New chat - Start with an empty array.
+      // This allows the ChatModal's internal timer (8 seconds) to trigger the initial welcome message.
       setCurrentChatMessages([]); 
     }
   };
@@ -2231,9 +2200,14 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     if (currentPartner && user) {
       const sanitizedMessages = messages.map((msg) => ({
         sender: msg.sender,
+        senderId: msg.senderId || null, // <-- ADDED: Preserve senderId for proper rendering/identification
+        senderName: msg.senderName || null, // <-- ADDED: Preserve senderName 
         text: msg.text,
         correction: msg.correction || null,
         translation: msg.translation || null,
+        audioUrl: msg.audioUrl || null, // <-- ADDED: For complete saving of voice messages
+        audioDuration: msg.audioDuration || null, // <-- ADDED
+        timestamp: msg.timestamp || null, // <-- ADDED: For consistent message order
       }));
 
       const chatToSave = {
@@ -2365,8 +2339,21 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
                     });
                 }
             } else {
-                // Solo Chat Logic
-                setCurrentChatMessages((prev) => [...prev, quizMessage]);
+                // Solo Chat Logic - FIX: Get response immediately to prevent useEffect loop.
+                
+                // 3a. Immediately get the AI response for the new message
+                const aiResponse = await geminiService.getChatResponse(
+                    [...currentChatMessages, quizMessage], // Pass current messages + new quiz message
+                    currentPartner || partners[0], 
+                    true, // Corrections are implicitly on for quiz results
+                    userProfile,
+                    teachMeCache,
+                    false // Not a group chat
+                );
+                
+                // 3b. Single atomic update: add both the user's quiz message and the AI's reply.
+                // This prevents the ChatModal useEffect from being triggered by a lone user message.
+                setCurrentChatMessages((prev) => [...prev, quizMessage, aiResponse]);
             }
 
             // 4. Update UI context for chat
