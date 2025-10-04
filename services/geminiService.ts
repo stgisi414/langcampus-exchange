@@ -63,14 +63,14 @@ const callGeminiProxy = async (prompt: string) => {
   }
 };
 
-export const synthesizeSpeech = async (text: string, languageCode: string): Promise<string> => {
+export const synthesizeSpeech = async (text: string, languageCode: string, gender: 'male' | 'female'): Promise<string> => {
   try {
     const response = await fetch(TTS_PROXY_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ text, languageCode }),
+      body: JSON.stringify({ text, languageCode, gender }),
     });
 
     if (!response.ok) {
@@ -92,6 +92,7 @@ export const generatePartners = async (nativeLanguage: string, targetLanguage: s
     My native language is ${nativeLanguage}. I want to learn ${targetLanguage}.
     My interests are: ${userInterests}.
     Each partner should have a unique, culturally appropriate name.
+    Each partner must also have a "gender" field, set to either "**male**" or "**female**".
     Their nativeLanguage should be ${targetLanguage} and their learningLanguage should be ${nativeLanguage}.
     Generate a diverse set of interests for them, some might align with mine.
     Return ONLY the JSON array.`;
@@ -106,7 +107,7 @@ export const generatePartners = async (nativeLanguage: string, targetLanguage: s
     }
 
     return partnersData
-      .filter((p: any) => p && p.name && p.nativeLanguage && p.learningLanguage && Array.isArray(p.interests))
+      .filter((p: any) => p && p.name && p.nativeLanguage && p.learningLanguage && Array.isArray(p.interests) && (p.gender === 'male' || p.gender === 'female'))
       .map((p: any) => ({
         ...p,
         avatar: `https://api.dicebear.com/8.x/micah/svg?seed=${p.name}`,

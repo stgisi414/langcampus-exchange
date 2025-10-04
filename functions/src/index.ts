@@ -109,21 +109,66 @@ export const transcribeAudio = onRequest(
 );
 
 const voiceConfigMap: Record<string, any> = {
-    "en-US": {prebuiltVoiceConfig: {voiceName: "Kore"}},
-    "es-ES": {prebuiltVoiceConfig: {voiceName: "Puck"}},
-    "fr-FR": {prebuiltVoiceConfig: {voiceName: "Leda"}},
-    "de-DE": {prebuiltVoiceConfig: {voiceName: "Charon"}},
-    "ja-JP": {prebuiltVoiceConfig: {voiceName: "Aoede"}},
-    "ko-KR": {prebuiltVoiceConfig: {voiceName: "Orus"}},
-    "it-IT": {prebuiltVoiceConfig: {voiceName: "Fenrir"}},
-    "pt-BR": {prebuiltVoiceConfig: {voiceName: "Umbriel"}},
-    "ru-RU": {prebuiltVoiceConfig: {voiceName: "Iapetus"}},
-    "ar-XA": {prebuiltVoiceConfig: {voiceName: "Algieba"}},
-    "cmn-CN": {prebuiltVoiceConfig: {voiceName: "Achernar"}},
-    "hi-IN": {prebuiltVoiceConfig: {voiceName: "Alnilam"}},
-    "vi-VN": {prebuiltVoiceConfig: {voiceName: "Gacrux"}},
-    "pl-PL": {prebuiltVoiceConfig: {voiceName: "Pulcherrima"}},
-    "mn-MN": {prebuiltVoiceConfig: {voiceName: "Sadachbia"}},
+    "en-US": {
+        male: {prebuiltVoiceConfig: {voiceName: "Kore"}}, 
+        female: {prebuiltVoiceConfig: {voiceName: "Leda"}} 
+    },
+    "es-ES": {
+        male: {prebuiltVoiceConfig: {voiceName: "Puck"}}, 
+        female: {prebuiltVoiceConfig: {voiceName: "Andromeda"}} 
+    },
+    "fr-FR": {
+        male: {prebuiltVoiceConfig: {voiceName: "Orion"}}, 
+        female: {prebuiltVoiceConfig: {voiceName: "Leda"}} 
+    },
+    "de-DE": {
+        male: {prebuiltVoiceConfig: {voiceName: "Charon"}}, 
+        female: {prebuiltVoiceConfig: {voiceName: "Deneb"}} 
+    },
+    "ja-JP": {
+        male: {prebuiltVoiceConfig: {voiceName: "Orus"}}, 
+        female: {prebuiltVoiceConfig: {voiceName: "Aoede"}} 
+    },
+    "ko-KR": {
+        male: {prebuiltVoiceConfig: {voiceName: "Sirius"}}, 
+        female: {prebuiltVoiceConfig: {voiceName: "Adhara"}} 
+    },
+    "it-IT": {
+        male: {prebuiltVoiceConfig: {voiceName: "Fenrir"}}, 
+        female: {prebuiltVoiceConfig: {voiceName: "Lyra"}} 
+    },
+    "pt-BR": {
+        male: {prebuiltVoiceConfig: {voiceName: "Umbriel"}}, 
+        female: {prebuiltVoiceConfig: {voiceName: "Vega"}} 
+    },
+    "ru-RU": {
+        male: {prebuiltVoiceConfig: {voiceName: "Iapetus"}}, 
+        female: {prebuiltVoiceConfig: {voiceName: "Cassiopeia"}} 
+    },
+    "ar-XA": {
+        male: {prebuiltVoiceConfig: {voiceName: "Algieba"}}, 
+        female: {prebuiltVoiceConfig: {voiceName: "Rigel"}} 
+    },
+    "cmn-CN": {
+        male: {prebuiltVoiceConfig: {voiceName: "Achernar"}}, 
+        female: {prebuiltVoiceConfig: {voiceName: "Lyra"}} 
+    },
+    "hi-IN": {
+        male: {prebuiltVoiceConfig: {voiceName: "Alnilam"}}, 
+        female: {prebuiltVoiceConfig: {voiceName: "Chara"}} 
+    },
+    "vi-VN": {
+        male: {prebuiltVoiceConfig: {voiceName: "Gacrux"}}, 
+        female: {prebuiltVoiceConfig: {voiceName: "Fomalhaut"}} 
+    },
+    "pl-PL": {
+        male: {prebuiltVoiceConfig: {voiceName: "Pulcherrima"}}, 
+        female: {prebuiltVoiceConfig: {voiceName: "Lyra"}} 
+    },
+    "mn-MN": {
+        male: {prebuiltVoiceConfig: {voiceName: "Sadachbia"}}, 
+        female: {prebuiltVoiceConfig: {voiceName: "Mira"}} 
+    },
 };
 
 // Use the correct, aliased types for Firebase onRequest handlers
@@ -135,9 +180,9 @@ export const geminiTTS = onRequest(
       if (request.method !== "POST") {
         return response.status(405).send("Method Not Allowed");
       }
-      const { text, languageCode } = request.body;
-      if (!text || !languageCode) {
-        return response.status(400).send("Bad Request: Missing text or languageCode");
+      const { text, languageCode, gender } = request.body; // <--- DESTRUCTURE GENDER
+      if (!text || !languageCode || !gender || (gender !== 'male' && gender !== 'female')) { // <--- VALIDATE GENDER
+        return response.status(400).send("Bad Request: Missing text, languageCode, or invalid gender.");
       }
       const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
       if (!GEMINI_API_KEY) {
@@ -149,7 +194,20 @@ export const geminiTTS = onRequest(
           processedText = `<break time="150ms"/>${text}<break time="150ms"/>`;
         }
         const contentText = `<speak><lang xml:lang="${languageCode}">${processedText}</lang></speak>`;
-        const voiceConfig = voiceConfigMap[languageCode] || voiceConfigMap["en-US"];
+        
+        // <--- NEW: Select voice based on gender, with fallback
+        const selectedVoiceConfig = voiceConfigMap[languageCode]?.[gender];
+        if (!selectedVoiceConfig) {
+             logger.warn(`No specific voice found for ${languageCode} with gender ${gender}. Falling back to default English male.`);
+             // Fallback to default English male voice
+             const fallbackVoice = voiceConfigMap["en-US"]?.male;
+             if (!fallbackVoice) {
+                  throw new Error("Missing fallback voice configuration.");
+             }
+             return response.status(500).send("Failed to find voice config.");
+        }
+        const voiceConfig = selectedVoiceConfig;
+        
         const ttsUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${GEMINI_API_KEY}`;
         const payload = {
           "model": "gemini-2.5-flash-preview-tts",
@@ -157,7 +215,7 @@ export const geminiTTS = onRequest(
           "generationConfig": {
             "responseModalities": ["AUDIO"],
             "speechConfig": {
-              "voiceConfig": voiceConfig,
+              "voiceConfig": voiceConfig, // <--- USING GENDER-SPECIFIC VOICE
               "languageCode": languageCode,
             },
           },

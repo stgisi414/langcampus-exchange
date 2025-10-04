@@ -21,6 +21,7 @@ export interface Partner {
   nativeLanguage: string;
   learningLanguage: string;
   interests: string[];
+  gender: 'male' | 'female';
 }
 
 export interface Message {

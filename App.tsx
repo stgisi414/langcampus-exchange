@@ -115,6 +115,53 @@ const pcmToWav = (pcmData: Int16Array, sampleRate: number) => {
   return new Blob([view], { type: "audio/wav" });
 };
 
+const FeatureCard: React.FC<{
+  title: string;
+  description: string;
+  icon: React.FC<any>;
+}> = ({ title, description, icon: Icon }) => (
+  <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg flex flex-col items-center text-center transition-transform duration-300 hover:scale-[1.02]">
+    <Icon className="w-10 h-10 text-blue-500 mb-3" />
+    <h3 className="text-xl font-semibold mb-2">{title}</h3>
+    <p className="text-gray-600 dark:text-gray-400 text-sm">
+      {description}
+    </p>
+  </div>
+);
+
+const FEATURES = [
+    {
+        title: "Smart Partner Search",
+        description: "Find an AI partner whose interests and native language instantly match your learning goals.",
+        icon: SearchIcon,
+    },
+    {
+        title: "1-on-1 AI Chat",
+        description: "Engage in private, continuous conversation with your chosen AI partner and save your progress anytime.",
+        icon: InfoIcon, 
+    },
+    {
+        title: "Group Learning Rooms",
+        description: "Create private group chats with up to two friends and learn together with AI guidance.",
+        icon: UsersIcon,
+    },
+    {
+        title: "Real-time Corrections",
+        description: "Get instant, personalized feedback and corrections on your messages to quickly learn from mistakes.",
+        icon: BookOpenIcon, // Used for learning/corrections
+    },
+    {
+        title: "Custom Lessons & Quizzes",
+        description: "Generate structured grammar and vocabulary lessons or test your knowledge with quizzes, all on-demand.",
+        icon: BookOpenIcon, 
+    },
+    {
+        title: "Voice Practice",
+        description: "Practice speaking and listening with integrated audio recording, transcription, and playback features.",
+        icon: MicrophoneIcon,
+    },
+];
+
 // User Profile Component
 const UserProfile: React.FC<{
   profile: { name: string; hobbies: string; bio: string };
@@ -1495,9 +1542,12 @@ const ChatModal: React.FC<ChatModalProps> = ({
     handleUsageCheck("audioPlays", async () => {
       setSpeakingMessageIndex(index); // Disable button & show loading state
       try {
+        const partnerGender = partner.gender || 'male';
+        
         const audioContent = await geminiService.synthesizeSpeech(
           text,
           partnerLanguageCode,
+          partnerGender,
         );
         const pcmData = base64ToArrayBuffer(audioContent);
         const pcm16 = new Int16Array(pcmData);
@@ -2646,7 +2696,7 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
             <div>
               <p className="font-bold">New Here?</p>
               <p>
-                Click the "My Info" icon to learn how to use Langcampus
+                Click the "My Info" <InfoIcon className="w-6 h-6 inline-block align-middle" /> icon to learn how to use Langcampus
                 Exchange.
               </p>
             </div>
@@ -2712,12 +2762,27 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
           !error &&
           partners.length === 0 &&
           !savedChat && (
-            <div className="text-center mt-12 text-gray-500">
-              <p className="text-xl">Welcome to Langcampus Exchange!</p>
-              <p>
-                Select your languages and click "Find New Pals" to start your
-                journey.
-              </p>
+            // Replace the simple welcome message with the new Feature Grid
+            <div className="text-center mt-12">
+                <p className="text-xl text-gray-500 dark:text-gray-400">
+                    Select your languages and click "Find New Pals" to start your
+                    journey.
+                </p>
+                <div className="mt-16">
+                    <h2 className="text-3xl font-bold text-center mb-8 text-gray-800 dark:text-gray-200">
+                        Unlock Your Fluency with Our Powerful Features
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {FEATURES.map((feature, index) => (
+                            <FeatureCard 
+                                key={index} 
+                                title={feature.title} 
+                                description={feature.description} 
+                                icon={feature.icon} 
+                            />
+                        ))}
+                    </div>
+                </div>
             </div>
           )}
       </main>
