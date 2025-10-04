@@ -458,7 +458,7 @@ const QuizModal: React.FC<{
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<string[]>([]);
   const [showResults, setShowResults] = useState(false);
-  const quizSharedRef = useRef(false);
+  const [isSharing, setIsSharing] = useState(false);
 
   if (!questions || questions.length === 0) {
     return (
@@ -500,9 +500,8 @@ const QuizModal: React.FC<{
   };
 
   const handleShare = () => {
-    // Prevent duplicate execution if already shared (The true fix for the 4x messages)
-    if (quizSharedRef.current) return; 
-    quizSharedRef.current = true;
+    if (isSharing) return;
+    setIsSharing(true);
     
     onShareQuizResults(topic, score, questions, userAnswers);
   };
@@ -538,15 +537,17 @@ const QuizModal: React.FC<{
             <div className="mt-4 flex justify-center gap-4">
               <button
                 onClick={onClose}
+                disabled={isSharing}
                 className="px-6 py-2 bg-gray-500 text-white font-bold rounded-lg hover:bg-gray-600"
               >
                 Finish
               </button>
               <button
                 onClick={handleShare}
-                className="px-6 py-2 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600"
+                disabled={isSharing}
+                className="px-6 py-2 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 disabled:opacity-75"
               >
-                Discuss with Pal
+                {isSharing ? "Sharing..." : "Discuss with Pal"}
               </button>
             </div>
           </div>
@@ -1978,6 +1979,8 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   const [activeGroup, setActiveGroup] = useState<GroupChat | null>(null);
   const [groupMessages, setGroupMessages] = useState<Message[]>([]); // New state for group messages
   const unsubscribeGroupRef = useRef<(() => void) | null>(null); // For unsubscribing from Firestore listener
+  const lastQuizShareTimestamp = useRef(0);
+  const DEBOUNCE_TIME = 500; // 500ms debounce time
   const [newMessage, setNewMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
 
@@ -2263,6 +2266,12 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     questions: QuizQuestion[],
     userAnswers: string[],
   ) => {
+    // FIX: Add debounce logic to prevent multiple calls on modal unmount/re-render
+    if (Date.now() - lastQuizShareTimestamp.current < DEBOUNCE_TIME) {
+        console.warn("Quiz share debounced. Ignoring duplicate call.");
+        return;
+    }
+    lastQuizShareTimestamp.current = Date.now();
     let quizSummary = `I just took a quiz on "${topic}" and my score was ${score}/${questions.length}. `;
 
     const incorrectAnswers = questions
