@@ -47,7 +47,7 @@ const callGeminiProxy = async (prompt: string) => {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ prompt, model }),
+      body: JSON.stringify({ prompt }),
     });
 
     if (!response.ok) {
@@ -117,7 +117,7 @@ export const generatePartners = async (nativeLanguage: string, targetLanguage: s
   }
 };
 
-export const getChatResponse = async (messages: Message[], partner: Partner, corrections: boolean, userProfile: UserProfileData, teachMeCache: TeachMeCache | null): Promise<Message> => {
+export const getChatResponse = async (messages: Message[], partner: Partner, corrections: boolean, userProfile: UserProfileData, teachMeCache: TeachMeCache | null, isGroupChat: boolean): Promise<Message> => {
   if (!partner || !partner.name) {
     console.error("getChatResponse called with an invalid partner object.");
     return { sender: 'ai', text: "Sorry, there's a problem with my memory. Please try starting a new chat." };
@@ -214,11 +214,9 @@ export const getChatResponse = async (messages: Message[], partner: Partner, cor
       aiResponse = { text: rawText, correction: "", translation: "" };
     }
 
-    const responseText = aiResponse.text || "Sorry, I'm having trouble thinking right now.";
-
-    return {
+    const responseMessage: Message = {
       sender: 'ai',
-      text: responseText
+      text: aiResponse.text || "Sorry, I'm having trouble thinking right now."
     };
 
     if (aiResponse.correction) {
@@ -293,7 +291,7 @@ export const generateQuiz = async (topic: string, type: 'Grammar' | 'Vocabulary'
   `;
 
   try {
-    const data = await callGeminiProxy(prompt, "gemini-2.5-flash");
+    const data = await callGeminiProxy(prompt);
     const rawText = data.candidates[0].content.parts[0].text;
     const quizData = cleanAndParseJson(rawText);
 
@@ -340,24 +338,50 @@ export const transcribeAudio = async (audioBlob: Blob, languageCode: string): Pr
   }
 };
 
-export const getGroupBotResponse = async (
-    messages: Message[],
-    partner: Partner,
-    userProfile: UserProfileData,
-    correctionsEnabled: boolean
-): Promise<Message> => {
-    const lastUserMessage = messages.findLast(m => m.sender === 'user');
-    
-    if (lastUserMessage) {
-        try {
-            // This now calls the actual Gemini service for a real response
-            const aiResponse = await geminiService.getChatResponse(messages, partner, correctionsEnabled, userProfile);
-            return aiResponse;
-        } catch (error) {
-            console.error("Error getting group bot response:", error);
-            return { sender: 'ai', text: "Sorry, I'm having trouble connecting right now." };
-        }
+export const getNudgeResponse = async (messages: Message[], partner: Partner, userProfile: UserProfileData): Promise<Message> => {
+  if (!partner || !partner.name) {
+    console.error("getNudgeResponse called with an invalid partner object.");
+    return { sender: 'ai', text: "Something went wrong." };
+  }
+
+  const conversationHistory = messages.map(m => `${m.sender === 'user' ? 'Me' : partner.name}: ${m.text}`).join('\n');
+
+  const prompt = `
+    **Background Context:** You are an AI language exchange partner named ${partner.name}. You are talking to ${userProfile.name || 'a user'}.
+    The user has not responded for a little while. Your task is to gently re-engage them with a short, friendly, open-ended question in your native language, ${partner.nativeLanguage}.
+    Keep it simple and relevant to the conversation if possible. Do not mention that they have been quiet. Just continue the conversation naturally.
+
+    Your native language is ${partner.nativeLanguage}.
+
+    Conversation History:
+    ${conversationHistory}
+
+    **Your Task:**
+    Generate a single JSON object with a "text" property containing your re-engagement question in ${partner.nativeLanguage} and a "translation" property with the translation into the user's language.
+
+    Example Response:
+    {
+      "text": "À quoi penses-tu ?",
+      "translation": "What are you thinking about?"
     }
-    // Default message if there's no user message to respond to
-    return { sender: 'ai', text: 'Group chat initialized.' };
+
+    Now, generate the JSON object for your response.
+  `;
+
+  try {
+    const data = await callGeminiProxy(prompt);
+    const rawText = data.candidates[0].content.parts[0].text;
+    const aiResponse = cleanAndParseJson(rawText);
+
+    const responseMessage: Message = {
+      sender: 'ai',
+      text: aiResponse.text || "...",
+      translation: aiResponse.translation || ""
+    };
+
+    return responseMessage;
+  } catch (error) {
+    console.error("Error getting nudge response:", error);
+    return { sender: 'ai', text: "Sorry, I lost my train of thought." };
+  }
 };

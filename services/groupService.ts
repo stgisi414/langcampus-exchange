@@ -1,6 +1,6 @@
 import { doc, setDoc, updateDoc, onSnapshot, arrayUnion, arrayRemove, deleteDoc, getDoc, deleteField } from "firebase/firestore";
 import { db } from '../firebaseConfig.ts';
-import { GroupChat, Message, Partner, UserProfileData } from '../types.ts';
+import { GroupChat, Message, Partner, UserProfileData, TeachMeCache } from '../types.ts';
 import * as geminiService from './geminiService';
 
 const GROUPS_COLLECTION = 'groupChats';
@@ -113,7 +113,7 @@ export const getGroupBotResponse = async (
     if (lastUserMessage) {
         try {
             // This now calls the actual Gemini service for a real response
-            const aiResponse = await geminiService.getChatResponse(messages, partner, correctionsEnabled, userProfile, teachMeCache);
+            const aiResponse = await geminiService.getChatResponse(messages, partner, correctionsEnabled, userProfile, teachMeCache, true);
             return aiResponse;
         } catch (error) {
             console.error("Error getting group bot response:", error);

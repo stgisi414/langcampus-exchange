@@ -1325,11 +1325,101 @@ const ChatModal: React.FC<ChatModalProps> = ({
   const [correctionsEnabled, setCorrectionsEnabled] = useState(true);
   const [showTeachMe, setShowTeachMe] = useState(false);
   const chatHistoryRef = useRef<HTMLDivElement>(null);
-  const isFetchingResponse = useRef(false);
   const [recorder, setRecorder] = useState<MediaRecorder | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const [speakingMessageIndex, setSpeakingMessageIndex] = useState<number | null>(null);
+  const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  const getBotResponse = useCallback(
+    async (currentMessages: Message[]) => {
+      // The `isSending` state is set by the functions that call this (`handleTextSubmit`),
+      // and `isFetchingResponse` prevents this from running multiple times simultaneously.
+      // We don't need to check or set `isSending` here.
+      // if (isSending) return;  // This was the cause of the bug.
+      // setIsSending(true);
+      try {
+        const aiResponse = await geminiService.getChatResponse(
+          currentMessages,
+          partner,
+          correctionsEnabled,
+          userProfile,
+          teachMeCache,
+          !!groupChat
+        );
+        onMessagesChange((prev) => [...prev, aiResponse]);
+      } catch (error) {
+        console.error(error);
+        const errorMessage: Message = {
+          sender: "ai",
+          text: "Sorry, I encountered an error. Please try again.",
+        };
+        onMessagesChange((prev) => [...prev, errorMessage]);
+      } finally {
+        setIsSending(false);
+      }
+    },
+    [
+      partner,
+      correctionsEnabled,
+      userProfile,
+      teachMeCache,
+      onMessagesChange,
+      groupChat,
+    ],
+  );  
+
+  useEffect(() => {
+    chatHistoryRef.current?.scrollTo(0, chatHistoryRef.current.scrollHeight);
+  }, [messages]);
+
+  useEffect(() => {
+    const lastMessage = messages[messages.length - 1];
+    if (
+      lastMessage?.sender === "user" &&
+      !isSending &&
+      !groupChat
+    ) {
+      getBotResponse(messages);
+    }
+  }, [messages, getBotResponse, groupChat, isSending]);
+
+  useEffect(() => {
+    if (inactivityTimerRef.current) {
+      clearTimeout(inactivityTimerRef.current);
+    }
+    if (!groupChat) {
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage && lastMessage.sender === 'ai' && !isSending) {
+        inactivityTimerRef.current = setTimeout(async () => {
+          if (isSending) return;
+          setIsSending(true);
+          try {
+            const nudgeResponse = await geminiService.getNudgeResponse(
+              messages,
+              partner,
+              userProfile
+            );
+            onMessagesChange(prevMessages => {
+              const latestMessage = prevMessages[prevMessages.length - 1];
+              if (latestMessage && latestMessage.sender === 'ai') {
+                return [...prevMessages, nudgeResponse];
+              }
+              return prevMessages;
+            });
+          } catch (error) {
+            console.error("Failed to get nudge message:", error);
+          } finally {
+            setIsSending(false);
+          }
+        }, 8000); // 8 seconds
+      }
+    }
+    return () => {
+      if (inactivityTimerRef.current) {
+        clearTimeout(inactivityTimerRef.current);
+      }
+    };
+  }, [messages, groupChat, partner, userProfile, onMessagesChange, isSending, setIsSending, getBotResponse]);
   const startTimer = useCallback(() => {
     setAudioDuration(0);
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -1394,42 +1484,6 @@ const ChatModal: React.FC<ChatModalProps> = ({
     setRecordedBlob(null);
     setAudioDuration(0);
   }, [handleStopRecording]);
-
-  const getBotResponse = useCallback(
-    async (currentMessages: Message[]) => {
-      // The `isSending` state is set by the functions that call this (`handleTextSubmit`),
-      // and `isFetchingResponse` prevents this from running multiple times simultaneously.
-      // We don't need to check or set `isSending` here.
-      // if (isSending) return;  // This was the cause of the bug.
-      // setIsSending(true);
-      try {
-        const aiResponse = await geminiService.getChatResponse(
-          currentMessages,
-          partner,
-          correctionsEnabled,
-          userProfile,
-          teachMeCache, // <-- FIX: Pass teachMeCache here
-        );
-        onMessagesChange((prev) => [...prev, aiResponse]);
-      } catch (error) {
-        console.error(error);
-        const errorMessage: Message = {
-          sender: "ai",
-          text: "Sorry, I encountered an error. Please try again.",
-        };
-        onMessagesChange((prev) => [...prev, errorMessage]);
-      } finally {
-        setIsSending(false);
-      }
-    },
-    [
-      partner,
-      correctionsEnabled,
-      userProfile,
-      teachMeCache, // <-- FIX: Add teachMeCache to dependencies
-      onMessagesChange
-    ],
-  );
 
   useEffect(() => {
     chatHistoryRef.current?.scrollTo(0, chatHistoryRef.current.scrollHeight);
