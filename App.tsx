@@ -458,6 +458,7 @@ const QuizModal: React.FC<{
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<string[]>([]);
   const [showResults, setShowResults] = useState(false);
+  const quizSharedRef = useRef(false);
 
   if (!questions || questions.length === 0) {
     return (
@@ -499,6 +500,10 @@ const QuizModal: React.FC<{
   };
 
   const handleShare = () => {
+    // Prevent duplicate execution if already shared (The true fix for the 4x messages)
+    if (quizSharedRef.current) return; 
+    quizSharedRef.current = true;
+    
     onShareQuizResults(topic, score, questions, userAnswers);
   };
 
@@ -1325,10 +1330,12 @@ const ChatModal: React.FC<ChatModalProps> = ({
   const [correctionsEnabled, setCorrectionsEnabled] = useState(true);
   const [showTeachMe, setShowTeachMe] = useState(false);
   const chatHistoryRef = useRef<HTMLDivElement>(null);
+  const quizSharedRef = useRef(false); 
   const [recorder, setRecorder] = useState<MediaRecorder | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const [speakingMessageIndex, setSpeakingMessageIndex] = useState<number | null>(null);
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [nudgeCount, setNudgeCount] = useState(0);
 
   const getBotResponse = useCallback(
     async (currentMessages: Message[]) => {
@@ -1394,42 +1401,63 @@ const ChatModal: React.FC<ChatModalProps> = ({
     }
     if (!groupChat) {
       const lastMessage = messages[messages.length - 1];
-      
-      // FIX: Only set the timer if the last message is from AI AND we are NOT sending.
-      if (lastMessage && lastMessage.sender === 'ai' && !isSending) { 
-        inactivityTimerRef.current = setTimeout(async () => {
-          
-          if (isSending) return; // Final safety check inside the timeout
-          
-          setIsSending(true); // Start "typing..." state for the nudge
-          try {
-            const nudgeResponse = await geminiService.getNudgeResponse(
-              messages,
-              partner,
-              userProfile
-            );
-            onMessagesChange(prevMessages => {
-              const latestMessage = prevMessages[prevMessages.length - 1];
-              if (latestMessage && latestMessage.sender === 'ai') {
-                return [...prevMessages, nudgeResponse];
+      const isInitialChat = messages.length === 0;
+
+      // Check if we should set a timer (not sending and either initial chat OR last message was from AI)
+      const shouldSetTimer = !isSending && (isInitialChat || lastMessage?.sender === 'ai');
+
+      if (shouldSetTimer) {
+        // The first AI-initiated message is the welcome, subsequent ones are nudges.
+        const TIMEOUT_DURATION = isInitialChat ? 8000 : 60000;
+        const MAX_AI_INITIATED_MESSAGES = 3; // Welcome (1) + 2 Nudges (2)
+
+        // FIX 2: Check the nudge count before setting the timer for subsequent nudges
+        if (isInitialChat || nudgeCount < MAX_AI_INITIATED_MESSAGES) {
+          inactivityTimerRef.current = setTimeout(async () => {
+            
+            if (isSending) return; // Final safety check inside the timeout
+            
+            setIsSending(true); 
+            try {
+              let response: Message;
+
+              if (isInitialChat) {
+                // Initial Welcome Message (Nudge #1)
+                response = await geminiService.getInitialWelcomeMessage(partner);
+              } else {
+                // Subsequent Nudge (Nudge #2 or #3)
+                response = await geminiService.getNudgeResponse(
+                  messages,
+                  partner,
+                  userProfile
+                );
               }
-              return prevMessages;
-            });
-          } catch (error) {
-            console.error("Failed to get nudge message:", error);
-          } finally {
-            setIsSending(false);
-          }
-        }, 8000); // 8 seconds
+              
+              onMessagesChange(prevMessages => {
+                // Ensure no message was sent while waiting for the timer
+                if (prevMessages.length === messages.length) { 
+                  setNudgeCount(prev => prev + 1); // Increment the counter
+                  return [...prevMessages, {...response, timestamp: Date.now()}]; 
+                }
+                return prevMessages;
+              });
+            } catch (error) {
+              console.error("Failed to get AI response:", error);
+            } finally {
+              setIsSending(false);
+            }
+          }, TIMEOUT_DURATION);
+        }
       }
     }
+
     return () => {
       if (inactivityTimerRef.current) {
         clearTimeout(inactivityTimerRef.current);
       }
     };
-    // Dependencies now correctly ensure the timer effect runs only when relevant message or state changes occur.
-  }, [messages, groupChat, partner, userProfile, onMessagesChange, isSending]);
+    // Include nudgeCount in dependencies to re-evaluate max nudge limit
+  }, [messages, groupChat, partner, userProfile, onMessagesChange, isSending, nudgeCount]);
 
   const startTimer = useCallback(() => {
     setAudioDuration(0);
@@ -2161,10 +2189,13 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
 
   const handleStartChat = (partner: Partner) => {
     setCurrentPartner(partner);
+
+    // If a saved chat exists for this partner, resume it.
     if (savedChat && savedChat.partner.name === partner.name) {
       setCurrentChatMessages(savedChat.messages);
     } else {
-      setCurrentChatMessages([]);
+      // FIX 1: Start new chats with an empty array to trigger the delayed welcome message (nudge logic)
+      setCurrentChatMessages([]); 
     }
   };
 
@@ -2234,36 +2265,62 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   ) => {
     let quizSummary = `I just took a quiz on "${topic}" and my score was ${score}/${questions.length}. `;
 
-    // ... (quizSummary building logic)
+    const incorrectAnswers = questions
+      .map((q, index) => ({
+        question: q.question,
+        userAnswer: userAnswers[index],
+        correctAnswer: q.correctAnswer,
+      }))
+      .filter((item, index) => userAnswers[index] !== item.correctAnswer);
+
+    // Build the detailed message, including incorrect answers
+    if (incorrectAnswers.length > 0) {
+      quizSummary += `I missed ${incorrectAnswers.length} question(s). I would like help understanding the following: `;
+      incorrectAnswers.forEach((item, index) => {
+        quizSummary += `[Q${index + 1}: "${item.question}". My Answer: "${item.userAnswer}". Correct: "${item.correctAnswer}"]. `;
+      });
+      quizSummary = quizSummary.trim();
+    } else {
+        quizSummary += "I got everything right, but I'd love some encouragement!";
+    }
 
     const quizMessage: Message = {
       sender: "user",
       text: quizSummary,
       senderId: user.uid, 
       senderName: user.displayName || 'User',
-      timestamp: Date.now() // Add timestamp
+      timestamp: Date.now()
     };
 
+    // Group Chat Logic
     if (activeGroup) {
       const groupQuizMessage = { ...quizMessage, text: `@bot ${quizSummary}` };
+      
       handleUsageCheck('messages', async () => {
         await groupService.addMessageToGroup(activeGroup.id, groupQuizMessage);
         
         setIsSending(true);
         try {
             const updatedGroup = await groupService.getGroupById(activeGroup.id);
-            const currentMessages = updatedGroup ? updatedGroup.messages : [groupQuizMessage];
+            // Must include the user's latest message in the context for the bot's request
+            const currentMessages = updatedGroup ? [...updatedGroup.messages, groupQuizMessage] : [groupQuizMessage]; 
+
             const groupTeachMeCache: TeachMeCache | null = activeGroup.topic
               ? { topic: activeGroup.topic, language: currentPartner?.nativeLanguage || targetLanguage, type: 'Grammar', content: '' }
               : null;
 
             const botResponse = await groupService.getGroupBotResponse(currentMessages, activeGroup.partner, userProfile, true, groupTeachMeCache);
-            await groupService.addMessageToGroup(activeGroup.id, {...botResponse, timestamp: Date.now()}); // Add timestamp
+            await groupService.addMessageToGroup(activeGroup.id, {...botResponse, timestamp: Date.now()}); 
+        } catch (error) {
+            console.error("Bot Reply Failed in Group Quiz Share:", error);
+            const errorMessage: Message = { sender: "ai", text: "Sorry, I encountered an error responding to the quiz share." };
+            await groupService.addMessageToGroup(activeGroup.id, {...errorMessage, timestamp: Date.now()}); 
         } finally {
             setIsSending(false);
         }
       });
     } else {
+      // Solo Chat Logic
       handleUsageCheck('messages', () => {
         setCurrentChatMessages((prev) => [...prev, quizMessage]);
       });

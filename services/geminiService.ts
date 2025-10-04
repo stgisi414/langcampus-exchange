@@ -291,7 +291,7 @@ export const generateQuiz = async (topic: string, type: 'Grammar' | 'Vocabulary'
   `;
 
   try {
-    const data = await callGeminiProxy(prompt);
+    const data = await callGeminiProxy(prompt, "gemini-2.5-flash");
     const rawText = data.candidates[0].content.parts[0].text;
     const quizData = cleanAndParseJson(rawText);
 
@@ -383,5 +383,47 @@ export const getNudgeResponse = async (messages: Message[], partner: Partner, us
   } catch (error) {
     console.error("Error getting nudge response:", error);
     return { sender: 'ai', text: "Sorry, I lost my train of thought." };
+  }
+};
+
+export const getInitialWelcomeMessage = async (partner: Partner): Promise<Message> => {
+  const prompt = `
+    **Background Context:** You are an AI language exchange partner within a web application called "Langcampus Exchange". Your purpose is to welcome new users and start a conversation.
+
+    You are an AI language exchange partner. Your name is ${partner.name}.
+    Your native language is ${partner.nativeLanguage}.
+    You are learning ${partner.learningLanguage}.
+    Your interests include: ${partner.interests.join(', ')}.
+
+    **Your Task:**
+    Generate a warm, friendly, and open-ended welcome message in your native language (${partner.nativeLanguage}). Introduce yourself (your name and the languages you speak/learn). End with a simple question to start the conversation naturally.
+    
+    **IMPORTANT:** Your entire response must be a single, valid JSON object. Do not include any text outside of the JSON object.
+
+    The JSON object must have three string properties:
+    1. "text": Your welcome reply.
+    2. "correction": Must be an empty string "".
+    3. "translation": A simple translation of your reply into the user's language (${partner.learningLanguage}).
+
+    Now, generate the JSON object for your welcome message.
+  `;
+
+  try {
+    const data = await callGeminiProxy(prompt);
+    const rawText = data.candidates[0].content.parts[0].text;
+    const aiResponse = cleanAndParseJson(rawText);
+
+    const responseMessage: Message = {
+      sender: 'ai',
+      text: aiResponse.text || `Hi, I'm ${partner.name}. Let's chat!`,
+      translation: aiResponse.translation || "",
+      correction: aiResponse.correction || ""
+    };
+
+    return responseMessage;
+  } catch (error) {
+    console.error("Error getting initial welcome message:", error);
+    // Fallback message
+    return { sender: 'ai', text: `Hi, I'm ${partner.name}. Let's chat!`, translation: "", correction: "" };
   }
 };
