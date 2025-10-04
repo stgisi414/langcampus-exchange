@@ -1222,7 +1222,7 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({
         </div>
       ) : recordedBlob ? (
         // Playback and Send state UI
-        <div className="flex items-center w-full gap-3">
+        <div className="flex items-center w-full gap-2">
           <button
             onClick={handleSend}
             className="p-1 bg-green-500 text-white rounded-full hover:bg-green-600 transition-colors"
@@ -1231,7 +1231,7 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({
           >
             <SendIcon className="w-5 h-5" />
           </button>
-          <div className="flex-grow text-center text-gray-800 dark:text-gray-200 font-semibold">
+          <div className="flex-grow text-center text-gray-800 dark:text-gray-200 font-semibold text-xs sm:text-base">
             Ready to Send ({formatTime(audioDuration)})
           </div>
           <button
@@ -1247,11 +1247,11 @@ const AudioRecorder: React.FC<AudioRecorderProps> = ({
         // Initial state UI
         <button
           onClick={onStartRecording}
-          className="flex-grow flex items-center justify-center gap-2 px-3 py-1 text-gray-500 hover:text-red-500"
+          className="flex-grow flex items-center justify-center gap-1 px-3 py-1 text-gray-500 hover:text-red-500"
           disabled={isSending}
           aria-label="Start voice recording"
         >
-          <MicrophoneIcon className="w-6 h-6" />
+          <MicrophoneIcon className="w-5 h-5" />
           <span className="text-sm">Record Voice Message</span>
         </button>
       )}
@@ -1548,58 +1548,99 @@ const ChatModal: React.FC<ChatModalProps> = ({
 
     if (!identifier || !currentUserId) return;
 
-    handleUsageCheck("messages", async () => {
-      setIsSending(true);
+    await handleUsageCheck("messages", async () => {
+      setIsSending(true); // (1) START: General busy indicator for upload/post.
+      let transcription = "";
 
       try {
-        // 1. Upload the audio and get the public URL for playback
+        // Phase 1: Upload V/M and Post to Chat
         const audioUrl = await storageService.uploadAudioMessage(
           audioBlob,
           identifier,
           currentUserId,
         );
-
-        // 2. Create the voice message object for immediate display
         const voiceMessage: Message = {
           sender: "user",
           text: "(Voice Message)",
           audioUrl,
           audioDuration: duration,
+          senderId: currentUserId,
+          senderName: user.displayName || 'User',
         };
-
-        // 3. Send the voice message object to be displayed
         await onSendVoiceMessage(voiceMessage);
-
-        // 4. Transcribe the audio to text
-        const transcription = await geminiService.transcribeAudio(
-          audioBlob,
-          partnerLanguageCode,
-        );
-
-        // 5. If transcription is successful, send it as a new text message to the AI
-        if (transcription) {
-          const textMessage: Message = { sender: "user", text: transcription };
-          // Add the transcribed message to the current chat history for context
-          const updatedMessages = [...messages, voiceMessage, textMessage];
-
-          // In a solo chat, get the bot's response to the transcription
-          if (!groupChat) {
-            getBotResponse(updatedMessages);
-          } else {
-            // In a group chat, you might just add the transcription as a message
-            // Or have a bot respond there too. For now, let's just log it.
-            console.log("Group chat transcription:", transcription);
-          }
-        }
       } catch (error) {
-        console.error("Failed to send voice message:", error);
-        alert("Failed to send voice message.");
-      } finally {
-        setIsSending(false);
-        setRecordedBlob(null);
-        setIsRecording(false);
+        console.error("Upload or Post Failed:", error);
+        setIsSending(false); // Clear lock on failure
+        throw error; // Re-throw to halt execution
       }
+
+      // --- CRITICAL FIX START ---
+
+      // After successful posting of the V/M, clear the general busy indicator immediately in group chat,
+      // before the long-running transcription phase, to prevent the misleading "Typing..." flash.
+      if (activeGroup) {
+          setIsSending(false); // (2) STOP: Clear general busy indicator.
+      }
+      
+      try {
+          // Phase 2: Transcribe (Runs unlocked in group chat, still locked in solo due to external useEffect hook).
+          transcription = await geminiService.transcribeAudio(
+              audioBlob,
+              partnerLanguageCode,
+          );
+      } catch (error) {
+          console.error("Transcription Failed:", error);
+          transcription = ""; // Continue even if transcription fails
+      }
+      
+      // Phase 3: Post Transcription and Trigger Bot
+      if (transcription) {
+          const isBotMention = transcription.toLowerCase().startsWith('@bot');
+          const userTranscriptionMessage: Message = {
+            sender: "user",
+            text: `(Transcription: ${transcription})`,
+            senderId: currentUserId,
+            senderName: user.displayName || 'User' 
+          };
+
+          if (activeGroup) {
+              // Group Chat Logic
+              await groupService.addMessageToGroup(activeGroup.id, userTranscriptionMessage);
+
+              if (isBotMention) {
+                  setIsSending(true); // (3) START: Re-engage indicator specifically for AI typing
+                  
+                  // Bot response logic is self-contained to clear its own state
+                  await (async () => {
+                      const rawContextMessage: Message = { sender: "user", text: transcription, senderId: currentUserId, senderName: user.displayName || 'User' };
+                      const updatedGroup = await groupService.getGroupById(activeGroup.id);
+                      const currentMessages = updatedGroup ? [...updatedGroup.messages, rawContextMessage] : [userTranscriptionMessage, rawContextMessage];
+                      
+                      const groupTeachMeCache: TeachMeCache | null = activeGroup.topic
+                      ? { topic: activeGroup.topic, language: partnerLanguageObject.name, type: 'Grammar', content: '', } : null;
+
+                      try {
+                          const botResponse = await groupService.getGroupBotResponse(currentMessages, activeGroup.partner, userProfile, true, groupTeachMeCache);
+                          await groupService.addMessageToGroup(activeGroup.id, botResponse);
+                      } catch (error) {
+                          console.error("Bot Reply Failed:", error);
+                      } finally {
+                          setIsSending(false); // (4) STOP: Clear AI typing indicator
+                      }
+                  })();
+              }
+          } else {
+              // Solo Chat Logic: Relies on external useEffect to trigger AI response and clear isSending
+              const soloTextMessage: Message = { sender: "user", text: transcription };
+              onMessagesChange((prev) => [...prev, soloTextMessage]);
+          }
+      }
+      // --- CRITICAL FIX END ---
+      
     });
+    // Global cleanup runs after await handleUsageCheck completes
+    setRecordedBlob(null);
+    setIsRecording(false);
   };
 
   return (
@@ -1736,7 +1777,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
           )}
         </div>
 
-        <div className="p-4 border-t dark:border-gray-700">
+        <div className="px-4 py-2 border-t dark:border-gray-700">
           {isRecording || recordedBlob ? (
             <AudioRecorder
               isRecording={isRecording}
@@ -1753,7 +1794,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
           ) : (
             <form
               onSubmit={onTextSubmit}
-              className="flex-grow flex items-center gap-3"
+              className="flex-grow flex items-center gap-2 sm:gap-3"
             >
               <input
                 type="text"
@@ -1766,18 +1807,18 @@ const ChatModal: React.FC<ChatModalProps> = ({
               <button
                 type="button"
                 onClick={handleStartRecording}
-                className="p-3 bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-full hover:bg-gray-400 dark:hover:bg-gray-600"
+                className="p-2 sm:p-3 bg-gray-300 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-full hover:bg-gray-400 dark:hover:bg-gray-600"
                 disabled={isSending}
                 aria-label="Start voice recording"
               >
-                <MicrophoneIcon className="w-6 h-6" />
+                <MicrophoneIcon className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
               <button
                 type="submit"
-                className="p-3 bg-blue-500 text-white rounded-full hover:bg-blue-600 disabled:bg-gray-400"
+                className="p-2 sm:p-3 bg-blue-500 text-white rounded-full hover:bg-blue-600 disabled:bg-gray-400"
                 disabled={isSending || !newMessage.trim()}
               >
-                <SendIcon className="w-6 h-6" />
+                <SendIcon className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
             </form>
           )}
