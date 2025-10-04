@@ -41,6 +41,7 @@ import {
   MicrophoneIcon,
   StopIcon,
   PlayIcon,
+  ClipboardListIcon,
 } from "./components/Icons";
 import LoadingSpinner from "./components/LoadingSpinner";
 import { grammarData, vocabData, conversationData } from "./teachMeData";
@@ -62,6 +63,7 @@ import TermsOfService from "./components/TermsOfService.tsx";
 import PrivacyPolicy from "./components/PrivacyPolicy.tsx";
 import GroupJoinPage from "./components/GroupJoinPage.tsx";
 import GroupNotFound from "./components/GroupNotFound.tsx";
+import NotesModal from "./components/NotesModal.tsx";
 
 // Helper for localStorage (Removed as we are using Firestore for persistence)
 
@@ -652,6 +654,9 @@ const TeachMeModal: React.FC<{
   userIsGroupCreator: boolean;
   groupTopic: string | null;
   onSetGroupTopic?: (topic: string) => void;
+  user: UserData;
+  onAddNote: (noteText: string, topic: string) => void;
+  onDeleteNote: (noteId: string) => void;
 }> = ({
   language,
   onClose,
@@ -664,6 +669,9 @@ const TeachMeModal: React.FC<{
   userIsGroupCreator,
   groupTopic,
   onSetGroupTopic,
+  user,
+  onAddNote,
+  onDeleteNote,
 }) => {
   const [activeTab, setActiveTab] = useState<"Grammar" | "Vocabulary" | "Conversation">(
     "Grammar",
@@ -680,6 +688,11 @@ const TeachMeModal: React.FC<{
   const [searchQuery, setSearchQuery] = useState("");
   const topicListRef = useRef<HTMLUListElement>(null);
   const topicRefs = useRef<Map<string, HTMLButtonElement | null>>(new Map());
+
+  const [showNotes, setShowNotes] = useState(false);
+  const [buttonPosition, setButtonPosition] = useState<{ top: number; left: number } | null>(null);
+  const selectionRef = useRef<{ text: string; range: Range } | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   const isHost = isGroupChat && userIsGroupCreator;
   const isMember = isGroupChat && !userIsGroupCreator;
@@ -853,6 +866,39 @@ const TeachMeModal: React.FC<{
     }
   };
 
+  const handleMouseUp = () => {
+    if (user.subscription !== 'subscriber') return;
+    const selection = window.getSelection();
+    const selectedText = selection?.toString().trim() || '';
+
+    if (selection && selection.rangeCount > 0 && selectedText.length > 0 && selectedText.length <= 200) {
+      const range = selection.getRangeAt(0);
+      selectionRef.current = { text: selectedText, range: range.cloneRange() };
+      const rect = range.getBoundingClientRect();
+      const containerRect = contentRef.current?.getBoundingClientRect();
+      
+      if (containerRect) {
+        setButtonPosition({
+          top: rect.top - containerRect.top + (contentRef.current?.scrollTop || 0),
+          left: rect.left - containerRect.left + (rect.width / 2),
+        });
+      }
+    } else {
+      selectionRef.current = null;
+      setButtonPosition(null);
+    }
+  };
+
+  const handleAddNote = () => {
+    if (selectionRef.current && (groupTopic || selectedTopic)) {
+      onAddNote(selectionRef.current.text, (groupTopic || selectedTopic)!);
+      
+      selectionRef.current = null;
+      setButtonPosition(null);
+      window.getSelection()?.removeAllRanges();
+    }
+  };
+
   return (
     <div
       className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-start pt-10 sm:items-center sm:pt-0 z-50 p-4"
@@ -873,13 +919,22 @@ const TeachMeModal: React.FC<{
               {isGroupChat ? `Group Topic: ${language}` : `Teach Me: ${language}`}
             </h2>
           </div>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200"
-            aria-label="Close learning module"
-          >
-            <CloseIcon className="w-6 h-6" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+                onClick={() => setShowNotes(true)}
+                className="p-1 sm:p-2 rounded-full text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                aria-label="Open my notes"
+            >
+                <ClipboardListIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+            </button>
+            <button
+              onClick={onClose}
+              className="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200"
+              aria-label="Close learning module"
+            >
+              <CloseIcon className="w-6 h-6" />
+            </button>
+          </div>
         </div>
         <div className="flex-grow flex relative overflow-hidden">
           {isMenuOpen && (
@@ -963,7 +1018,7 @@ const TeachMeModal: React.FC<{
 
                 <ul
                 ref={topicListRef}
-                className="space-y-2 overflow-y-auto flex-grow" // This will now scroll correctly
+                className="space-y-2 overflow-y-auto flex-grow"
                 >
                 {(isHost || !isGroupChat) && availableTopics.length > 0 ? (
                     availableTopics.map((topic) => (
@@ -992,7 +1047,17 @@ const TeachMeModal: React.FC<{
             </div>
           </div>
 
-          <div className="w-full p-6 overflow-y-auto">
+          <div className="w-full p-6 overflow-y-auto relative" ref={contentRef} onMouseUp={handleMouseUp} onScroll={() => setButtonPosition(null)}>
+            {buttonPosition && (
+              <button
+                onClick={handleAddNote}
+                className="absolute z-10 px-3 py-1 bg-blue-500 text-white text-sm font-bold rounded-lg shadow-lg hover:bg-blue-600 transition-transform transform -translate-x-1/2"
+                style={{ top: `${buttonPosition.top - 40}px`, left: `${buttonPosition.left}px` }}
+              >
+                Add to Notes
+              </button>
+            )}
+
             {(isHost || !isGroupChat) && (groupTopic || selectedTopic) && (
               <div className="flex justify-between items-center mb-4">
                 <button
@@ -1052,6 +1117,13 @@ const TeachMeModal: React.FC<{
           topic={(groupTopic || selectedTopic)!}
           onClose={() => setShowQuiz(false)}
           onShareQuizResults={handleShareAndClose}
+        />
+      )}
+      {showNotes && (
+        <NotesModal
+            notes={user.notes || []}
+            onClose={() => setShowNotes(false)}
+            onDeleteNote={onDeleteNote}
         />
       )}
     </div>
@@ -1355,6 +1427,8 @@ interface ChatModalProps {
   nudgeCount: number;
   onAddNudge: (response: Message, messagesSnapshot: Message[]) => void;
   onTranscribeAndRespond: (audioBlob: Blob, languageCode: string, messagesSnapshot: Message[]) => Promise<void>;
+  onAddNote: (noteText: string, topic: string) => void;
+  onDeleteNote: (noteId: string) => void;
 }
 
 const ChatModal: React.FC<ChatModalProps> = ({
@@ -1385,6 +1459,8 @@ const ChatModal: React.FC<ChatModalProps> = ({
   nudgeCount,
   onAddNudge,
   onTranscribeAndRespond,
+  onAddNote,
+  onDeleteNote,
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
@@ -1921,6 +1997,9 @@ const ChatModal: React.FC<ChatModalProps> = ({
           userIsGroupCreator={userIsGroupCreator}
           groupTopic={groupChat?.topic || null}
           onSetGroupTopic={onSetGroupTopic}
+          user={user}
+          onAddNote={onAddNote}
+          onDeleteNote={onDeleteNote}
         />
       )}
     </div>
@@ -2565,6 +2644,25 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     }
   };
 
+  const handleAddNote = (noteText: string, topic: string) => {
+      if (user) {
+          const newNote: Note = {
+              id: `note_${Date.now()}`,
+              text: noteText,
+              topic: topic,
+              createdAt: Date.now()
+          };
+          firestoreService.addNoteToFirestore(user.uid, newNote);
+      }
+  };
+
+  const handleDeleteNote = (noteId: string) => {
+      if (user) {
+          firestoreService.deleteNoteFromFirestore(user.uid, noteId);
+      }
+  };
+
+
   const handleUpgrade = async () => {
     if (!user) return;
     setIsUpgrading(true);
@@ -2824,6 +2922,9 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
           onTranscribeAndRespond={handleTranscribeAndRespond}
           nudgeCount={nudgeCount} 
           onAddNudge={handleAddNudge}
+          user={user}
+          onAddNote={handleAddNote}
+          onDeleteNote={handleDeleteNote}
         />
       )}
       {showSubscriptionModal && (

@@ -1,3 +1,4 @@
+// stgisi414/langcampus-exchange/langcampus-exchange-c252374cd98c19888539724d173cd65dd78ec341/hooks/useAuth.ts
 import { useState, useEffect } from 'react';
 import { onAuthStateChanged, User as AuthUser } from 'firebase/auth';
 import { doc, onSnapshot, Unsubscribe, collection, query, where } from 'firebase/firestore';
@@ -18,7 +19,6 @@ export const useAuth = () => {
       if (unsubscribeSubscriptions) unsubscribeSubscriptions();
 
       if (authUser) {
-        // Ensure the user profile is created or updated as soon as the user is authenticated.
         await initializeUserProfile(authUser.uid, authUser);
         
         const customerRef = doc(db, 'customers', authUser.uid);
@@ -27,38 +27,33 @@ export const useAuth = () => {
           if (docSnap.exists()) {
             const customerData = docSnap.data();
 
-            // Set the user and stop loading immediately with a default subscription status.
-            // This prevents the infinite loading screen.
-            const initialUserData = {
+            // FIX: This merges new data with the previous state, preventing race conditions
+            // where the 'notes' array or other fields get temporarily overwritten.
+            setUser(prevUser => ({
+              ...(prevUser || {}),
               uid: authUser.uid,
               email: authUser.email,
               displayName: authUser.displayName,
               photoURL: authUser.photoURL,
               ...customerData,
-              subscription: 'free', // Assume 'free' until the subscription check completes.
-            } as UserData;
+              subscription: prevUser?.subscription || 'free',
+            } as UserData));
+            
+            setLoading(false);
 
-            setUser(initialUserData);
-            setLoading(false); // This is the key fix.
-
-            // Now, separately listen for subscription changes and update the user state if they exist.
             const subscriptionsRef = collection(db, 'customers', authUser.uid, 'subscriptions');
             const q = query(subscriptionsRef, where("status", "in", ["trialing", "active"]));
             
             unsubscribeSubscriptions = onSnapshot(q, (subscriptionsSnap) => {
               const subscriptionStatus: SubscriptionStatus = subscriptionsSnap.empty ? 'free' : 'subscriber';
               
-              // Update the user state again with the correct subscription status.
-              setUser(prevUser => ({
-                ...prevUser!,
-                ...customerData,
-                subscription: subscriptionStatus,
-              }));
+              setUser(prevUser => {
+                  if (!prevUser || prevUser.subscription === subscriptionStatus) return prevUser;
+                  return { ...prevUser, subscription: subscriptionStatus };
+              });
             });
 
           }
-          // If docSnap doesn't exist, we do nothing and wait. The listener will
-          // re-run once initializeUserProfile creates the document.
         }, (error) => {
           console.error("Auth Hook Firestore Error:", error);
           setUser(null);
@@ -66,7 +61,6 @@ export const useAuth = () => {
         });
 
       } else {
-        // User is signed out
         setUser(null);
         setLoading(false);
       }

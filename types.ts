@@ -84,6 +84,13 @@ export interface TeachMeCache {
   content: string;
 }
 
+export interface Note {
+  id: string;
+  text: string;
+  topic: string;
+  createdAt: number;
+}
+
 export interface UserData {
   uid: string;
   email: string | null;
@@ -103,4 +110,5 @@ export interface UserData {
   savedChat: SavedChat | null;
   teachMeCache: TeachMeCache | null;
   activeGroupId: string | null;
+  notes?: Note[];
 }

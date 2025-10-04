@@ -1,7 +1,7 @@
-import { doc, getDoc, updateDoc, increment, setDoc } from "firebase/firestore";
+import { doc, getDoc, updateDoc, increment, setDoc, arrayUnion, arrayRemove } from "firebase/firestore";
 import { User } from "firebase/auth";
 import { db } from '../firebaseConfig.ts';
-import { UserData, UsageKey, SavedChat, SubscriptionStatus, TeachMeCache } from '../types.ts';
+import { UserData, UsageKey, SavedChat, SubscriptionStatus, TeachMeCache, Note } from '../types.ts';
 import { deleteAudioMessage } from './storageService.ts';
 
 const DAILY_LIMITS = {
@@ -29,14 +29,18 @@ export const initializeUserProfile = async (uid: string, user: User) => {
   const userRef = doc(db, "customers", uid);
   const docSnap = await getDoc(userRef);
 
-  if (!docSnap.exists() || !docSnap.data().usage) {
-    await setDoc(userRef, {
-      name: docSnap.data()?.name || user.displayName || '',
-      hobbies: docSnap.data()?.hobbies || '',
-      bio: docSnap.data()?.bio || '',
-      savedChat: docSnap.data()?.savedChat || null,
-      teachMeCache: docSnap.data()?.teachMeCache || null, // Add this line
-      usage: {
+  const data = docSnap.data();
+
+  // Check if the document doesn't exist OR if critical fields are missing
+  if (!docSnap.exists() || !data?.usage || data.notes === undefined) {
+    const dataToSet = {
+      name: data?.name || user.displayName || '',
+      hobbies: data?.hobbies || '',
+      bio: data?.bio || '',
+      savedChat: data?.savedChat || null,
+      teachMeCache: data?.teachMeCache || null,
+      notes: data?.notes || [], // This ensures 'notes' is always an array
+      usage: data?.usage || {
         searches: 0,
         messages: 0,
         audioPlays: 0,
@@ -44,7 +48,9 @@ export const initializeUserProfile = async (uid: string, user: User) => {
         quizzes: 0,
         lastUsageDate: getTodayDateString(),
       },
-    }, { merge: true });
+    };
+    // Use setDoc with merge to create or update without overwriting existing fields like stripeId
+    await setDoc(userRef, dataToSet, { merge: true });
   }
 };
 
@@ -145,4 +151,25 @@ export const checkAndIncrementUsage = async (userId: string, feature: UsageKey, 
     });
 
     return true;
+};
+
+export const addNoteToFirestore = async (userId: string, note: Note) => {
+  const userRef = doc(db, "customers", userId);
+  await updateDoc(userRef, {
+    notes: arrayUnion(note)
+  });
+};
+
+export const deleteNoteFromFirestore = async (userId: string, noteId: string) => {
+  const userRef = doc(db, "customers", userId);
+  const userSnap = await getDoc(userRef);
+  if (userSnap.exists()) {
+    const userData = userSnap.data() as UserData;
+    const noteToDelete = userData.notes?.find(n => n.id === noteId);
+    if (noteToDelete) {
+      await updateDoc(userRef, {
+        notes: arrayRemove(noteToDelete)
+      });
+    }
+  }
 };
