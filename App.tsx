@@ -665,7 +665,7 @@ const TeachMeModal: React.FC<{
   groupTopic,
   onSetGroupTopic,
 }) => {
-  const [activeTab, setActiveTab] = useState<TeachMeType>(
+  const [activeTab, setActiveTab] = useState<"Grammar" | "Vocabulary" | "Conversation">(
     "Grammar",
   );
   const [level, setLevel] = useState(1);
@@ -683,24 +683,20 @@ const TeachMeModal: React.FC<{
 
   const isHost = isGroupChat && userIsGroupCreator;
   const isMember = isGroupChat && !userIsGroupCreator;
-
+  
+  // FIX #1: This useEffect now ONLY runs when a specific topic is selected or changed.
+  // This prevents the tab from reverting when you click it.
   useEffect(() => {
-    // This helper is inside the useEffect and needs to be redefined to handle TeachMeType
-    const fetchContentForTopic = async (topic: string, type: TeachMeType) => {
+    const fetchContentForTopic = async (topic: string, type: "Grammar" | "Vocabulary" | "Conversation") => {
       setIsLoading(true);
       setContent("");
       try {
         const nativeLanguageName =
           LANGUAGES.find((lang) => lang.code === nativeLanguage)?.name ||
           nativeLanguage;
-        
-        // Only 'Grammar' and 'Vocabulary' are valid types for geminiService.getContent
-        // We default 'Conversation' to 'Grammar' for the gemini call
-        const contentType: 'Grammar' | 'Vocabulary' = (type === 'Conversation' ? 'Grammar' : type) as 'Grammar' | 'Vocabulary';
-
         const fetchedContent = await geminiService.getContent(
           topic,
-          contentType, // Use the sanitized type
+          type,
           language,
           nativeLanguageName,
         );
@@ -712,109 +708,70 @@ const TeachMeModal: React.FC<{
       }
     };
 
-    // PRIORITY 1: Handle Group Topic Synchronization
-    if (isGroupChat && groupTopic) {
-      if (selectedTopic !== groupTopic) {
-        // Find topic list to correctly set the tab
-        const allTopics = [
-            ...(grammarData[language as keyof typeof grammarData] || []), 
-            ...vocabData, 
-            ...(conversationData[language as keyof typeof conversationData] || [])
-        ];
-        
-        const topicToLoad = allTopics.find(t => t.title === groupTopic);
-        
-        if (topicToLoad) {
-            let newType: TeachMeType;
-            if (topicToLoad.tags.includes('conversation')) {
-                newType = 'Conversation';
-            } else if (vocabData.some(v => v.title === groupTopic)) {
-                newType = 'Vocabulary';
-            } else {
-                newType = 'Grammar';
-            }
-            
-            setActiveTab(newType);
-            setLevel(topicToLoad.level);
-            setSelectedTopic(groupTopic);
-            fetchContentForTopic(groupTopic, newType);
-        }
-      } else if (selectedTopic && !content && !isLoading) {
-          // Re-fetch content if a topic is selected but content is somehow cleared (e.g., manual clear)
-          fetchContentForTopic(selectedTopic, activeTab);
-      }
-    } 
-    
-    // PRIORITY 2: Handle Initial Solo Cache Loading - CRITICAL FIX: Only run if no topic is currently selected
-    else if (!isGroupChat && cache && cache.language === language && !selectedTopic) {
-      // The cache loading is now restricted to initial load by !selectedTopic
-      setActiveTab(cache.type);
+    const topicToLoad = isGroupChat ? groupTopic : selectedTopic;
+
+    if (topicToLoad) {
+      fetchContentForTopic(topicToLoad, activeTab);
+    } else {
+        // Clear content if no topic is selected
+        setContent('');
+    }
+  }, [selectedTopic, groupTopic, isGroupChat, activeTab, language, nativeLanguage]);
+
+  // FIX #2: This new useEffect runs only once on mount or when language changes,
+  // to load the initial state from cache without interfering later.
+  useEffect(() => {
+    if (!isGroupChat && cache && cache.language === language) {
+      setActiveTab(cache.type as "Grammar" | "Vocabulary" | "Conversation");
       
-      // Use the correct topic list for loading level info (Fixed logic to include Conversation)
-      const topicList = cache.type === "Grammar" 
-          ? grammarData[language as keyof typeof grammarData] 
-          : (cache.type === "Conversation" 
-              ? conversationData[language as keyof typeof conversationData] 
-              : vocabData);
-      
-      const topicData = topicList?.find((t) => t.title === cache.topic);
+      const dataSet = cache.type === 'Grammar' ? grammarData : cache.type === 'Vocabulary' ? vocabData : conversationData;
+      const topicData = (dataSet[language as keyof typeof dataSet] as any[])?.find(t => t.title === cache.topic);
 
       if (topicData) {
         setLevel(topicData.level);
       }
       setSelectedTopic(cache.topic);
-      setContent(cache.content);
-      
+      // Content is now loaded by the other useEffect
       setTimeout(() => {
         topicRefs.current.get(cache.topic)?.scrollIntoView({ block: "center" });
       }, 0);
-    } else if (!isGroupChat && selectedTopic && !content && !isLoading) {
-        // Case: Solo mode, topic selected but content cleared/missing. Re-fetch it.
-        fetchContentForTopic(selectedTopic, activeTab);
+    } else {
+        // If there's no cache, reset to defaults.
+        setActiveTab("Grammar");
+        setSelectedTopic(null);
+        setContent("");
+        setQuizQuestions(null);
     }
+  }, [language, cache, isGroupChat]); // Removed activeTab and selectedTopic dependencies
 
-  }, [language, cache, isGroupChat, groupTopic, activeTab, nativeLanguage, selectedTopic]);
-
-  const handleTabChange = (newTab: TeachMeType) => {
-    setActiveTab(newTab);
-    // FIX: Crucially clear the current topic, content, and quiz state when switching categories
-    setSelectedTopic(null);
-    setContent("");
-    setQuizQuestions(null);
-    // Reset search when switching tabs
-    setSearchQuery("");
-  };
 
   const availableTopics = useMemo(() => {
-    // FIX: Ensure the Conversation data is correctly referenced by its language key
-    let data: { title: string; level: number; tags: string[] }[] = [];
-    const languageKey = language as keyof typeof grammarData; 
-
-    if (activeTab === "Grammar") {
-        // Access keyed data
-        data = grammarData[languageKey] || [];
-    } else if (activeTab === "Conversation") {
-        // Access keyed data
-        data = conversationData[languageKey] || [];
-    } else if (activeTab === "Vocabulary") {
-        // As requested: Use the flat vocabData array directly for all languages
-        data = vocabData; 
+    let data;
+    switch (activeTab) {
+      case 'Grammar':
+        data = grammarData[language as keyof typeof grammarData] || [];
+        break;
+      case 'Vocabulary':
+        data = vocabData;
+        break;
+      case 'Conversation':
+        data = conversationData[language as keyof typeof conversationData] || [];
+        break;
+      default:
+        data = [];
     }
 
-    // Filter by search query first
-    const filteredBySearch = searchQuery.trim()
-      ? data.filter(
-          (topic) =>
-            topic.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            topic.tags.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase())),
-        )
-      : data;
 
-    // Apply level filtering only if no search query is active
-    return searchQuery.trim()
-      ? filteredBySearch
-      : filteredBySearch.filter((topic) => topic.level === level);
-      
+    if (searchQuery.trim()) {
+      const lowercasedQuery = searchQuery.toLowerCase();
+      return (data as any[]).filter(
+        (topic) =>
+          topic.title.toLowerCase().includes(lowercasedQuery) ||
+          (topic.tags && topic.tags.some((tag: string) => tag.toLowerCase().includes(lowercasedQuery))),
+      );
+    } else {
+      return (data as any[]).filter((topic) => topic.level === level);
+    }
   }, [activeTab, level, language, searchQuery]);
 
   const handleLevelChange = (lvl: number) => {
@@ -832,29 +789,8 @@ const TeachMeModal: React.FC<{
 
     if (!isGroupChat) {
         handleUsageCheck("lessons", async () => {
-        setSelectedTopic(topic);
-        setIsLoading(true);
-        setContent("");
-        setQuizQuestions(null);
-        try {
-            const nativeLanguageName =
-            LANGUAGES.find((lang) => lang.code === nativeLanguage)?.name ||
-            nativeLanguage;
-            const fetchedContent = await geminiService.getContent(
-            topic,
-            activeTab,
-            language,
-            nativeLanguageName,
-            );
-            setContent(fetchedContent);
-            setCache({ language, type: activeTab, topic, content: fetchedContent });
-        } catch (error) {
-            setContent(
-            "Sorry, there was an error loading the content. Please try again.",
-            );
-        } finally {
-            setIsLoading(false);
-        }
+        setSelectedTopic(topic); // This now triggers the content-fetching useEffect
+        setCache({ language, type: activeTab, topic, content: '' }); // Save context, content will be filled by fetcher
         });
     }
   };
@@ -924,16 +860,16 @@ const TeachMeModal: React.FC<{
       aria-modal="true"
     >
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[95vw] max-w-4xl h-[90vh] flex flex-col animate-fade-in-down">
-        <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
-          <div className="flex items-center gap-2 overflow-hidden"> {/* Added overflow-hidden */}
+        <div className="flex justify-between items-center p-4 border-b dark:border-gray-700 flex-shrink-0">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => setIsMenuOpen(true)}
-              className="flex-none p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 md:hidden" // Added flex-none to protect button space
+              className="p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 md:hidden"
               aria-label="Open topics menu"
             >
               <MenuIcon className="w-6 h-6" />
             </button>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white truncate"> {/* Added truncate to prevent text push-out */}
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
               {isGroupChat ? `Group Topic: ${language}` : `Teach Me: ${language}`}
             </h2>
           </div>
@@ -955,113 +891,105 @@ const TeachMeModal: React.FC<{
           )}
 
           <div
-             className={`absolute top-0 left-0 h-full w-4/5 max-w-sm bg-white dark:bg-gray-800 z-20 transform transition-transform p-4 flex-col md:static md:w-1/3 md:translate-x-0 md:border-r md:dark:border-gray-700 ${isMenuOpen ? "translate-x-0 flex" : "-translate-x-full hidden md:flex"}`}
+             className={`absolute top-0 left-0 h-full w-4/5 max-w-sm bg-white dark:bg-gray-800 z-20 transform transition-transform flex flex-col md:static md:w-1/3 md:translate-x-0 md:border-r md:dark:border-gray-700 ${isMenuOpen ? "translate-x-0 flex" : "-translate-x-full hidden md:flex"}`}
           >
-            <div className="flex justify-between items-center mb-4 md:hidden">
-              <h3 className="text-lg font-bold">Topics</h3>
-              <button
-                onClick={() => setIsMenuOpen(false)}
-                className="p-1"
-                aria-label="Close topics menu"
-              >
-                <CloseIcon className="w-6 h-6" />
-              </button>
-            </div>
+            <div className="p-4 flex flex-col flex-grow overflow-y-auto">
+                <div className="flex justify-between items-center mb-4 md:hidden flex-shrink-0">
+                <h3 className="text-lg font-bold">Topics</h3>
+                <button
+                    onClick={() => setIsMenuOpen(false)}
+                    className="p-1"
+                    aria-label="Close topics menu"
+                >
+                    <CloseIcon className="w-6 h-6" />
+                </button>
+                </div>
 
-            {/* NEW: Container to manage vertical space and scrolling */}
-            <div className="flex flex-col flex-grow">
-            
-              {(isHost || !isGroupChat) && <div className="relative mb-4 flex-none flex-shrink-0">
+                {(isHost || !isGroupChat) && <div className="relative mb-4 flex-shrink-0">
                 <input
-                  type="text"
-                  placeholder="Search lessons..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-full bg-gray-100 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    type="text"
+                    placeholder="Search lessons..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-full bg-gray-100 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              </div>}
+                </div>}
 
-              {(isHost || !isGroupChat) && searchQuery.trim() === "" ? (
-                <>
-                  <div className="flex overflow-x-auto border-b dark:border-gray-600 mb-4 pb-2 flex-shrink-0">  
+                {(isHost || !isGroupChat) && searchQuery.trim() === "" ? (
+                <div className='flex-shrink-0'>
+                    <div className="flex border-b dark:border-gray-600 mb-4 overflow-x-auto whitespace-nowrap">
                     <button
-                      onClick={() => handleTabChange("Grammar")} // <-- USE handleTabChange
-                      className={`flex-none px-4 py-2 text-center text-sm ${activeTab === "Grammar" ? "border-b-2 border-blue-500 text-blue-500 font-semibold" : "text-gray-500"}`}
+                        onClick={() => setActiveTab("Grammar")}
+                        className={`flex-shrink-0 px-4 py-2 text-center text-sm sm:text-base ${activeTab === "Grammar" ? "border-b-2 border-blue-500 text-blue-500" : "text-gray-500"}`}
                     >
-                      Grammar
+                        Grammar
                     </button>
                     <button
-                      onClick={() => handleTabChange("Vocabulary")} // <-- USE handleTabChange
-                      className={`flex-none px-4 py-2 text-center text-sm ${activeTab === "Vocabulary" ? "border-b-2 border-blue-500 text-blue-500 font-semibold" : "text-gray-500"}`}
+                        onClick={() => setActiveTab("Vocabulary")}
+                        className={`flex-shrink-0 px-4 py-2 text-center text-sm sm:text-base ${activeTab === "Vocabulary" ? "border-b-2 border-blue-500 text-blue-500" : "text-gray-500"}`}
                     >
-                      Vocabulary
+                        Vocabulary
                     </button>
                     <button
-                      onClick={() => handleTabChange("Conversation")} // <-- USE handleTabChange
-                      className={`flex-none px-4 py-2 text-center text-sm ${activeTab === "Conversation" ? "border-b-2 border-blue-500 text-blue-500 font-semibold" : "text-gray-500"}`}
+                        onClick={() => setActiveTab("Conversation")}
+                        className={`flex-shrink-0 px-4 py-2 text-center text-sm sm:text-base ${activeTab === "Conversation" ? "border-b-2 border-blue-500 text-blue-500" : "text-gray-500"}`}
                     >
-                      Conversation
+                        Scenarios
                     </button>
-                  </div>
-                  <div className="mb-4 flex-none flex-shrink-0">
+                    </div>
+                    <div className="mb-4">
                     <p className="font-semibold mb-2 text-center">
-                      Select Level:
+                        Select Level:
                     </p>
                     <div className="flex justify-center gap-2">
-                      {[1, 2, 3, 4, 5].map((lvl) => (
+                        {[1, 2, 3, 4, 5].map((lvl) => (
                         <button
-                          key={lvl}
-                          onClick={() => handleLevelChange(lvl)}
-                          className={`px-3 py-1 rounded-full text-sm ${level === lvl ? "bg-blue-500 text-white" : "bg-gray-200 dark:bg-gray-700"}`}
+                            key={lvl}
+                            onClick={() => handleLevelChange(lvl)}
+                            className={`px-3 py-1 rounded-full text-sm ${level === lvl ? "bg-blue-500 text-white" : "bg-gray-200 dark:bg-gray-700"}`}
                         >
-                          {lvl}
-                      </button>
-                      ))}
+                            {lvl}
+                        </button>
+                        ))}
                     </div>
-                  </div>
-                </>
-              ) : (
-                <div className="text-center mb-2 flex-none">
-                  <p className="font-semibold">{isGroupChat ? 'Current Topic' : 'Search Results'}</p>
+                    </div>
                 </div>
-              )}
+                ) : (
+                <div className="text-center mb-2 flex-shrink-0">
+                    <p className="font-semibold">{isGroupChat ? 'Current Topic' : 'Search Results'}</p>
+                </div>
+                )}
 
-              {/* FIX: Removed redundant overflow-y-auto flex-grow from UL. It fills the remaining space. */}
-              <ul
+                <ul
                 ref={topicListRef}
-                className="space-y-2 flex-grow overflow-y-auto"
-              >
-                {availableTopics.length > 0 ? (
-                  availableTopics.map((topic) => (
+                className="space-y-2 overflow-y-auto flex-grow" // This will now scroll correctly
+                >
+                {(isHost || !isGroupChat) && availableTopics.length > 0 ? (
+                    availableTopics.map((topic) => (
                     <li key={topic.title}>
-                      <button
+                        <button
                         ref={(el) => topicRefs.current.set(topic.title, el)}
                         onClick={() => handleTopicSelect(topic.title)}
-                        className={`w-full text-left p-2 rounded text-sm transition-colors 
-                                   ${(groupTopic || selectedTopic) === topic.title
-                                     ? "bg-blue-500 text-white"
-                                     : "hover:bg-gray-100 dark:hover:bg-gray-700"}
-                                   ${isMember && (groupTopic !== topic.title) ? "opacity-50 cursor-not-allowed" : ""}
-                                   `}
-                        disabled={isMember && (groupTopic !== topic.title)}
-                      >
-                        <span className="font-semibold">{topic.title}</span>
-                        <span className="text-xs ml-2 text-gray-500 dark:text-gray-400">
-                           Lvl {topic.level}
-                        </span>
-                      </button>
+                        className={`w-full text-left p-2 rounded text-sm ${(groupTopic || selectedTopic) === topic.title ? "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100" : "hover:bg-gray-100 dark:hover:bg-gray-700"}`}
+                        >
+                        {topic.title}
+                        </button>
                     </li>
-                  ))
+                    ))
                 ) : (
-                  !isLoading && searchQuery.trim() !== "" && (
-                    <p className="text-gray-500 text-center p-4">
-                      No topics found matching "{searchQuery}".
-                    </p>
-                  )
+                    isMember && (groupTopic || selectedTopic) ? (
+                        <li>
+                            <button className="w-full text-left p-2 rounded text-sm bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100">
+                                {groupTopic || selectedTopic}
+                            </button>
+                        </li>
+                    ) : (
+                        <p className="text-gray-500 text-center p-4">No topics found.</p>
+                    )
                 )}
-              </ul>
-            </div> {/* END: New scrolling wrapper */}
+                </ul>
+            </div>
           </div>
 
           <div className="w-full p-6 overflow-y-auto">
@@ -1108,7 +1036,7 @@ const TeachMeModal: React.FC<{
             )}
           </div>
         </div>
-        <div className="flex justify-end p-4 border-t dark:border-gray-700">
+        <div className="flex justify-end p-4 border-t dark:border-gray-700 flex-shrink-0">
           <button
             onClick={handleQuizMe}
             disabled={!(groupTopic || selectedTopic) || isLoading}
