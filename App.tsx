@@ -453,7 +453,7 @@ const QuizModal: React.FC<{
     score: number,
     questions: QuizQuestion[],
     userAnswers: string[],
-  ) => void;
+  ) => Promise<void>;
 }> = ({ questions, topic, onClose, onShareQuizResults }) => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [userAnswers, setUserAnswers] = useState<string[]>([]);
@@ -499,11 +499,13 @@ const QuizModal: React.FC<{
     }, 500);
   };
 
-  const handleShare = () => {
+  const handleShare = async () => {
     if (isSharing) return;
     setIsSharing(true);
     
-    onShareQuizResults(topic, score, questions, userAnswers);
+    await onShareQuizResults(topic, score, questions, userAnswers);
+
+    setIsSharing(false);
   };
 
   return (
@@ -2265,80 +2267,121 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     score: number,
     questions: QuizQuestion[],
     userAnswers: string[],
-  ) => {
-    // FIX: Add debounce logic to prevent multiple calls on modal unmount/re-render
-    if (Date.now() - lastQuizShareTimestamp.current < DEBOUNCE_TIME) {
-        console.warn("Quiz share debounced. Ignoring duplicate call.");
-        return;
-    }
-    lastQuizShareTimestamp.current = Date.now();
-    let quizSummary = `I just took a quiz on "${topic}" and my score was ${score}/${questions.length}. `;
-
-    const incorrectAnswers = questions
-      .map((q, index) => ({
-        question: q.question,
-        userAnswer: userAnswers[index],
-        correctAnswer: q.correctAnswer,
-      }))
-      .filter((item, index) => userAnswers[index] !== item.correctAnswer);
-
-    // Build the detailed message, including incorrect answers
-    if (incorrectAnswers.length > 0) {
-      quizSummary += `I missed ${incorrectAnswers.length} question(s). I would like help understanding the following: `;
-      incorrectAnswers.forEach((item, index) => {
-        quizSummary += `[Q${index + 1}: "${item.question}". My Answer: "${item.userAnswer}". Correct: "${item.correctAnswer}"]. `;
-      });
-      quizSummary = quizSummary.trim();
-    } else {
-        quizSummary += "I got everything right, but I'd love some encouragement!";
+): Promise<void> => {
+    
+    // Mutex: Prevent multiple simultaneous executions of this function
+    if (isSending) {
+        return Promise.resolve();
     }
 
-    const quizMessage: Message = {
-      sender: "user",
-      text: quizSummary,
-      senderId: user.uid, 
-      senderName: user.displayName || 'User',
-      timestamp: Date.now()
-    };
+    setIsSending(true); // Global Lock START
 
-    // Group Chat Logic
-    if (activeGroup) {
-      const groupQuizMessage = { ...quizMessage, text: `@bot ${quizSummary}` };
-      
-      handleUsageCheck('messages', async () => {
-        await groupService.addMessageToGroup(activeGroup.id, groupQuizMessage);
-        
-        setIsSending(true);
+    return new Promise<void>(async (resolve) => {
         try {
-            const updatedGroup = await groupService.getGroupById(activeGroup.id);
-            // Must include the user's latest message in the context for the bot's request
-            const currentMessages = updatedGroup ? [...updatedGroup.messages, groupQuizMessage] : [groupQuizMessage]; 
+            // 1. Prepare Message
+            let quizSummary = `I just took a quiz on "${topic}" and my score was ${score}/${questions.length}. `;
 
-            const groupTeachMeCache: TeachMeCache | null = activeGroup.topic
-              ? { topic: activeGroup.topic, language: currentPartner?.nativeLanguage || targetLanguage, type: 'Grammar', content: '' }
-              : null;
+            const incorrectAnswers = questions
+                .map((q, index) => ({
+                    question: q.question,
+                    userAnswer: userAnswers[index],
+                    correctAnswer: q.correctAnswer,
+                }))
+                .filter((item, index) => userAnswers[index] !== item.correctAnswer);
 
-            const botResponse = await groupService.getGroupBotResponse(currentMessages, activeGroup.partner, userProfile, true, groupTeachMeCache);
-            await groupService.addMessageToGroup(activeGroup.id, {...botResponse, timestamp: Date.now()}); 
+            if (incorrectAnswers.length > 0) {
+                quizSummary += `I missed ${incorrectAnswers.length} question(s). I would like help understanding the following: `;
+                incorrectAnswers.forEach((item, index) => {
+                    quizSummary += `[Q${index + 1}: "${item.question}". My Answer: "${item.userAnswer}". Correct: "${item.correctAnswer}"]. `;
+                });
+                quizSummary = quizSummary.trim();
+            } else {
+                quizSummary += "I got everything right, but I'd love some encouragement!";
+            }
+
+            const quizMessage: Message = {
+                sender: "user",
+                text: quizSummary,
+                senderId: user.uid,
+                senderName: user.displayName || "User",
+                timestamp: Date.now(),
+            };
+
+            // 2. Check Usage
+            const canProceed = await checkAndIncrementUsage(
+                user.uid,
+                "messages",
+                user.subscription,
+            );
+
+            if (!canProceed) {
+                setSubscriptionModalReason("limit");
+                setShowSubscriptionModal(true);
+                return; // Exit try block and go to finally
+            }
+
+            // 3. Execute Action
+            if (activeGroup) {
+                // Group Chat Logic
+                const groupQuizMessage = { ...quizMessage, text: `@bot ${quizSummary}` };
+
+                // 3a. Add user message
+                await groupService.addMessageToGroup(activeGroup.id, groupQuizMessage);
+
+                try {
+                    // 3b. Fetch updated context, get bot response, and add it
+                    const updatedGroup = await groupService.getGroupById(activeGroup.id);
+                    const currentMessages = updatedGroup ? [...updatedGroup.messages, groupQuizMessage] : [groupQuizMessage];
+
+                    const groupTeachMeCache: TeachMeCache | null = activeGroup.topic
+                        ? {
+                            topic: activeGroup.topic,
+                            language: currentPartner?.nativeLanguage || targetLanguage,
+                            type: "Grammar",
+                            content: "",
+                        }
+                        : null;
+
+                    const botResponse = await groupService.getGroupBotResponse(
+                        currentMessages,
+                        activeGroup.partner,
+                        userProfile,
+                        true,
+                        groupTeachMeCache,
+                    );
+                    await groupService.addMessageToGroup(activeGroup.id, {
+                        ...botResponse,
+                        timestamp: Date.now(),
+                    });
+                } catch (error) {
+                    console.error("Bot Reply Failed in Group Quiz Share:", error);
+                    const errorMessage: Message = {
+                        sender: "ai",
+                        text: "Sorry, I encountered an error responding to the quiz share.",
+                    };
+                    await groupService.addMessageToGroup(activeGroup.id, {
+                        ...errorMessage,
+                        timestamp: Date.now(),
+                    });
+                }
+            } else {
+                // Solo Chat Logic
+                setCurrentChatMessages((prev) => [...prev, quizMessage]);
+            }
+
+            // 4. Update UI context for chat
+            if (!currentPartner) {
+                const partnerToChatWith = savedChat?.partner || partners[0];
+                if (partnerToChatWith) setCurrentPartner(partnerToChatWith);
+            }
+
         } catch (error) {
-            console.error("Bot Reply Failed in Group Quiz Share:", error);
-            const errorMessage: Message = { sender: "ai", text: "Sorry, I encountered an error responding to the quiz share." };
-            await groupService.addMessageToGroup(activeGroup.id, {...errorMessage, timestamp: Date.now()}); 
+            console.error("Critical error in handleShareQuizResults:", error);
         } finally {
-            setIsSending(false);
+            setIsSending(false); // Global Lock END - Crucial for preventing re-execution
+            resolve();
         }
-      });
-    } else {
-      // Solo Chat Logic
-      handleUsageCheck('messages', () => {
-        setCurrentChatMessages((prev) => [...prev, quizMessage]);
-      });
-    }
-
-    if (!currentPartner) {
-      const partnerToChatWith = savedChat?.partner || partners[0];
-      if (partnerToChatWith) setCurrentPartner(partnerToChatWith);
-    }
+    });
   };
 
   const handleStartGroup = async () => {
