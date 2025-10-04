@@ -32,7 +32,7 @@ export const geminiProxy = onRequest(
       if (request.method !== "POST") {
         return response.status(405).send("Method Not Allowed");
       }
-      const { prompt } = request.body;
+      const { prompt, model } = request.body;
       if (!prompt) {
         return response.status(400).send("Bad Request: Missing prompt");
       }
@@ -41,7 +41,8 @@ export const geminiProxy = onRequest(
         return response.status(500).send("Internal Server Error: API key not configured.");
       }
       try {
-        const modelUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`;
+        const modelToUse = model || "gemini-2.5-flash-lite";
+        const modelUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${GEMINI_API_KEY}`;
         const geminiResponse = await fetch(modelUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },

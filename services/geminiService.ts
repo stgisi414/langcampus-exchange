@@ -47,7 +47,7 @@ const callGeminiProxy = async (prompt: string) => {
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({ prompt, model }),
     });
 
     if (!response.ok) {
@@ -125,6 +125,24 @@ export const getChatResponse = async (messages: Message[], partner: Partner, cor
 
   const conversationHistory = messages.map(m => `${m.sender === 'user' ? 'Me' : partner.name}: ${m.text}`).join('\n');
   const userLastMessage = messages[messages.length - 1].text;
+  const lastUserMessage = messages.findLast(m => m.sender === 'user');
+  const userToAddress = lastUserMessage?.senderName || userProfile?.name || 'the user';
+
+  let interactionContext;
+  if (isGroupChat) {
+    interactionContext = `
+    **Current Interaction:**
+    You are talking to a group of users. The person you are specifically responding to now is named **${userToAddress}**.
+    The overall user profile (for context on hobbies, etc.) belongs to: ${userProfile?.name || 'a user'}. Their interests are: ${userProfile?.hobbies || 'not specified'}.
+    `;
+  } else {
+    interactionContext = `
+    **Current Interaction:**
+    You are talking to ${userProfile?.name || 'a user'}.
+    The user's interests include: ${userProfile?.hobbies || 'not specified'}.
+    The user's bio says: "${userProfile?.bio || 'not specified'}".
+    `;
+  }
 
   const teachMeTopicInfo = teachMeCache?.topic
     ? `The user is currently studying the topic "${teachMeCache.topic}" in the "Teach Me" module.`
@@ -140,10 +158,7 @@ export const getChatResponse = async (messages: Message[], partner: Partner, cor
     You are learning ${partner.learningLanguage}.
     Your interests include: ${partner.interests.join(', ')}.
 
-    You are talking to ${userProfile?.name || 'a user'}.
-    The user's native language is ${partner.learningLanguage}.
-    The user's interests include: ${userProfile?.hobbies || 'not specified'}.
-    The user's bio says: "${userProfile?.bio || 'not specified'}".
+    ${interactionContext}
     
     ${teachMeTopicInfo} 
 
@@ -278,7 +293,7 @@ export const generateQuiz = async (topic: string, type: 'Grammar' | 'Vocabulary'
   `;
 
   try {
-    const data = await callGeminiProxy(prompt);
+    const data = await callGeminiProxy(prompt, "gemini-2.5-flash");
     const rawText = data.candidates[0].content.parts[0].text;
     const quizData = cleanAndParseJson(rawText);
 

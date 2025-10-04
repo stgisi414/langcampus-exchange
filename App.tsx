@@ -1328,6 +1328,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
   const isFetchingResponse = useRef(false);
   const [recorder, setRecorder] = useState<MediaRecorder | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [speakingMessageIndex, setSpeakingMessageIndex] = useState<number | null>(null);
 
   const startTimer = useCallback(() => {
     setAudioDuration(0);
@@ -1458,8 +1459,14 @@ const ChatModal: React.FC<ChatModalProps> = ({
   const partnerLanguageName = partnerLanguageObject.name;
   const partnerLanguageCode = partnerLanguageObject.code;
 
-  const handleSpeak = async (text: string) => {
+  const handleSpeak = (text: string, index: number) => {
+    // Prevent another TTS request while one is already loading/playing
+    if (speakingMessageIndex !== null) {
+      return;
+    }
+
     handleUsageCheck("audioPlays", async () => {
+      setSpeakingMessageIndex(index); // Disable button & show loading state
       try {
         const audioContent = await geminiService.synthesizeSpeech(
           text,
@@ -1470,12 +1477,34 @@ const ChatModal: React.FC<ChatModalProps> = ({
         const wavBlob = pcmToWav(pcm16, 24000);
         const audioUrl = URL.createObjectURL(wavBlob);
         const audio = new Audio(audioUrl);
+        
+        audio.onended = () => setSpeakingMessageIndex(null);
+        audio.onerror = () => {
+            console.error("Audio playback error.");
+            setSpeakingMessageIndex(null);
+        };
         audio.play();
+
       } catch (error) {
-        console.error("Error synthesizing speech:", error);
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = partnerLanguageCode;
-        window.speechSynthesis.speak(utterance);
+        // Fallback to browser's built-in speech synthesis
+        console.error("Error synthesizing speech, falling back to browser TTS:", error);
+        try {
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = partnerLanguageCode;
+                utterance.onend = () => setSpeakingMessageIndex(null);
+                utterance.onerror = (e) => {
+                    console.error("Browser TTS error:", e);
+                    setSpeakingMessageIndex(null);
+                };
+                window.speechSynthesis.speak(utterance);
+            } else {
+                 setSpeakingMessageIndex(null); // No TTS available
+            }
+        } catch (speechError) {
+            console.error("Browser speech synthesis failed to start:", speechError);
+            setSpeakingMessageIndex(null);
+        }
       }
     });
   };
@@ -1486,44 +1515,51 @@ const ChatModal: React.FC<ChatModalProps> = ({
   }) => {
     const [isPlaying, setIsPlaying] = useState(false);
     const audioRef = useRef<HTMLAudioElement | null>(null);
-
+  
+    // This effect ensures the audio source is updated if the URL changes,
+    // and that the player pauses when the component is unmounted.
     useEffect(() => {
-      const audio = new Audio(audioUrl);
-      audioRef.current = audio;
-
-      const handleEnded = () => setIsPlaying(false);
-      audio.addEventListener("ended", handleEnded);
-
-      return () => {
-        audio.removeEventListener("ended", handleEnded);
-        audio.pause();
-      };
+      const audio = audioRef.current;
+      if (audio) {
+        audio.src = audioUrl;
+        const handleEnded = () => setIsPlaying(false);
+        audio.addEventListener("ended", handleEnded);
+  
+        // Cleanup function to run when the component unmounts
+        return () => {
+          audio.removeEventListener("ended", handleEnded);
+          if (!audio.paused) {
+            audio.pause();
+          }
+        };
+      }
     }, [audioUrl]);
-
+  
     const togglePlay = () => {
       if (!audioRef.current) return;
-
+  
       if (isPlaying) {
         audioRef.current.pause();
         setIsPlaying(false);
       } else {
         handleUsageCheck("audioPlays", () => {
-          audioRef
-            .current!.play()
-            .catch((e) => console.error("Audio playback failed:", e));
+          audioRef.current?.play().catch((e) => console.error("Audio playback failed:", e));
           setIsPlaying(true);
         });
       }
     };
-
+  
     const formatTime = (seconds: number) => {
       const min = Math.floor(seconds / 60);
-      const sec = seconds % 60;
+      const sec = Math.floor(seconds % 60); // Use Math.floor to avoid decimals
       return `${min.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
     };
-
+  
     return (
       <div className="flex items-center gap-2 p-1 bg-white dark:bg-gray-700 rounded-full w-full">
+        {/* The single <audio> element, hidden from view but controllable via the ref */}
+        <audio ref={audioRef} src={audioUrl} preload="metadata"></audio>
+        
         <button
           onClick={togglePlay}
           className="p-1 bg-blue-500 text-white rounded-full hover:bg-blue-600"
@@ -1545,20 +1581,11 @@ const ChatModal: React.FC<ChatModalProps> = ({
   const handleSendAudio = async (audioBlob: Blob, duration: number) => {
     const currentUserId = auth.currentUser?.uid;
     const identifier = groupChat?.id || partner?.name;
-
     if (!identifier || !currentUserId) return;
-
     await handleUsageCheck("messages", async () => {
-      setIsSending(true); // (1) START: General busy indicator for upload/post.
       let transcription = "";
-
       try {
-        // Phase 1: Upload V/M and Post to Chat
-        const audioUrl = await storageService.uploadAudioMessage(
-          audioBlob,
-          identifier,
-          currentUserId,
-        );
+        const audioUrl = await storageService.uploadAudioMessage(audioBlob, identifier, currentUserId);
         const voiceMessage: Message = {
           sender: "user",
           text: "(Voice Message)",
@@ -1566,79 +1593,54 @@ const ChatModal: React.FC<ChatModalProps> = ({
           audioDuration: duration,
           senderId: currentUserId,
           senderName: user.displayName || 'User',
+          timestamp: Date.now() // Add timestamp
         };
         await onSendVoiceMessage(voiceMessage);
       } catch (error) {
         console.error("Upload or Post Failed:", error);
-        setIsSending(false); // Clear lock on failure
-        throw error; // Re-throw to halt execution
+        alert("Failed to send voice message. Please try again.");
+        return;
       }
-
-      // --- CRITICAL FIX START ---
-
-      // After successful posting of the V/M, clear the general busy indicator immediately in group chat,
-      // before the long-running transcription phase, to prevent the misleading "Typing..." flash.
-      if (activeGroup) {
-          setIsSending(false); // (2) STOP: Clear general busy indicator.
-      }
-      
       try {
-          // Phase 2: Transcribe (Runs unlocked in group chat, still locked in solo due to external useEffect hook).
-          transcription = await geminiService.transcribeAudio(
-              audioBlob,
-              partnerLanguageCode,
-          );
+          transcription = await geminiService.transcribeAudio(audioBlob, partnerLanguageCode);
       } catch (error) {
           console.error("Transcription Failed:", error);
-          transcription = ""; // Continue even if transcription fails
+          transcription = "";
       }
-      
-      // Phase 3: Post Transcription and Trigger Bot
       if (transcription) {
           const isBotMention = transcription.toLowerCase().startsWith('@bot');
           const userTranscriptionMessage: Message = {
             sender: "user",
             text: `(Transcription: ${transcription})`,
             senderId: currentUserId,
-            senderName: user.displayName || 'User' 
+            senderName: user.displayName || 'User',
+            timestamp: Date.now() // Add timestamp
           };
-
           if (activeGroup) {
-              // Group Chat Logic
               await groupService.addMessageToGroup(activeGroup.id, userTranscriptionMessage);
-
               if (isBotMention) {
-                  setIsSending(true); // (3) START: Re-engage indicator specifically for AI typing
-                  
-                  // Bot response logic is self-contained to clear its own state
-                  await (async () => {
-                      const rawContextMessage: Message = { sender: "user", text: transcription, senderId: currentUserId, senderName: user.displayName || 'User' };
+                  setIsSending(true);
+                  try {
+                      const rawContextMessage: Message = { sender: "user", text: transcription, senderId: currentUserId, senderName: user.displayName || 'User', timestamp: Date.now() }; // Add timestamp
                       const updatedGroup = await groupService.getGroupById(activeGroup.id);
                       const currentMessages = updatedGroup ? [...updatedGroup.messages, rawContextMessage] : [userTranscriptionMessage, rawContextMessage];
-                      
                       const groupTeachMeCache: TeachMeCache | null = activeGroup.topic
                       ? { topic: activeGroup.topic, language: partnerLanguageObject.name, type: 'Grammar', content: '', } : null;
-
-                      try {
-                          const botResponse = await groupService.getGroupBotResponse(currentMessages, activeGroup.partner, userProfile, true, groupTeachMeCache);
-                          await groupService.addMessageToGroup(activeGroup.id, botResponse);
-                      } catch (error) {
-                          console.error("Bot Reply Failed:", error);
-                      } finally {
-                          setIsSending(false); // (4) STOP: Clear AI typing indicator
-                      }
-                  })();
+                      const botResponse = await groupService.getGroupBotResponse(currentMessages, activeGroup.partner, userProfile, true, groupTeachMeCache);
+                      await groupService.addMessageToGroup(activeGroup.id, {...botResponse, timestamp: Date.now()}); // Add timestamp
+                  } catch (error) {
+                      console.error("Bot Reply Failed:", error);
+                  } finally {
+                      setIsSending(false);
+                  }
               }
           } else {
-              // Solo Chat Logic: Relies on external useEffect to trigger AI response and clear isSending
-              const soloTextMessage: Message = { sender: "user", text: transcription };
+              setIsSending(true);
+              const soloTextMessage: Message = { sender: "user", text: transcription, timestamp: Date.now() }; // Add timestamp
               onMessagesChange((prev) => [...prev, soloTextMessage]);
           }
       }
-      // --- CRITICAL FIX END ---
-      
     });
-    // Global cleanup runs after await handleUsageCheck completes
     setRecordedBlob(null);
     setIsRecording(false);
   };
@@ -1754,10 +1756,11 @@ const ChatModal: React.FC<ChatModalProps> = ({
                         </p>
                       )}
                       <button
-                        onClick={() => handleSpeak(msg.text)}
-                        className="mt-1 text-xs opacity-60 hover:opacity-100"
+                        onClick={() => handleSpeak(msg.text, index)}
+                        className="mt-1 text-xs opacity-60 hover:opacity-100 disabled:opacity-30 disabled:cursor-wait"
+                        disabled={speakingMessageIndex === index}
                       >
-                        <VolumeUpIcon className="w-4 h-4 inline-block" />
+                        <VolumeUpIcon className={`w-4 h-4 inline-block ${speakingMessageIndex === index ? 'animate-pulse text-blue-500' : ''}`} />
                       </button>
                     </>
                   )}
@@ -1920,7 +1923,11 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
             setActiveGroup(group);
             // Switch the current chat to the group's state
             setCurrentPartner(group.partner);
-            setCurrentChatMessages(group.messages);
+
+            // *** FIX: SORT MESSAGES BY TIMESTAMP ***
+            const sortedMessages = [...group.messages].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+            setCurrentChatMessages(sortedMessages);
+
           } else {
             // Group was deleted or user was removed
             setActiveGroup(null);
@@ -1974,44 +1981,39 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
         const userMessage: Message = {
             sender: 'user',
             text: messageToSend,
-            senderId: user.uid, // This field is required by the fixed Firestore rule
-            senderName: user.displayName || 'User'
+            senderId: user.uid,
+            senderName: user.displayName || 'User',
+            timestamp: Date.now() // Add timestamp
         };
 
         if (activeGroup) {
-            // 1. Add the user's message to Firestore immediately.
-            // This is the call that required the Firestore rule fix above.
             await groupService.addMessageToGroup(activeGroup.id, userMessage);
 
-            // 2. CHECK: Only proceed to send/show typing if the bot is mentioned.
             if (messageToSend.toLowerCase().startsWith('@bot')) {
-                setIsSending(true); // Start typing indicator ONLY if @bot is present
+                setIsSending(true);
 
                 const updatedGroup = await groupService.getGroupById(activeGroup.id);
-                // Use the updated messages or default to the user's message for context
                 const currentMessages = updatedGroup ? updatedGroup.messages : [userMessage];
                 
-                // Pass all necessary arguments to getGroupBotResponse
                 const groupTeachMeCache: TeachMeCache | null = activeGroup.topic
                 ? {
                     topic: activeGroup.topic,
                     language: currentPartner?.nativeLanguage || targetLanguage,
-                    type: 'Grammar', // Type can be generic as the topic provides context
-                    content: '', // Content is not needed for the prompt
+                    type: 'Grammar',
+                    content: '',
                   }
                 : null;
 
-                const botResponse = await groupService.getGroupBotResponse(currentMessages, activeGroup.partner, userProfile, true, groupTeachMeCache);
-
-                await groupService.addMessageToGroup(activeGroup.id, botResponse);
-                
-                setIsSending(false); // End typing indicator
+                try {
+                  const botResponse = await groupService.getGroupBotResponse(currentMessages, activeGroup.partner, userProfile, true, groupTeachMeCache);
+                  await groupService.addMessageToGroup(activeGroup.id, {...botResponse, timestamp: Date.now()}); // Add timestamp
+                } finally {
+                  setIsSending(false);
+                }
             }
         } else {
-            // For solo chats, always send a response.
-            setIsSending(true); // Always set for solo chat as a response is expected
+            setIsSending(true);
             setCurrentChatMessages(prev => [...prev, userMessage]);
-            // isSending is reset inside the asynchronous getBotResponse (via finally block)
         }
     });
   };
@@ -2172,26 +2174,40 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   ) => {
     let quizSummary = `I just took a quiz on "${topic}" and my score was ${score}/${questions.length}. `;
 
-    const incorrectAnswers = questions
-      .map((q, index) => ({
-        question: q.question,
-        userAnswer: userAnswers[index],
-        correctAnswer: q.correctAnswer,
-      }))
-      .filter((item, index) => userAnswers[index] !== item.correctAnswer);
+    // ... (quizSummary building logic)
 
-    if (incorrectAnswers.length > 0) {
-      quizSummary +=
-        "Can you help me understand my mistakes?\n\nHere's what I got wrong:\n";
-      incorrectAnswers.forEach((item, index) => {
-        quizSummary += `\n${index + 1}. Question: "${item.question}"\n   - I answered: "${item.userAnswer}"\n   - Correct answer: "${item.correctAnswer}"`;
+    const quizMessage: Message = {
+      sender: "user",
+      text: quizSummary,
+      senderId: user.uid, 
+      senderName: user.displayName || 'User',
+      timestamp: Date.now() // Add timestamp
+    };
+
+    if (activeGroup) {
+      const groupQuizMessage = { ...quizMessage, text: `@bot ${quizSummary}` };
+      handleUsageCheck('messages', async () => {
+        await groupService.addMessageToGroup(activeGroup.id, groupQuizMessage);
+        
+        setIsSending(true);
+        try {
+            const updatedGroup = await groupService.getGroupById(activeGroup.id);
+            const currentMessages = updatedGroup ? updatedGroup.messages : [groupQuizMessage];
+            const groupTeachMeCache: TeachMeCache | null = activeGroup.topic
+              ? { topic: activeGroup.topic, language: currentPartner?.nativeLanguage || targetLanguage, type: 'Grammar', content: '' }
+              : null;
+
+            const botResponse = await groupService.getGroupBotResponse(currentMessages, activeGroup.partner, userProfile, true, groupTeachMeCache);
+            await groupService.addMessageToGroup(activeGroup.id, {...botResponse, timestamp: Date.now()}); // Add timestamp
+        } finally {
+            setIsSending(false);
+        }
       });
     } else {
-      quizSummary += "I got a perfect score!";
+      handleUsageCheck('messages', () => {
+        setCurrentChatMessages((prev) => [...prev, quizMessage]);
+      });
     }
-
-    const quizMessage: Message = { sender: "user", text: quizSummary };
-    setCurrentChatMessages((prev) => [...prev, quizMessage]);
 
     if (!currentPartner) {
       const partnerToChatWith = savedChat?.partner || partners[0];

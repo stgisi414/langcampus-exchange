@@ -32,6 +32,7 @@ export interface Message {
   translation?: string;
   audioUrl?: string; 
   audioDuration?: number;
+  timestamp?: number;
 }
 
 export interface QuizQuestion {

@@ -22,8 +22,8 @@ export const createGroupInFirestore = async (
         partner,
         topic: null,
         shareLink,
-        members: { [creatorId]: true }, // Changed to a map
-        messages: [initialMessage],
+        members: { [creatorId]: true }, 
+        messages: [{...initialMessage, timestamp: Date.now()}], // Add timestamp here
     };
 
     // FIX: Ensure the group document is created first.
