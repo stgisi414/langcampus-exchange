@@ -1276,6 +1276,7 @@ interface ChatModalProps {
   onClose: () => void;
   onSaveChat: (messages: Message[]) => void;
   nativeLanguage: string;
+  nativeLanguageName: string;
   teachMeCache: TeachMeCache | null;
   setTeachMeCache: (cache: TeachMeCache | null) => void;
   onShareQuizResults: (
@@ -1310,6 +1311,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
   onClose,
   onSaveChat,
   nativeLanguage,
+  nativeLanguageName,
   teachMeCache,
   setTeachMeCache,
   onShareQuizResults,
@@ -1380,7 +1382,8 @@ const ChatModal: React.FC<ChatModalProps> = ({
                 response = await geminiService.getNudgeResponse(
                   messages,
                   partner,
-                  userProfile
+                  userProfile,
+                  nativeLanguageName
                 );
               }
               
@@ -1871,6 +1874,9 @@ const ChatModal: React.FC<ChatModalProps> = ({
           language={partnerLanguageName}
           onClose={() => setShowTeachMe(false)}
           nativeLanguage={nativeLanguage}
+          nativeLanguageName={
+            LANGUAGES.find((l) => l.code === nativeLanguage)?.name || 'English' 
+          }
           cache={teachMeCache}
           setCache={setTeachMeCache}
           onShareQuizResults={onShareQuizResults}
@@ -2041,25 +2047,29 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
                 }
             }
         } else {
-            // SOLO CHAT LOGIC (Atomic Update to prevent loop)
+            // SOLO CHAT LOGIC (Fixed for instantaneous display and atomic response)
             setIsSending(true); // Start sending visual feedback
 
-            try {
-                // 1. Calculate the *next* state: current messages + user message
-                const messagesWithUserMessage = [...currentChatMessages, userMessage];
+            // 1. IMMEDIATELY add the user message for instantaneous display
+            setCurrentChatMessages((prev) => [...prev, userMessage]); 
 
-                // 2. Fetch AI response based on the new context
+            // 2. Build the full context array for the API call using the current messages state 
+            //    from this closure + the new user message.
+            const messagesContext = [...currentChatMessages, userMessage];
+
+            try {
+                // 3. Fetch AI response
                 const aiResponse = await geminiService.getChatResponse(
-                    messagesWithUserMessage,
-                    currentPartner!,
-                    correctionsEnabled, // Pass the correct status
+                    messagesContext,
+                    currentPartner!, // currentPartner is guaranteed here
+                    correctionsEnabled,
                     userProfile,
                     teachMeCache,
                     false // Not a group chat
                 );
                 
-                // 3. Update state once with both messages
-                setCurrentChatMessages((prev) => [...prev, userMessage, { ...aiResponse, timestamp: Date.now() }]); // Ensure AI response has timestamp for consistency
+                // 4. Append only the AI message to the state
+                setCurrentChatMessages((prev) => [...prev, { ...aiResponse, timestamp: Date.now() }]);
             } catch (error) {
                 console.error("Solo Chat Response Error:", error);
                 const errorMessage: Message = {
@@ -2067,7 +2077,8 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
                     text: "Sorry, I encountered an error. Please try again.",
                     timestamp: Date.now()
                 };
-                setCurrentChatMessages((prev) => [...prev, userMessage, errorMessage]);
+                // 4. Append only the error message
+                setCurrentChatMessages((prev) => [...prev, errorMessage]);
             } finally {
                 setIsSending(false);
             }

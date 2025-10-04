@@ -338,7 +338,7 @@ export const transcribeAudio = async (audioBlob: Blob, languageCode: string): Pr
   }
 };
 
-export const getNudgeResponse = async (messages: Message[], partner: Partner, userProfile: UserProfileData): Promise<Message> => {
+export const getNudgeResponse = async (messages: Message[], partner: Partner, userProfile: UserProfileData, nativeLanguageName: string): Promise<Message> => {
   if (!partner || !partner.name) {
     console.error("getNudgeResponse called with an invalid partner object.");
     return { sender: 'ai', text: "Something went wrong." };
@@ -357,7 +357,7 @@ export const getNudgeResponse = async (messages: Message[], partner: Partner, us
     ${conversationHistory}
 
     **Your Task:**
-    Generate a single JSON object with a "text" property containing your re-engagement question in ${partner.nativeLanguage} and a "translation" property with the translation into the user's language.
+    Generate a single JSON object with a "text" property containing your re-engagement question in ${partner.nativeLanguage} and a "translation" property with the translation into the user's native language, **${nativeLanguageName}**.
 
     Example Response:
     {
