@@ -1420,6 +1420,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
       }
     };
   }, [messages, groupChat, partner, userProfile, onMessagesChange, isSending, setIsSending, getBotResponse]);
+
   const startTimer = useCallback(() => {
     setAudioDuration(0);
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -1948,6 +1949,7 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   const unsubscribeGroupRef = useRef<(() => void) | null>(null); // For unsubscribing from Firestore listener
   const [newMessage, setNewMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const isFetchingResponse = useRef(false);
 
   useEffect(() => {
     localStorage.setItem("nativeLanguage", nativeLanguage);
