@@ -1276,7 +1276,6 @@ interface ChatModalProps {
   onClose: () => void;
   onSaveChat: (messages: Message[]) => void;
   nativeLanguage: string;
-  nativeLanguageName: string;
   teachMeCache: TeachMeCache | null;
   setTeachMeCache: (cache: TeachMeCache | null) => void;
   onShareQuizResults: (
@@ -1300,7 +1299,8 @@ interface ChatModalProps {
   isSending: boolean;
   setIsSending: React.Dispatch<React.SetStateAction<boolean>>;
   onTextSubmit: (e: React.FormEvent, correctionsEnabled: boolean) => void;
-
+  nudgeCount: number;
+  onAddNudge: (response: Message, messagesSnapshot: Message[]) => void;
 }
 
 const ChatModal: React.FC<ChatModalProps> = ({
@@ -1311,7 +1311,6 @@ const ChatModal: React.FC<ChatModalProps> = ({
   onClose,
   onSaveChat,
   nativeLanguage,
-  nativeLanguageName,
   teachMeCache,
   setTeachMeCache,
   onShareQuizResults,
@@ -1329,6 +1328,8 @@ const ChatModal: React.FC<ChatModalProps> = ({
   isSending,
   setIsSending,
   onTextSubmit,
+  nudgeCount,
+  onAddNudge,
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
@@ -1341,7 +1342,6 @@ const ChatModal: React.FC<ChatModalProps> = ({
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const [speakingMessageIndex, setSpeakingMessageIndex] = useState<number | null>(null);
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const [nudgeCount, setNudgeCount] = useState(0);
 
   useEffect(() => {
     // 1. Clear any existing timer when dependencies change (new message, sending status, etc.)
@@ -1383,18 +1383,21 @@ const ChatModal: React.FC<ChatModalProps> = ({
                   messages,
                   partner,
                   userProfile,
-                  nativeLanguageName
+                  nativeLanguage
                 );
               }
               
               onMessagesChange(prevMessages => {
+                let didAddNudge = false;
                 // Check if the conversation length is still the same (user hasn't sent a message yet)
                 if (prevMessages.length === messages.length) { 
-                  setNudgeCount(prev => prev + 1); // Increment the counter
+                  didAddNudge = true; // Set flag inside setter for atomic check
                   return [...prevMessages, {...response, timestamp: Date.now()}]; 
                 }
                 return prevMessages; // User sent a message, so don't add the nudge
               });
+
+              onAddNudge(response, messages);
             } catch (error) {
               console.error("Failed to get AI response:", error);
             } finally {
@@ -1874,9 +1877,6 @@ const ChatModal: React.FC<ChatModalProps> = ({
           language={partnerLanguageName}
           onClose={() => setShowTeachMe(false)}
           nativeLanguage={nativeLanguage}
-          nativeLanguageName={
-            LANGUAGES.find((l) => l.code === nativeLanguage)?.name || 'English' 
-          }
           cache={teachMeCache}
           setCache={setTeachMeCache}
           onShareQuizResults={onShareQuizResults}
@@ -1929,16 +1929,30 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   const DEBOUNCE_TIME = 500; // 500ms debounce time
   const [newMessage, setNewMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [nudgeCount, setNudgeCount] = useState(0);
 
   useEffect(() => {
     localStorage.setItem("nativeLanguage", nativeLanguage);
   }, [nativeLanguage]);
+
+  const handleAddNudge = useCallback((response: Message, messagesSnapshot: Message[]) => {
+    // Check if the conversation length has NOT changed since the timer started.
+    // This is the CRITICAL check to prevent duplicates if the user types quickly.
+    if (messagesSnapshot.length === currentChatMessages.length) { 
+      // 1. Atomically update the messages list
+      setCurrentChatMessages((prev) => [...prev, { ...response, timestamp: Date.now() }]);
+      
+      // 2. Separately update the nudge count (React will batch these two updates)
+      setNudgeCount((prev) => prev + 1);
+    }
+  }, [currentChatMessages.length]); // Re-create if messages.length changes
 
   useEffect(() => {
     localStorage.setItem("targetLanguage", targetLanguage);
     setPartners([]);
     // The line deleting from Firestore is removed. The local component state
     // will now handle the UI update gracefully without a flicker.
+    setNudgeCount(0); 
   }, [targetLanguage]);
 
   useEffect(() => {
@@ -2169,14 +2183,14 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
 
   const handleStartChat = async (partner: Partner) => {
     setCurrentPartner(partner);
+    setNudgeCount(0); // <--- FIX 2: Reset nudge count on starting a new chat
 
     // If a saved chat exists for this partner, resume it.
     if (savedChat && savedChat.partner.name === partner.name) {
       setCurrentChatMessages(savedChat.messages);
     } else {
-      // FIX: New chat - Start with an empty array.
-      // This allows the ChatModal's internal timer (8 seconds) to trigger the initial welcome message.
-      setCurrentChatMessages([]); 
+      // New chat - Start with an empty array.
+      setCurrentChatMessages([]);
     }
   };
 
@@ -2671,6 +2685,8 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
           onTextSubmit={handleTextSubmit}
           onSendTextMessage={handleSendTextMessage}
           onSendVoiceMessage={handleSendVoiceMessage}
+          nudgeCount={nudgeCount} 
+          onAddNudge={handleAddNudge}
         />
       )}
       {showSubscriptionModal && (
