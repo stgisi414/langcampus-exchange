@@ -92,26 +92,60 @@ export const generatePartners = async (nativeLanguage: string, targetLanguage: s
     My native language is ${nativeLanguage}. I want to learn ${targetLanguage}.
     My interests are: ${userInterests}.
     Each partner should have a unique, culturally appropriate name.
-    Each partner must also have a "gender" field, set to either "**male**" or "**female**".
+    Each partner must also have a "gender" field, set to either "**male**" or "**female**". **Crucially, generate exactly 6 unique partners.**
     Their nativeLanguage should be ${targetLanguage} and their learningLanguage should be ${nativeLanguage}.
     Generate a diverse set of interests for them, some might align with mine.
     Return ONLY the JSON array.`;
 
   try {
     const data = await callGeminiProxy(prompt);
+    const rawText = data.candidates[0].content.parts[0].text;
+
+    // --- DEBUG LOGGING RAW AI RESPONSE ---
+    console.log("--- DEBUG: Raw AI Partner Response ---");
+    console.log(rawText);
+    console.log("--- END RAW RESPONSE ---");
+
     // Use our new helper function to safely parse the response
-    const partnersData = cleanAndParseJson(data.candidates[0].content.parts[0].text);
+    const partnersData = cleanAndParseJson(rawText);
+
     if (!Array.isArray(partnersData)) {
       console.error("AI did not return a valid array for partners:", partnersData);
-      return []; // Return an empty array to prevent crashing
+      return []; 
     }
 
-    return partnersData
-      .filter((p: any) => p && p.name && p.nativeLanguage && p.learningLanguage && Array.isArray(p.interests) && (p.gender === 'male' || p.gender === 'female'))
-      .map((p: any) => ({
-        ...p,
-        avatar: `https://api.dicebear.com/8.x/micah/svg?seed=${p.name}`,
-      }));
+    const finalPartners = partnersData
+      .filter((p: any) => {
+        // Function to strip ** and lowercase
+        const cleanedGender = p.gender?.replace(/\*\*/g, '').toLowerCase();
+
+        return (
+          p && 
+          p.name && 
+          p.nativeLanguage && 
+          p.learningLanguage && 
+          Array.isArray(p.interests) && 
+          (cleanedGender === 'male' || cleanedGender === 'female') 
+        );
+      })
+      .map((p: any) => {
+        // Ensure the final object uses cleaned, consistent lowercase gender values
+        const cleanedGender = p.gender?.replace(/\*\*/g, '').toLowerCase();
+        
+        return {
+          ...p,
+          avatar: `https://api.dicebear.com/8.x/micah/svg?seed=${p.name}`,
+          gender: cleanedGender === 'female' ? 'female' : 'male',
+        };
+      });
+
+    // --- DEBUG LOGGING FINAL FILTERED LIST ---
+    console.log("--- DEBUG: Final Filtered Partners ---");
+    console.log("Count:", finalPartners.length);
+    console.log(finalPartners);
+    console.log("--- END FILTERED RESPONSE ---");
+
+    return finalPartners;
   } catch (error) {
     console.error("Error generating partners:", error);
     throw new Error("Failed to generate AI partners. Please try again.");

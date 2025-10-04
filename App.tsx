@@ -1979,7 +1979,7 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
 
   useEffect(() => {
     localStorage.setItem("targetLanguage", targetLanguage);
-    setPartners([]);
+    // Removed the conflicting setPartners([]) line here.
     // The line deleting from Firestore is removed. The local component state
     // will now handle the UI update gracefully without a flicker.
     setNudgeCount(0); 
@@ -2267,10 +2267,11 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   };
 
   const findPartners = async () => {
+    setIsLoadingPartners(true);
+    setError(null);
+    setPartners([]);
+    
     handleUsageCheck("searches", async () => {
-      setIsLoadingPartners(true);
-      setError(null);
-      setPartners([]);
       try {
         const nativeLangName =
           LANGUAGES.find((l) => l.code === nativeLanguage)?.name ||

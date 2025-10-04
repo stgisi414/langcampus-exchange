@@ -195,19 +195,18 @@ export const geminiTTS = onRequest(
         }
         const contentText = `<speak><lang xml:lang="${languageCode}">${processedText}</lang></speak>`;
         
-        // <--- NEW: Select voice based on gender, with fallback
-        const selectedVoiceConfig = voiceConfigMap[languageCode]?.[gender];
-        if (!selectedVoiceConfig) {
-             logger.warn(`No specific voice found for ${languageCode} with gender ${gender}. Falling back to default English male.`);
-             // Fallback to default English male voice
-             const fallbackVoice = voiceConfigMap["en-US"]?.male;
-             if (!fallbackVoice) {
-                  throw new Error("Missing fallback voice configuration.");
-             }
-             return response.status(500).send("Failed to find voice config.");
+        // --- MODIFICATION: ROBUST VOICE SELECTION ---
+        // Attempt a direct lookup using both language and gender
+        let voiceConfig = voiceConfigMap[languageCode]?.[gender];
+
+        if (!voiceConfig) {
+            // Fallback to default English male voice if the requested voice is not found
+            logger.warn(`No specific voice found for ${languageCode} with gender ${gender}. Falling back to default English male.`);
+            // This is a robust fallback as "en-US" should always be defined in the map
+            voiceConfig = voiceConfigMap["en-US"].male;
         }
-        const voiceConfig = selectedVoiceConfig;
-        
+        // --- END MODIFICATION ---
+
         const ttsUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${GEMINI_API_KEY}`;
         const payload = {
           "model": "gemini-2.5-flash-preview-tts",
@@ -215,7 +214,7 @@ export const geminiTTS = onRequest(
           "generationConfig": {
             "responseModalities": ["AUDIO"],
             "speechConfig": {
-              "voiceConfig": voiceConfig, // <--- USING GENDER-SPECIFIC VOICE
+              "voiceConfig": voiceConfig, // Guaranteed to be an object now
               "languageCode": languageCode,
             },
           },
