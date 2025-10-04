@@ -2460,3 +2460,756 @@ export const vocabData = [
     { "title": "Media & Journalism Vocabulary (Source, Bias, Misinformation, Broadcast, Publication, Editorial)", "level": 5, "tags": ["media", "news", "communication", "society"] },
     { "title": "Colloquialisms & Slang (Context-dependent and to be used with caution)", "level": 5, "tags": ["colloquialisms", "slang", "informal", "culture", "nuance"] }
 ];
+
+export const conversationData = {
+    "Spanish": [
+        // Level 1: Basic Everyday Interactions (A1)
+        { "title": "Greetings & Basic Introductions (Saludar y Presentaciones Básicas)", "level": 1, "tags": ["greetings", "introductions", "basics"] },
+        { "title": "Ordering Coffee & a Snack (Pedir Café y un Bocadillo)", "level": 1, "tags": ["food", "cafe", "ordering", "basics"] },
+        { "title": "Asking for Basic Information (What is this? Where is the bathroom?)", "level": 1, "tags": ["questions", "information", "basics"] },
+        { "title": "Shopping for Groceries (Simple) (Hacer la Compra - Simple)", "level": 1, "tags": ["shopping", "food", "basics"] },
+        { "title": "Talking About Your Family (Hablar de tu Familia)", "level": 1, "tags": ["family", "people", "introductions"] },
+        { "title": "Making a Simple Purchase (Clothing) (Hacer una Compra Simple - Ropa)", "level": 1, "tags": ["shopping", "clothing", "basics"] },
+        { "title": "Asking for and Giving the Time (Preguntar y Decir la Hora)", "level": 1, "tags": ["time", "questions", "basics"] },
+        { "title": "Talking About Hobbies (Hablar de Pasatiempos)", "level": 1, "tags": ["hobbies", "leisure", "interests"] },
+
+        // Level 2: More Detailed Scenarios (A2)
+        { "title": "Ordering a Full Meal at a Restaurant (Pedir una Comida Completa en un Restaurante)", "level": 2, "tags": ["food", "restaurant", "ordering"] },
+        { "title": "Asking for Directions (Pedir Direcciones)", "level": 2, "tags": ["directions", "travel", "city"] },
+        { "title": "Talking About Your Daily Routine (Hablar de tu Rutina Diaria)", "level": 2, "tags": ["daily routine", "lifestyle", "verbs"] },
+        { "title": "Making Plans with a Friend (Hacer Planes con un Amigo)", "level": 2, "tags": ["social", "planning", "friends"] },
+        { "title": "Checking into a Hotel (Registrarse en un Hotel)", "level": 2, "tags": ["travel", "hotel", "accommodation"] },
+        { "title": "Talking About the Weather (Hablar del Tiempo)", "level": 2, "tags": ["weather", "small talk", "nature"] },
+        { "title": "A Simple Doctor's Visit (Una Visita Simple al Médico)", "level": 2, "tags": ["health", "doctor", "body"] },
+        { "title": "Taking Public Transportation (Tomar Transporte Público)", "level": 2, "tags": ["travel", "transportation", "city"] },
+
+        // Level 3: Handling Problems & More Complex Interactions (B1)
+        { "title": "Describing a Past Vacation (Describir unas Vacaciones Pasadas)", "level": 3, "tags": ["travel", "past tense", "storytelling"] },
+        { "title": "Discussing a Movie or Book (Hablar de una Película o un Libro)", "level": 3, "tags": ["entertainment", "opinions", "media"] },
+        { "title": "Returning an Item to a Store (Devolver un Artículo en una Tienda)", "level": 3, "tags": ["shopping", "problems", "communication"] },
+        { "title": "Making a Complaint (Hotel/Restaurant) (Hacer una Queja - Hotel/Restaurante)", "level": 3, "tags": ["problems", "communication", "travel", "food"] },
+        { "title": "Talking About Your Job or Studies (Hablar de tu Trabajo o Estudios)", "level": 3, "tags": ["work", "education", "professions"] },
+        { "title": "Giving and Receiving Opinions (Dar y Recibir Opiniones)", "level": 3, "tags": ["opinions", "discussion", "communication"] },
+        { "title": "Planning a Weekend Trip (Planificar un Viaje de Fin de Semana)", "level": 3, "tags": ["travel", "planning", "leisure"] },
+        { "title": "Explaining a Simple Recipe (Explicar una Receta Sencilla)", "level": 3, "tags": ["food", "cooking", "instructions"] },
+
+        // Level 4: Abstract Topics & Formal Situations (B2)
+        { "title": "Discussing Future Goals and Aspirations (Hablar de Metas y Aspiraciones Futuras)", "level": 4, "tags": ["future", "goals", "discussion", "abstract"] },
+        { "title": "A Formal Job Interview (Una Entrevista de Trabajo Formal)", "level": 4, "tags": ["work", "formal", "interview", "professions"] },
+        { "title": "Debating Pros and Cons (e.g., City vs. Countryside Life)", "level": 4, "tags": ["debate", "opinions", "discussion", "abstract"] },
+        { "title": "Talking About Cultural Differences (Hablar de Diferencias Culturales)", "level": 4, "tags": ["culture", "society", "discussion"] },
+        { "title": "Narrating a Story or Event in Detail (Narrar una Historia o Evento en Detalle)", "level": 4, "tags": ["storytelling", "past tense", "narrative"] },
+        { "title": "Renting an Apartment (Alquilar un Apartamento)", "level": 4, "tags": ["housing", "money", "formal", "negotiation"] },
+        { "title": "Discussing Current Events (Hablar de Actualidad)", "level": 4, "tags": ["current events", "news", "society", "discussion"] },
+        { "title": "Giving Advice on a Complex Problem (Dar Consejos sobre un Problema Complejo)", "level": 4, "tags": ["advice", "problems", "communication", "subjunctive"] },
+
+        // Level 5: Advanced & Specialized Scenarios (C1/C2)
+        { "title": "Arguing a Point of View on a Social Issue (Argumentar un Punto de Vista sobre un Tema Social)", "level": 5, "tags": ["debate", "society", "politics", "formal", "advanced"] },
+        { "title": "Participating in a Business Meeting (Participar en una Reunión de Negocios)", "level": 5, "tags": ["work", "business", "formal", "advanced"] },
+        { "title": "Discussing a piece of literature or art in depth (Analizar una obra literaria o de arte)", "level": 5, "tags": ["art", "literature", "analysis", "abstract", "advanced"] },
+        { "title": "Explaining a Technical or Scientific Concept Simply (Explicar un Concepto Técnico o Científico)", "level": 5, "tags": ["science", "technology", "explanation", "advanced"] },
+        { "title": "Negotiating a Contract or Agreement (Negociar un Contrato o Acuerdo)", "level": 5, "tags": ["business", "negotiation", "formal", "advanced"] },
+        { "title": "Telling a Joke or an Anecdote with Cultural Nuances (Contar un Chiste o Anécdota con Matices Culturales)", "level": 5, "tags": ["culture", "humor", "storytelling", "advanced", "nuance"] },
+        { "title": "Hypothetical Scenarios: 'What would you do if...?' (Escenarios Hipotéticos: ¿Qué harías si...?)", "level": 5, "tags": ["hypothetical", "conditionals", "subjunctive", "advanced"] }
+    ],
+    "English": [
+        // Level 1
+        { "title": "Greetings & Basic Introductions", "level": 1, "tags": ["greetings", "introductions", "basics"] },
+        { "title": "Ordering a Coffee", "level": 1, "tags": ["food", "cafe", "ordering", "basics"] },
+        { "title": "Asking for Basic Information", "level": 1, "tags": ["questions", "information", "basics"] },
+        { "title": "Simple Grocery Shopping", "level": 1, "tags": ["shopping", "food", "basics"] },
+        { "title": "Talking About Your Family", "level": 1, "tags": ["family", "people", "introductions"] },
+        { "title": "Buying a T-shirt", "level": 1, "tags": ["shopping", "clothing", "basics"] },
+        { "title": "Asking for the Time", "level": 1, "tags": ["time", "questions", "basics"] },
+        { "title": "Talking About Hobbies", "level": 1, "tags": ["hobbies", "leisure", "interests"] },
+
+        // Level 2
+        { "title": "Ordering a Meal at a Restaurant", "level": 2, "tags": ["food", "restaurant", "ordering"] },
+        { "title": "Asking for Directions", "level": 2, "tags": ["directions", "travel", "city"] },
+        { "title": "Describing Your Daily Routine", "level": 2, "tags": ["daily routine", "lifestyle", "verbs"] },
+        { "title": "Making Plans with a Friend", "level": 2, "tags": ["social", "planning", "friends"] },
+        { "title": "Checking into a Hotel", "level": 2, "tags": ["travel", "hotel", "accommodation"] },
+        { "title": "Talking About the Weather", "level": 2, "tags": ["weather", "small talk", "nature"] },
+        { "title": "At the Doctor's Office (Simple Symptoms)", "level": 2, "tags": ["health", "doctor", "body"] },
+        { "title": "Buying a Train Ticket", "level": 2, "tags": ["travel", "transportation", "city"] },
+
+        // Level 3
+        { "title": "Describing a Past Trip", "level": 3, "tags": ["travel", "past tense", "storytelling"] },
+        { "title": "Discussing a Favorite Movie", "level": 3, "tags": ["entertainment", "opinions", "media"] },
+        { "title": "Returning a Faulty Item", "level": 3, "tags": ["shopping", "problems", "communication"] },
+        { "title": "Making a Complaint about a Service", "level": 3, "tags": ["problems", "communication", "services"] },
+        { "title": "Talking About Your Job", "level": 3, "tags": ["work", "education", "professions"] },
+        { "title": "Expressing Opinions on a Topic", "level": 3, "tags": ["opinions", "discussion", "communication"] },
+        { "title": "Planning a Party", "level": 3, "tags": ["social", "planning", "events"] },
+        { "title": "Explaining How to Do Something Simple", "level": 3, "tags": ["instructions", "how-to"] },
+
+        // Level 4
+        { "title": "Discussing Future Career Goals", "level": 4, "tags": ["future", "goals", "work", "discussion", "abstract"] },
+        { "title": "A Formal Job Interview", "level": 4, "tags": ["work", "formal", "interview", "professions"] },
+        { "title": "Debating Pros and Cons", "level": 4, "tags": ["debate", "opinions", "discussion", "abstract"] },
+        { "title": "Talking About Cultural Norms and Etiquette", "level": 4, "tags": ["culture", "society", "discussion"] },
+        { "title": "Narrating a Personal Story", "level": 4, "tags": ["storytelling", "past tense", "narrative"] },
+        { "title": "Inquiring About an Apartment for Rent", "level": 4, "tags": ["housing", "formal", "inquiry"] },
+        { "title": "Discussing a News Article", "level": 4, "tags": ["current events", "news", "society", "discussion"] },
+        { "title": "Giving Advice to a Friend", "level": 4, "tags": ["advice", "problems", "communication", "conditionals"] },
+
+        // Level 5
+        { "title": "Debating a Complex Social Issue", "level": 5, "tags": ["debate", "society", "politics", "formal", "advanced"] },
+        { "title": "Participating in a Business Negotiation", "level": 5, "tags": ["work", "business", "formal", "advanced", "negotiation"] },
+        { "title": "Analyzing a Character from a Book", "level": 5, "tags": ["art", "literature", "analysis", "abstract", "advanced"] },
+        { "title": "Explaining a Complex Process", "level": 5, "tags": ["explanation", "technical", "process", "advanced"] },
+        { "title": "Handling a Customer Service Dispute", "level": 5, "tags": ["problems", "communication", "negotiation", "advanced"] },
+        { "title": "Telling a Funny Story with Sarcasm or Irony", "level": 5, "tags": ["culture", "humor", "storytelling", "advanced", "nuance"] },
+        { "title": "Discussing Hypothetical Situations", "level": 5, "tags": ["hypothetical", "conditionals", "advanced"] }
+    ],
+    "French": [
+        // Level 1
+        { "title": "Salutations et Présentations de Base", "level": 1, "tags": ["greetings", "introductions", "basics"] },
+        { "title": "Commander un Café et un Croissant", "level": 1, "tags": ["food", "cafe", "ordering", "basics"] },
+        { "title": "Demander des Informations Simples", "level": 1, "tags": ["questions", "information", "basics"] },
+        { "title": "Faire les Courses à l'Épicerie", "level": 1, "tags": ["shopping", "food", "basics"] },
+        { "title": "Parler de sa Famille", "level": 1, "tags": ["family", "people", "introductions"] },
+        { "title": "Acheter un Souvenir", "level": 1, "tags": ["shopping", "travel", "basics"] },
+        { "title": "Demander et Dire l'Heure", "level": 1, "tags": ["time", "questions", "basics"] },
+        { "title": "Parler de ses Loisirs", "level": 1, "tags": ["hobbies", "leisure", "interests"] },
+
+        // Level 2
+        { "title": "Commander un Repas au Restaurant", "level": 2, "tags": ["food", "restaurant", "ordering"] },
+        { "title": "Demander son Chemin", "level": 2, "tags": ["directions", "travel", "city"] },
+        { "title": "Décrire sa Routine Quotidienne", "level": 2, "tags": ["daily routine", "lifestyle", "verbs"] },
+        { "title": "Prendre un Rendez-vous avec un Ami", "level": 2, "tags": ["social", "planning", "friends"] },
+        { "title": "S'enregistrer à l'Hôtel", "level": 2, "tags": ["travel", "hotel", "accommodation"] },
+        { "title": "Parler de la Météo", "level": 2, "tags": ["weather", "small talk", "nature"] },
+        { "title": "Chez le Médecin (Symptômes Simples)", "level": 2, "tags": ["health", "doctor", "body"] },
+        { "title": "Acheter un Billet de Train", "level": 2, "tags": ["travel", "transportation", "city"] },
+
+        // Level 3
+        { "title": "Raconter ses Dernières Vacances", "level": 3, "tags": ["travel", "past tense", "storytelling"] },
+        { "title": "Discuter d'un Film ou d'un Livre", "level": 3, "tags": ["entertainment", "opinions", "media"] },
+        { "title": "Retourner un Article dans un Magasin", "level": 3, "tags": ["shopping", "problems", "communication"] },
+        { "title": "Faire une Réclamation (Service Client)", "level": 3, "tags": ["problems", "communication", "services"] },
+        { "title": "Parler de son Travail ou de ses Études", "level": 3, "tags": ["work", "education", "professions"] },
+        { "title": "Donner son Opinion sur un Sujet", "level": 3, "tags": ["opinions", "discussion", "communication"] },
+        { "title": "Organiser une Soirée", "level": 3, "tags": ["social", "planning", "events"] },
+        { "title": "Expliquer une Recette de Cuisine", "level": 3, "tags": ["food", "cooking", "instructions"] },
+
+        // Level 4
+        { "title": "Discuter de ses Projets d'Avenir", "level": 4, "tags": ["future", "goals", "work", "discussion", "abstract"] },
+        { "title": "Passer un Entretien d'Embauche", "level": 4, "tags": ["work", "formal", "interview", "professions"] },
+        { "title": "Débattre des Avantages et Inconvénients", "level": 4, "tags": ["debate", "opinions", "discussion", "abstract"] },
+        { "title": "Parler des Habitudes Culturelles", "level": 4, "tags": ["culture", "society", "discussion"] },
+        { "title": "Raconter une Anecdote Personnelle", "level": 4, "tags": ["storytelling", "past tense", "narrative"] },
+        { "title": "Visiter un Appartement à Louer", "level": 4, "tags": ["housing", "formal", "inquiry"] },
+        { "title": "Discuter d'un Article d'Actualité", "level": 4, "tags": ["current events", "news", "society", "discussion"] },
+        { "title": "Donner des Conseils à un Ami", "level": 4, "tags": ["advice", "problems", "communication", "conditionals"] },
+
+        // Level 5
+        { "title": "Débattre d'un Sujet de Société Controversé", "level": 5, "tags": ["debate", "society", "politics", "formal", "advanced"] },
+        { "title": "Mener une Négociation Commerciale", "level": 5, "tags": ["work", "business", "formal", "advanced", "negotiation"] },
+        { "title": "Analyser une Œuvre d'Art ou un Poème", "level": 5, "tags": ["art", "literature", "analysis", "abstract", "advanced"] },
+        { "title": "Vulgariser un Concept Scientifique", "level": 5, "tags": ["explanation", "science", "technical", "advanced"] },
+        { "title": "Gérer un Conflit ou un Malentendu", "level": 5, "tags": ["problems", "communication", "negotiation", "advanced"] },
+        { "title": "Raconter une Histoire avec Humour et Ironie", "level": 5, "tags": ["culture", "humor", "storytelling", "advanced", "nuance"] },
+        { "title": "Discuter de Scénarios Hypothétiques", "level": 5, "tags": ["hypothetical", "conditionals", "subjunctive", "advanced"] }
+    ],
+    "German": [
+        // Level 1: Basic Everyday Interactions (A1)
+        { "title": "Greetings & Basic Introductions (Begrüßungen und Vorstellungen)", "level": 1, "tags": ["greetings", "introductions", "basics"] },
+        { "title": "Ordering Coffee & a Snack (Kaffee und einen Snack bestellen)", "level": 1, "tags": ["food", "cafe", "ordering", "basics"] },
+        { "title": "Asking for Basic Information (Was ist das? Wo ist die Toilette?)", "level": 1, "tags": ["questions", "information", "basics"] },
+        { "title": "Simple Grocery Shopping (Einfache Lebensmitteleinkäufe)", "level": 1, "tags": ["shopping", "food", "basics"] },
+        { "title": "Talking About Your Family (Über deine Familie sprechen)", "level": 1, "tags": ["family", "people", "introductions"] },
+        { "title": "Making a Simple Purchase (Einfachen Einkauf tätigen)", "level": 1, "tags": ["shopping", "clothing", "basics"] },
+        { "title": "Asking for and Giving the Time (Nach der Uhrzeit fragen und sie nennen)", "level": 1, "tags": ["time", "questions", "basics"] },
+        { "title": "Talking About Hobbies (Über Hobbys sprechen)", "level": 1, "tags": ["hobbies", "leisure", "interests"] },
+
+        // Level 2: More Detailed Scenarios (A2)
+        { "title": "Ordering a Full Meal at a Restaurant (Eine vollständige Mahlzeit im Restaurant bestellen)", "level": 2, "tags": ["food", "restaurant", "ordering"] },
+        { "title": "Asking for Directions (Nach dem Weg fragen)", "level": 2, "tags": ["directions", "travel", "city"] },
+        { "title": "Talking About Your Daily Routine (Über deinen Tagesablauf sprechen)", "level": 2, "tags": ["daily routine", "lifestyle", "verbs"] },
+        { "title": "Making Plans with a Friend (Mit einem Freund Pläne machen)", "level": 2, "tags": ["social", "planning", "friends"] },
+        { "title": "Checking into a Hotel (Im Hotel einchecken)", "level": 2, "tags": ["travel", "hotel", "accommodation"] },
+        { "title": "Talking About the Weather (Über das Wetter sprechen)", "level": 2, "tags": ["weather", "small talk", "nature"] },
+        { "title": "A Simple Doctor's Visit (Ein einfacher Arztbesuch)", "level": 2, "tags": ["health", "doctor", "body"] },
+        { "title": "Taking Public Transportation (Öffentliche Verkehrsmittel nutzen)", "level": 2, "tags": ["travel", "transportation", "city"] },
+
+        // Level 3: Handling Problems & More Complex Interactions (B1)
+        { "title": "Describing a Past Vacation (Einen vergangenen Urlaub beschreiben)", "level": 3, "tags": ["travel", "past tense", "storytelling"] },
+        { "title": "Discussing a Movie or Book (Über einen Film oder ein Buch diskutieren)", "level": 3, "tags": ["entertainment", "opinions", "media"] },
+        { "title": "Returning an Item to a Store (Einen Artikel im Geschäft zurückgeben)", "level": 3, "tags": ["shopping", "problems", "communication"] },
+        { "title": "Making a Complaint (Hotel/Restaurant) (Eine Beschwerde einreichen - Hotel/Restaurant)", "level": 3, "tags": ["problems", "communication", "travel", "food"] },
+        { "title": "Talking About Your Job or Studies (Über deinen Job oder dein Studium sprechen)", "level": 3, "tags": ["work", "education", "professions"] },
+        { "title": "Giving and Receiving Opinions (Meinungen äußern und entgegennehmen)", "level": 3, "tags": ["opinions", "discussion", "communication"] },
+        { "title": "Planning a Weekend Trip (Einen Wochenendausflug planen)", "level": 3, "tags": ["travel", "planning", "leisure"] },
+        { "title": "Explaining a Simple Recipe (Ein einfaches Rezept erklären)", "level": 3, "tags": ["food", "cooking", "instructions"] },
+
+        // Level 4: Abstract Topics & Formal Situations (B2)
+        { "title": "Discussing Future Goals and Aspirations (Zukünftige Ziele und Wünsche diskutieren)", "level": 4, "tags": ["future", "goals", "discussion", "abstract"] },
+        { "title": "A Formal Job Interview (Ein formelles Bewerbungsgespräch)", "level": 4, "tags": ["work", "formal", "interview", "professions"] },
+        { "title": "Debating Pros and Cons (e.g., Stadt- vs. Landleben)", "level": 4, "tags": ["debate", "opinions", "discussion", "abstract"] },
+        { "title": "Talking About Cultural Differences (Über kulturelle Unterschiede sprechen)", "level": 4, "tags": ["culture", "society", "discussion"] },
+        { "title": "Narrating a Story or Event in Detail (Eine Geschichte oder ein Ereignis detailliert erzählen)", "level": 4, "tags": ["storytelling", "past tense", "narrative"] },
+        { "title": "Renting an Apartment (Eine Wohnung mieten)", "level": 4, "tags": ["housing", "money", "formal", "negotiation"] },
+        { "title": "Discussing Current Events (Aktuelle Ereignisse diskutieren)", "level": 4, "tags": ["current events", "news", "society", "discussion"] },
+        { "title": "Giving Advice on a Complex Problem (Ratschläge zu einem komplexen Problem geben)", "level": 4, "tags": ["advice", "problems", "communication", "subjunctive"] },
+
+        // Level 5: Advanced & Specialized Scenarios (C1/C2)
+        { "title": "Arguing a Point of View on a Social Issue (Einen Standpunkt zu einem sozialen Problem vertreten)", "level": 5, "tags": ["debate", "society", "politics", "formal", "advanced"] },
+        { "title": "Participating in a Business Meeting (An einem Geschäftstreffen teilnehmen)", "level": 5, "tags": ["work", "business", "formal", "advanced"] },
+        { "title": "Discussing a piece of literature or art in depth (Ein literarisches oder Kunstwerk tiefgehend analysieren)", "level": 5, "tags": ["art", "literature", "analysis", "abstract", "advanced"] },
+        { "title": "Explaining a Technical or Scientific Concept Simply (Ein technisches oder wissenschaftliches Konzept einfach erklären)", "level": 5, "tags": ["science", "technology", "explanation", "advanced"] },
+        { "title": "Negotiating a Contract or Agreement (Einen Vertrag oder eine Vereinbarung aushandeln)", "level": 5, "tags": ["business", "negotiation", "formal", "advanced"] },
+        { "title": "Telling a Joke or an Anecdote with Cultural Nuances (Einen Witz oder eine Anekdote mit kulturellen Nuancen erzählen)", "level": 5, "tags": ["culture", "humor", "storytelling", "advanced", "nuance"] },
+        { "title": "Hypothetical Scenarios: 'What would you do if...?' (Hypothetische Szenarien: Was würdest du tun, wenn...?)", "level": 5, "tags": ["hypothetical", "conditionals", "subjunctive", "advanced"] }
+    ],
+    "Italian": [
+        // Level 1: Basic Everyday Interactions (A1)
+        { "title": "Greetings & Basic Introductions (Saluti e presentazioni di base)", "level": 1, "tags": ["greetings", "introductions", "basics"] },
+        { "title": "Ordering Coffee & a Snack (Ordinare un caffè e uno spuntino)", "level": 1, "tags": ["food", "cafe", "ordering", "basics"] },
+        { "title": "Asking for Basic Information (Cos'è questo? Dov'è il bagno?)", "level": 1, "tags": ["questions", "information", "basics"] },
+        { "title": "Shopping for Groceries (Simple) (Fare la spesa - semplice)", "level": 1, "tags": ["shopping", "food", "basics"] },
+        { "title": "Talking About Your Family (Parlare della tua famiglia)", "level": 1, "tags": ["family", "people", "introductions"] },
+        { "title": "Making a Simple Purchase (Clothing) (Fare un acquisto semplice - vestiti)", "level": 1, "tags": ["shopping", "clothing", "basics"] },
+        { "title": "Asking for and Giving the Time (Chiedere e dire l'ora)", "level": 1, "tags": ["time", "questions", "basics"] },
+        { "title": "Talking About Hobbies (Parlare di hobby)", "level": 1, "tags": ["hobbies", "leisure", "interests"] },
+
+        // Level 2: More Detailed Scenarios (A2)
+        { "title": "Ordering a Full Meal at a Restaurant (Ordinare un pasto completo al ristorante)", "level": 2, "tags": ["food", "restaurant", "ordering"] },
+        { "title": "Asking for Directions (Chiedere indicazioni stradali)", "level": 2, "tags": ["directions", "travel", "city"] },
+        { "title": "Talking About Your Daily Routine (Parlare della tua routine quotidiana)", "level": 2, "tags": ["daily routine", "lifestyle", "verbs"] },
+        { "title": "Making Plans with a Friend (Organizzare programmi con un amico)", "level": 2, "tags": ["social", "planning", "friends"] },
+        { "title": "Checking into a Hotel (Fare il check-in in hotel)", "level": 2, "tags": ["travel", "hotel", "accommodation"] },
+        { "title": "Talking About the Weather (Parlare del tempo)", "level": 2, "tags": ["weather", "small talk", "nature"] },
+        { "title": "A Simple Doctor's Visit (Una semplice visita dal medico)", "level": 2, "tags": ["health", "doctor", "body"] },
+        { "title": "Taking Public Transportation (Prendere i mezzi pubblici)", "level": 2, "tags": ["travel", "transportation", "city"] },
+
+        // Level 3: Handling Problems & More Complex Interactions (B1)
+        { "title": "Describing a Past Vacation (Descrivere una vacanza passata)", "level": 3, "tags": ["travel", "past tense", "storytelling"] },
+        { "title": "Discussing a Movie or Book (Discutere di un film o un libro)", "level": 3, "tags": ["entertainment", "opinions", "media"] },
+        { "title": "Returning an Item to a Store (Restituire un articolo in un negozio)", "level": 3, "tags": ["shopping", "problems", "communication"] },
+        { "title": "Making a Complaint (Hotel/Restaurant) (Fare un reclamo - Hotel/Ristorante)", "level": 3, "tags": ["problems", "communication", "travel", "food"] },
+        { "title": "Talking About Your Job or Studies (Parlare del tuo lavoro o dei tuoi studi)", "level": 3, "tags": ["work", "education", "professions"] },
+        { "title": "Giving and Receiving Opinions (Dare e ricevere opinioni)", "level": 3, "tags": ["opinions", "discussion", "communication"] },
+        { "title": "Planning a Weekend Trip (Pianificare un viaggio nel fine settimana)", "level": 3, "tags": ["travel", "planning", "leisure"] },
+        { "title": "Explaining a Simple Recipe (Spiegare una ricetta semplice)", "level": 3, "tags": ["food", "cooking", "instructions"] },
+
+        // Level 4: Abstract Topics & Formal Situations (B2)
+        { "title": "Discussing Future Goals and Aspirations (Discutere obiettivi e aspirazioni future)", "level": 4, "tags": ["future", "goals", "discussion", "abstract"] },
+        { "title": "A Formal Job Interview (Un colloquio di lavoro formale)", "level": 4, "tags": ["work", "formal", "interview", "professions"] },
+        { "title": "Debating Pros and Cons (e.g., Vita in città vs. campagna)", "level": 4, "tags": ["debate", "opinions", "discussion", "abstract"] },
+        { "title": "Talking About Cultural Differences (Parlare di differenze culturali)", "level": 4, "tags": ["culture", "society", "discussion"] },
+        { "title": "Narrating a Story or Event in Detail (Narrare una storia o un evento in dettaglio)", "level": 4, "tags": ["storytelling", "past tense", "narrative"] },
+        { "title": "Renting an Apartment (Affittare un appartamento)", "level": 4, "tags": ["housing", "money", "formal", "negotiation"] },
+        { "title": "Discussing Current Events (Discutere di attualità)", "level": 4, "tags": ["current events", "news", "society", "discussion"] },
+        { "title": "Giving Advice on a Complex Problem (Dare consigli su un problema complesso)", "level": 4, "tags": ["advice", "problems", "communication", "subjunctive"] },
+
+        // Level 5: Advanced & Specialized Scenarios (C1/C2)
+        { "title": "Arguing a Point of View on a Social Issue (Argomentare un punto di vista su una questione sociale)", "level": 5, "tags": ["debate", "society", "politics", "formal", "advanced"] },
+        { "title": "Participating in a Business Meeting (Partecipare a un incontro d'affari)", "level": 5, "tags": ["work", "business", "formal", "advanced"] },
+        { "title": "Discussing a piece of literature or art in depth (Analizzare un'opera letteraria o artistica in profondità)", "level": 5, "tags": ["art", "literature", "analysis", "abstract", "advanced"] },
+        { "title": "Explaining a Technical or Scientific Concept Simply (Spiegare un concetto tecnico o scientifico in modo semplice)", "level": 5, "tags": ["science", "technology", "explanation", "advanced"] },
+        { "title": "Negotiating a Contract or Agreement (Negoziare un contratto o un accordo)", "level": 5, "tags": ["business", "negotiation", "formal", "advanced"] },
+        { "title": "Telling a Joke or an Anecdote with Cultural Nuances (Raccontare una barzelletta o un aneddoto con sfumature culturali)", "level": 5, "tags": ["culture", "humor", "storytelling", "advanced", "nuance"] },
+        { "title": "Hypothetical Scenarios: 'What would you do if...?' (Scenari Ipotetici: 'Cosa faresti se...?)", "level": 5, "tags": ["hypothetical", "conditionals", "subjunctive", "advanced"] }
+    ],
+    "Portuguese": [
+        // Level 1: Basic Everyday Interactions (A1)
+        { "title": "Greetings & Basic Introductions (Cumprimentos e Apresentações Básicas)", "level": 1, "tags": ["greetings", "introductions", "basics"] },
+        { "title": "Ordering Coffee & a Snack (Pedir Café e um Lanche)", "level": 1, "tags": ["food", "cafe", "ordering", "basics"] },
+        { "title": "Asking for Basic Information (O que é isto? Onde é a casa de banho?)", "level": 1, "tags": ["questions", "information", "basics"] },
+        { "title": "Shopping for Groceries (Simple) (Fazer Compras - Simples)", "level": 1, "tags": ["shopping", "food", "basics"] },
+        { "title": "Talking About Your Family (Falar sobre sua Família)", "level": 1, "tags": ["family", "people", "introductions"] },
+        { "title": "Making a Simple Purchase (Clothing) (Fazer uma Compra Simples - Roupas)", "level": 1, "tags": ["shopping", "clothing", "basics"] },
+        { "title": "Asking for and Giving the Time (Perguntar e Dizer a Hora)", "level": 1, "tags": ["time", "questions", "basics"] },
+        { "title": "Talking About Hobbies (Falar sobre Hobbies)", "level": 1, "tags": ["hobbies", "leisure", "interests"] },
+
+        // Level 2: More Detailed Scenarios (A2)
+        { "title": "Ordering a Full Meal at a Restaurant (Pedir uma Refeição Completa num Restaurante)", "level": 2, "tags": ["food", "restaurant", "ordering"] },
+        { "title": "Asking for Directions (Pedir Direções)", "level": 2, "tags": ["directions", "travel", "city"] },
+        { "title": "Talking About Your Daily Routine (Falar sobre sua Rotina Diária)", "level": 2, "tags": ["daily routine", "lifestyle", "verbs"] },
+        { "title": "Making Plans with a Friend (Fazer Planos com um Amigo)", "level": 2, "tags": ["social", "planning", "friends"] },
+        { "title": "Checking into a Hotel (Fazer Check-in num Hotel)", "level": 2, "tags": ["travel", "hotel", "accommodation"] },
+        { "title": "Talking About the Weather (Falar sobre o Tempo)", "level": 2, "tags": ["weather", "small talk", "nature"] },
+        { "title": "A Simple Doctor's Visit (Uma Consulta Simples com o Médico)", "level": 2, "tags": ["health", "doctor", "body"] },
+        { "title": "Taking Public Transportation (Pegar Transporte Público)", "level": 2, "tags": ["travel", "transportation", "city"] },
+
+        // Level 3: Handling Problems & More Complex Interactions (B1)
+        { "title": "Describing a Past Vacation (Descrever Férias Passadas)", "level": 3, "tags": ["travel", "past tense", "storytelling"] },
+        { "title": "Discussing a Movie or Book (Discutir um Filme ou Livro)", "level": 3, "tags": ["entertainment", "opinions", "media"] },
+        { "title": "Returning an Item to a Store (Devolver um Item na Loja)", "level": 3, "tags": ["shopping", "problems", "communication"] },
+        { "title": "Making a Complaint (Hotel/Restaurant) (Fazer uma Reclamação - Hotel/Restaurante)", "level": 3, "tags": ["problems", "communication", "travel", "food"] },
+        { "title": "Talking About Your Job or Studies (Falar sobre seu Trabalho ou Estudos)", "level": 3, "tags": ["work", "education", "professions"] },
+        { "title": "Giving and Receiving Opinions (Dar e Receber Opiniões)", "level": 3, "tags": ["opinions", "discussion", "communication"] },
+        { "title": "Planning a Weekend Trip (Planejar uma Viagem de Fim de Semana)", "level": 3, "tags": ["travel", "planning", "leisure"] },
+        { "title": "Explaining a Simple Recipe (Explicar uma Receita Simples)", "level": 3, "tags": ["food", "cooking", "instructions"] },
+
+        // Level 4: Abstract Topics & Formal Situations (B2)
+        { "title": "Discussing Future Goals and Aspirations (Discutir Metas e Aspirações Futuras)", "level": 4, "tags": ["future", "goals", "discussion", "abstract"] },
+        { "title": "A Formal Job Interview (Uma Entrevista de Emprego Formal)", "level": 4, "tags": ["work", "formal", "interview", "professions"] },
+        { "title": "Debating Pros and Cons (Ex: Vida na Cidade vs. Campo)", "level": 4, "tags": ["debate", "opinions", "discussion", "abstract"] },
+        { "title": "Talking About Cultural Differences (Falar sobre Diferenças Culturais)", "level": 4, "tags": ["culture", "society", "discussion"] },
+        { "title": "Narrating a Story or Event in Detail (Narrar uma História ou Evento em Detalhe)", "level": 4, "tags": ["storytelling", "past tense", "narrative"] },
+        { "title": "Renting an Apartment (Alugar um Apartamento)", "level": 4, "tags": ["housing", "money", "formal", "negotiation"] },
+        { "title": "Discussing Current Events (Discutir Eventos Atuais)", "level": 4, "tags": ["current events", "news", "society", "discussion"] },
+        { "title": "Giving Advice on a Complex Problem (Dar Conselhos sobre um Problema Complexo)", "level": 4, "tags": ["advice", "problems", "communication", "subjunctive"] },
+
+        // Level 5: Advanced & Specialized Scenarios (C1/C2)
+        { "title": "Arguing a Point of View on a Social Issue (Argumentar um Ponto de Vista sobre uma Questão Social)", "level": 5, "tags": ["debate", "society", "politics", "formal", "advanced"] },
+        { "title": "Participating in a Business Meeting (Participar de uma Reunião de Negócios)", "level": 5, "tags": ["work", "business", "formal", "advanced"] },
+        { "title": "Discussing a piece of literature or art in depth (Analisar uma obra literária ou de arte em profundidade)", "level": 5, "tags": ["art", "literature", "analysis", "abstract", "advanced"] },
+        { "title": "Explaining a Technical or Scientific Concept Simply (Explicar um Conceito Técnico ou Científico de Forma Simples)", "level": 5, "tags": ["science", "technology", "explanation", "advanced"] },
+        { "title": "Negotiating a Contract or Agreement (Negociar um Contrato ou Acordo)", "level": 5, "tags": ["business", "negotiation", "formal", "advanced"] },
+        { "title": "Telling a Joke or an Anecdote with Cultural Nuances (Contar uma Piada ou Anedota com Nuances Culturais)", "level": 5, "tags": ["culture", "humor", "storytelling", "advanced", "nuance"] },
+        { "title": "Hypothetical Scenarios: 'What would you do if...?' (Cenários Hipotéticos: 'O que você faria se...?)", "level": 5, "tags": ["hypothetical", "conditionals", "subjunctive", "advanced"] }
+    ],
+    "Japanese": [
+        // Level 1: Basic Everyday Interactions (N5)
+        { "title": "Greetings and Self-Introduction (挨拶と自己紹介)", "level": 1, "tags": ["greetings", "introductions", "basics"] },
+        { "title": "Ordering at a Cafe (カフェでの注文)", "level": 1, "tags": ["food", "cafe", "ordering", "basics"] },
+        { "title": "Asking for Basic Information (これ何ですか？トイレはどこですか？)", "level": 1, "tags": ["questions", "information", "basics"] },
+        { "title": "Simple Grocery Shopping (簡単な買い物)", "level": 1, "tags": ["shopping", "food", "basics"] },
+        { "title": "Talking About Your Family (家族について話す)", "level": 1, "tags": ["family", "people", "introductions"] },
+        { "title": "Making a Simple Purchase (Clothing) (簡単な買い物をする - 服)", "level": 1, "tags": ["shopping", "clothing", "basics"] },
+        { "title": "Asking for and Giving the Time (時間について尋ねる)", "level": 1, "tags": ["time", "questions", "basics"] },
+        { "title": "Talking About Hobbies (趣味について話す)", "level": 1, "tags": ["hobbies", "leisure", "interests"] },
+
+        // Level 2: More Detailed Scenarios (N4)
+        { "title": "Ordering a Full Meal at a Restaurant (レストランでフルコースを注文する)", "level": 2, "tags": ["food", "restaurant", "ordering"] },
+        { "title": "Asking for Directions (道順を尋ねる)", "level": 2, "tags": ["directions", "travel", "city"] },
+        { "title": "Talking About Your Daily Routine (毎日のルーティンについて話す)", "level": 2, "tags": ["daily routine", "lifestyle", "verbs"] },
+        { "title": "Making Plans with a Friend (友達と予定を立てる)", "level": 2, "tags": ["social", "planning", "friends"] },
+        { "title": "Checking into a Hotel (ホテルでチェックインする)", "level": 2, "tags": ["travel", "hotel", "accommodation"] },
+        { "title": "Talking About the Weather (天気について話す)", "level": 2, "tags": ["weather", "small talk", "nature"] },
+        { "title": "A Simple Doctor's Visit (簡単な医者の診察)", "level": 2, "tags": ["health", "doctor", "body"] },
+        { "title": "Taking Public Transportation (公共交通機関を利用する)", "level": 2, "tags": ["travel", "transportation", "city"] },
+
+        // Level 3: Handling Problems & More Complex Interactions (N3)
+        { "title": "Describing a Past Vacation (過去の旅行を説明する)", "level": 3, "tags": ["travel", "past tense", "storytelling"] },
+        { "title": "Discussing a Movie or Book (映画や本について議論する)", "level": 3, "tags": ["entertainment", "opinions", "media"] },
+        { "title": "Returning an Item to a Store (店に商品を返品する)", "level": 3, "tags": ["shopping", "problems", "communication"] },
+        { "title": "Making a Complaint (Hotel/Restaurant) (クレームを出す - ホテル/レストラン)", "level": 3, "tags": ["problems", "communication", "travel", "food"] },
+        { "title": "Talking About Your Job or Studies (仕事や勉強について話す)", "level": 3, "tags": ["work", "education", "professions"] },
+        { "title": "Giving and Receiving Opinions (意見を交換する)", "level": 3, "tags": ["opinions", "discussion", "communication"] },
+        { "title": "Planning a Weekend Trip (週末旅行を計画する)", "level": 3, "tags": ["travel", "planning", "leisure"] },
+        { "title": "Explaining a Simple Recipe (簡単なレシピを説明する)", "level": 3, "tags": ["food", "cooking", "instructions"] },
+
+        // Level 4: Abstract Topics & Formal Situations (N2)
+        { "title": "Discussing Future Goals and Aspirations (将来の目標や願望について話す)", "level": 4, "tags": ["future", "goals", "discussion", "abstract"] },
+        { "title": "A Formal Job Interview (正式な就職面接)", "level": 4, "tags": ["work", "formal", "interview", "professions"] },
+        { "title": "Debating Pros and Cons (例: 都市生活か田舎生活か)", "level": 4, "tags": ["debate", "opinions", "discussion", "abstract"] },
+        { "title": "Talking About Cultural Differences (文化的な違いについて話す)", "level": 4, "tags": ["culture", "society", "discussion"] },
+        { "title": "Narrating a Story or Event in Detail (出来事や物語を詳細に語る)", "level": 4, "tags": ["storytelling", "past tense", "narrative"] },
+        { "title": "Renting an Apartment (アパートを借りる)", "level": 4, "tags": ["housing", "money", "formal", "negotiation"] },
+        { "title": "Discussing Current Events (時事問題を議論する)", "level": 4, "tags": ["current events", "news", "society", "discussion"] },
+        { "title": "Giving Advice on a Complex Problem (複雑な問題についてアドバイスを与える)", "level": 4, "tags": ["advice", "problems", "communication", "conditionals"] },
+
+        // Level 5: Advanced & Specialized Scenarios (N1)
+        { "title": "Arguing a Point of View on a Social Issue (社会問題について自分の見解を論じる)", "level": 5, "tags": ["debate", "society", "politics", "formal", "advanced"] },
+        { "title": "Participating in a Business Meeting (ビジネス会議に参加する)", "level": 5, "tags": ["work", "business", "formal", "advanced"] },
+        { "title": "Discussing a piece of literature or art in depth (文学作品や芸術作品を深く議論する)", "level": 5, "tags": ["art", "literature", "analysis", "abstract", "advanced"] },
+        { "title": "Explaining a Technical or Scientific Concept Simply (技術的・科学的な概念を分かりやすく説明する)", "level": 5, "tags": ["science", "technology", "explanation", "advanced"] },
+        { "title": "Negotiating a Contract or Agreement (契約や合意の交渉をする)", "level": 5, "tags": ["business", "negotiation", "formal", "advanced"] },
+        { "title": "Telling a Joke or an Anecdote with Cultural Nuances (文化的なニュアンスのある冗談や逸話を話す)", "level": 5, "tags": ["culture", "humor", "storytelling", "advanced", "nuance"] },
+        { "title": "Hypothetical Scenarios: 'What would you do if...?' (仮定の状況: 「もし〜だったらどうしますか」)", "level": 5, "tags": ["hypothetical", "conditionals", "advanced"] }
+    ],
+    "Korean": [
+        // Level 1: Basic Everyday Interactions (TOPIK 1)
+        { "title": "Greetings and Self-Introduction (인사와 자기소개)", "level": 1, "tags": ["greetings", "introductions", "basics"] },
+        { "title": "Ordering Coffee & a Snack (커피와 간식 주문하기)", "level": 1, "tags": ["food", "cafe", "ordering", "basics"] },
+        { "title": "Asking for Basic Information (이것은 무엇입니까? 화장실이 어디예요?)", "level": 1, "tags": ["questions", "information", "basics"] },
+        { "title": "Simple Grocery Shopping (간단한 식료품 쇼핑)", "level": 1, "tags": ["shopping", "food", "basics"] },
+        { "title": "Talking About Your Family (가족에 대해 이야기하기)", "level": 1, "tags": ["family", "people", "introductions"] },
+        { "title": "Making a Simple Purchase (Clothing) (간단한 물건 구매하기 - 옷)", "level": 1, "tags": ["shopping", "clothing", "basics"] },
+        { "title": "Asking for and Giving the Time (시간 묻고 답하기)", "level": 1, "tags": ["time", "questions", "basics"] },
+        { "title": "Talking About Hobbies (취미에 대해 이야기하기)", "level": 1, "tags": ["hobbies", "leisure", "interests"] },
+
+        // Level 2: More Detailed Scenarios (TOPIK 2)
+        { "title": "Ordering a Full Meal at a Restaurant (식당에서 식사 주문하기)", "level": 2, "tags": ["food", "restaurant", "ordering"] },
+        { "title": "Asking for Directions (길 묻기)", "level": 2, "tags": ["directions", "travel", "city"] },
+        { "title": "Talking About Your Daily Routine (매일 하는 일 이야기하기)", "level": 2, "tags": ["daily routine", "lifestyle", "verbs"] },
+        { "title": "Making Plans with a Friend (친구와 약속 잡기)", "level": 2, "tags": ["social", "planning", "friends"] },
+        { "title": "Checking into a Hotel (호텔에 체크인하기)", "level": 2, "tags": ["travel", "hotel", "accommodation"] },
+        { "title": "Talking About the Weather (날씨 이야기하기)", "level": 2, "tags": ["weather", "small talk", "nature"] },
+        { "title": "A Simple Doctor's Visit (간단한 병원 방문)", "level": 2, "tags": ["health", "doctor", "body"] },
+        { "title": "Taking Public Transportation (대중교통 이용하기)", "level": 2, "tags": ["travel", "transportation", "city"] },
+
+        // Level 3: Handling Problems & More Complex Interactions (TOPIK 3)
+        { "title": "Describing a Past Vacation (지난 휴가 설명하기)", "level": 3, "tags": ["travel", "past tense", "storytelling"] },
+        { "title": "Discussing a Movie or Book (영화나 책에 대해 토론하기)", "level": 3, "tags": ["entertainment", "opinions", "media"] },
+        { "title": "Returning an Item to a Store (가게에 물건 반품하기)", "level": 3, "tags": ["shopping", "problems", "communication"] },
+        { "title": "Making a Complaint (Hotel/Restaurant) (불만 제기하기 - 호텔/식당)", "level": 3, "tags": ["problems", "communication", "travel", "food"] },
+        { "title": "Talking About Your Job or Studies (직장이나 학업에 대해 이야기하기)", "level": 3, "tags": ["work", "education", "professions"] },
+        { "title": "Giving and Receiving Opinions (의견 주고받기)", "level": 3, "tags": ["opinions", "discussion", "communication"] },
+        { "title": "Planning a Weekend Trip (주말 여행 계획하기)", "level": 3, "tags": ["travel", "planning", "leisure"] },
+        { "title": "Explaining a Simple Recipe (간단한 요리 레시피 설명하기)", "level": 3, "tags": ["food", "cooking", "instructions"] },
+
+        // Level 4: Abstract Topics & Formal Situations (TOPIK 4)
+        { "title": "Discussing Future Goals and Aspirations (미래 목표와 포부 논의하기)", "level": 4, "tags": ["future", "goals", "discussion", "abstract"] },
+        { "title": "A Formal Job Interview (공식적인 취업 면접)", "level": 4, "tags": ["work", "formal", "interview", "professions"] },
+        { "title": "Debating Pros and Cons (예: 도시 생활 대 시골 생활)", "level": 4, "tags": ["debate", "opinions", "discussion", "abstract"] },
+        { "title": "Talking About Cultural Differences (문화적 차이에 대해 이야기하기)", "level": 4, "tags": ["culture", "society", "discussion"] },
+        { "title": "Narrating a Story or Event in Detail (사건이나 이야기를 자세히 서술하기)", "level": 4, "tags": ["storytelling", "past tense", "narrative"] },
+        { "title": "Renting an Apartment (아파트 임대 계약하기)", "level": 4, "tags": ["housing", "money", "formal", "negotiation"] },
+        { "title": "Discussing Current Events (시사 문제 토론하기)", "level": 4, "tags": ["current events", "news", "society", "discussion"] },
+        { "title": "Giving Advice on a Complex Problem (복잡한 문제에 대해 조언하기)", "level": 4, "tags": ["advice", "problems", "communication", "conditionals"] },
+
+        // Level 5: Advanced & Specialized Scenarios (TOPIK 5/6)
+        { "title": "Arguing a Point of View on a Social Issue (사회 문제에 대한 관점 주장하기)", "level": 5, "tags": ["debate", "society", "politics", "formal", "advanced"] },
+        { "title": "Participating in a Business Meeting (비즈니스 회의에 참여하기)", "level": 5, "tags": ["work", "business", "formal", "advanced"] },
+        { "title": "Discussing a piece of literature or art in depth (문학 또는 예술 작품 심층 토론하기)", "level": 5, "tags": ["art", "literature", "analysis", "abstract", "advanced"] },
+        { "title": "Explaining a Technical or Scientific Concept Simply (기술적 또는 과학적 개념을 쉽게 설명하기)", "level": 5, "tags": ["science", "technology", "explanation", "advanced"] },
+        { "title": "Negotiating a Contract or Agreement (계약이나 합의를 협상하기)", "level": 5, "tags": ["business", "negotiation", "formal", "advanced"] },
+        { "title": "Telling a Joke or an Anecdote with Cultural Nuances (문화적 뉘앙스가 있는 농담이나 일화 말하기)", "level": 5, "tags": ["culture", "humor", "storytelling", "advanced", "nuance"] },
+        { "title": "Hypothetical Scenarios: 'What would you do if...?' (가상 상황: '만약 ~라면 어떻게 하시겠어요?')", "level": 5, "tags": ["hypothetical", "conditionals", "advanced"] }
+    ],
+    "Chinese": [
+        // Level 1: Basic Everyday Interactions (HSK 1)
+        { "title": "Greetings and Self-Introduction (问候和自我介绍)", "level": 1, "tags": ["greetings", "introductions", "basics"] },
+        { "title": "Ordering Tea or Coffee (点咖啡或茶)", "level": 1, "tags": ["food", "cafe", "ordering", "basics"] },
+        { "title": "Asking for Basic Information (这是什么? 厕所在哪里?)", "level": 1, "tags": ["questions", "information", "basics"] },
+        { "title": "Simple Grocery Shopping (简单的超市购物)", "level": 1, "tags": ["shopping", "food", "basics"] },
+        { "title": "Talking About Your Family (谈论你的家人)", "level": 1, "tags": ["family", "people", "introductions"] },
+        { "title": "Making a Simple Purchase (Clothing) (进行简单购买 - 衣服)", "level": 1, "tags": ["shopping", "clothing", "basics"] },
+        { "title": "Asking for and Giving the Time (询问和告知时间)", "level": 1, "tags": ["time", "questions", "basics"] },
+        { "title": "Talking About Hobbies (谈论爱好)", "level": 1, "tags": ["hobbies", "leisure", "interests"] },
+
+        // Level 2: More Detailed Scenarios (HSK 2)
+        { "title": "Ordering a Full Meal at a Restaurant (在餐厅点完整的餐)", "level": 2, "tags": ["food", "restaurant", "ordering"] },
+        { "title": "Asking for Directions (问路)", "level": 2, "tags": ["directions", "travel", "city"] },
+        { "title": "Talking About Your Daily Routine (谈论你的日常生活)", "level": 2, "tags": ["daily routine", "lifestyle", "verbs"] },
+        { "title": "Making Plans with a Friend (和朋友制定计划)", "level": 2, "tags": ["social", "planning", "friends"] },
+        { "title": "Checking into a Hotel (办理酒店入住)", "level": 2, "tags": ["travel", "hotel", "accommodation"] },
+        { "title": "Talking About the Weather (谈论天气)", "level": 2, "tags": ["weather", "small talk", "nature"] },
+        { "title": "A Simple Doctor's Visit (一次简单的就医)", "level": 2, "tags": ["health", "doctor", "body"] },
+        { "title": "Taking Public Transportation (乘坐公共交通)", "level": 2, "tags": ["travel", "transportation", "city"] },
+
+        // Level 3: Handling Problems & More Complex Interactions (HSK 3)
+        { "title": "Describing a Past Vacation (描述一次过去的假期)", "level": 3, "tags": ["travel", "past tense", "storytelling"] },
+        { "title": "Discussing a Movie or Book (讨论一部电影或一本书)", "level": 3, "tags": ["entertainment", "opinions", "media"] },
+        { "title": "Returning an Item to a Store (在商店退货)", "level": 3, "tags": ["shopping", "problems", "communication"] },
+        { "title": "Making a Complaint (Hotel/Restaurant) (投诉 - 酒店/餐厅)", "level": 3, "tags": ["problems", "communication", "travel", "food"] },
+        { "title": "Talking About Your Job or Studies (谈论你的工作或学习)", "level": 3, "tags": ["work", "education", "professions"] },
+        { "title": "Giving and Receiving Opinions (给予和接受意见)", "level": 3, "tags": ["opinions", "discussion", "communication"] },
+        { "title": "Planning a Weekend Trip (计划一次周末旅行)", "level": 3, "tags": ["travel", "planning", "leisure"] },
+        { "title": "Explaining a Simple Recipe (解释一个简单的食谱)", "level": 3, "tags": ["food", "cooking", "instructions"] },
+
+        // Level 4: Abstract Topics & Formal Situations (HSK 4)
+        { "title": "Discussing Future Goals and Aspirations (讨论未来目标和抱负)", "level": 4, "tags": ["future", "goals", "discussion", "abstract"] },
+        { "title": "A Formal Job Interview (一次正式的求职面试)", "level": 4, "tags": ["work", "formal", "interview", "professions"] },
+        { "title": "Debating Pros and Cons (例如：城市生活与乡村生活)", "level": 4, "tags": ["debate", "opinions", "discussion", "abstract"] },
+        { "title": "Talking About Cultural Differences (谈论文化差异)", "level": 4, "tags": ["culture", "society", "discussion"] },
+        { "title": "Narrating a Story or Event in Detail (详细叙述一个故事或事件)", "level": 4, "tags": ["storytelling", "past tense", "narrative"] },
+        { "title": "Renting an Apartment (租一套公寓)", "level": 4, "tags": ["housing", "money", "formal", "negotiation"] },
+        { "title": "Discussing Current Events (讨论时事)", "level": 4, "tags": ["current events", "news", "society", "discussion"] },
+        { "title": "Giving Advice on a Complex Problem (就复杂问题提供建议)", "level": 4, "tags": ["advice", "problems", "communication", "conditionals"] },
+
+        // Level 5: Advanced & Specialized Scenarios (HSK 5/6)
+        { "title": "Arguing a Point of View on a Social Issue (就社会问题阐述观点)", "level": 5, "tags": ["debate", "society", "politics", "formal", "advanced"] },
+        { "title": "Participating in a Business Meeting (参加商务会议)", "level": 5, "tags": ["work", "business", "formal", "advanced"] },
+        { "title": "Discussing a piece of literature or art in depth (深入讨论文学或艺术作品)", "level": 5, "tags": ["art", "literature", "analysis", "abstract", "advanced"] },
+        { "title": "Explaining a Technical or Scientific Concept Simply (简单解释技术或科学概念)", "level": 5, "tags": ["science", "technology", "explanation", "advanced"] },
+        { "title": "Negotiating a Contract or Agreement (谈判合同或协议)", "level": 5, "tags": ["business", "negotiation", "formal", "advanced"] },
+        { "title": "Telling a Joke or an Anecdote with Cultural Nuances (讲带有文化色彩的笑话或轶事)", "level": 5, "tags": ["culture", "humor", "storytelling", "advanced", "nuance"] },
+        { "title": "Hypothetical Scenarios: 'What would you do if...?' (假设情景: '如果你是..., 你会怎么做?')", "level": 5, "tags": ["hypothetical", "conditionals", "advanced"] }
+    ],
+    "Russian": [
+        // Level 1: Basic Everyday Interactions (A1)
+        { "title": "Greetings & Basic Introductions (Приветствия и базовое знакомство)", "level": 1, "tags": ["greetings", "introductions", "basics"] },
+        { "title": "Ordering Coffee & a Snack (Заказать кофе и перекус)", "level": 1, "tags": ["food", "cafe", "ordering", "basics"] },
+        { "title": "Asking for Basic Information (Что это? Где находится туалет?)", "level": 1, "tags": ["questions", "information", "basics"] },
+        { "title": "Simple Grocery Shopping (Простой поход за продуктами)", "level": 1, "tags": ["shopping", "food", "basics"] },
+        { "title": "Talking About Your Family (Разговор о семье)", "level": 1, "tags": ["family", "people", "introductions"] },
+        { "title": "Making a Simple Purchase (Clothing) (Совершить простую покупку - одежда)", "level": 1, "tags": ["shopping", "clothing", "basics"] },
+        { "title": "Asking for and Giving the Time (Спросить и сказать время)", "level": 1, "tags": ["time", "questions", "basics"] },
+        { "title": "Talking About Hobbies (Разговор о хобби)", "level": 1, "tags": ["hobbies", "leisure", "interests"] },
+
+        // Level 2: More Detailed Scenarios (A2)
+        { "title": "Ordering a Full Meal at a Restaurant (Заказать полноценный обед в ресторане)", "level": 2, "tags": ["food", "restaurant", "ordering"] },
+        { "title": "Asking for Directions (Спросить дорогу)", "level": 2, "tags": ["directions", "travel", "city"] },
+        { "title": "Talking About Your Daily Routine (Обсуждение распорядка дня)", "level": 2, "tags": ["daily routine", "lifestyle", "verbs"] },
+        { "title": "Making Plans with a Friend (Составить планы с другом)", "level": 2, "tags": ["social", "planning", "friends"] },
+        { "title": "Checking into a Hotel (Заселение в отель)", "level": 2, "tags": ["travel", "hotel", "accommodation"] },
+        { "title": "Talking About the Weather (Разговор о погоде)", "level": 2, "tags": ["weather", "small talk", "nature"] },
+        { "title": "A Simple Doctor's Visit (Простой визит к врачу)", "level": 2, "tags": ["health", "doctor", "body"] },
+        { "title": "Taking Public Transportation (Поездка на общественном транспорте)", "level": 2, "tags": ["travel", "transportation", "city"] },
+
+        // Level 3: Handling Problems & More Complex Interactions (B1)
+        { "title": "Describing a Past Vacation (Описание прошлого отпуска)", "level": 3, "tags": ["travel", "past tense", "storytelling"] },
+        { "title": "Discussing a Movie or Book (Обсуждение фильма или книги)", "level": 3, "tags": ["entertainment", "opinions", "media"] },
+        { "title": "Returning an Item to a Store (Возврат товара в магазин)", "level": 3, "tags": ["shopping", "problems", "communication"] },
+        { "title": "Making a Complaint (Hotel/Restaurant) (Подать жалобу - Отель/Ресторан)", "level": 3, "tags": ["problems", "communication", "travel", "food"] },
+        { "title": "Talking About Your Job or Studies (Разговор о работе или учебе)", "level": 3, "tags": ["work", "education", "professions"] },
+        { "title": "Giving and Receiving Opinions (Выражение и получение мнений)", "level": 3, "tags": ["opinions", "discussion", "communication"] },
+        { "title": "Planning a Weekend Trip (Планирование поездки на выходные)", "level": 3, "tags": ["travel", "planning", "leisure"] },
+        { "title": "Explaining a Simple Recipe (Объяснение простого рецепта)", "level": 3, "tags": ["food", "cooking", "instructions"] },
+
+        // Level 4: Abstract Topics & Formal Situations (B2)
+        { "title": "Discussing Future Goals and Aspirations (Обсуждение будущих целей и стремлений)", "level": 4, "tags": ["future", "goals", "discussion", "abstract"] },
+        { "title": "A Formal Job Interview (Формальное собеседование на работу)", "level": 4, "tags": ["work", "formal", "interview", "professions"] },
+        { "title": "Debating Pros and Cons (Например: Плюсы и минусы жизни в городе)", "level": 4, "tags": ["debate", "opinions", "discussion", "abstract"] },
+        { "title": "Talking About Cultural Differences (Разговор о культурных различиях)", "level": 4, "tags": ["culture", "society", "discussion"] },
+        { "title": "Narrating a Story or Event in Detail (Подробный рассказ истории или события)", "level": 4, "tags": ["storytelling", "past tense", "narrative"] },
+        { "title": "Renting an Apartment (Аренда квартиры)", "level": 4, "tags": ["housing", "money", "formal", "negotiation"] },
+        { "title": "Discussing Current Events (Обсуждение текущих событий)", "level": 4, "tags": ["current events", "news", "society", "discussion"] },
+        { "title": "Giving Advice on a Complex Problem (Давать советы по сложной проблеме)", "level": 4, "tags": ["advice", "problems", "communication", "conditionals"] },
+
+        // Level 5: Advanced & Specialized Scenarios (C1/C2)
+        { "title": "Arguing a Point of View on a Social Issue (Аргументация точки зрения по социальному вопросу)", "level": 5, "tags": ["debate", "society", "politics", "formal", "advanced"] },
+        { "title": "Participating in a Business Meeting (Участие в деловой встрече)", "level": 5, "tags": ["work", "business", "formal", "advanced"] },
+        { "title": "Discussing a piece of literature or art in depth (Глубокий анализ литературного или художественного произведения)", "level": 5, "tags": ["art", "literature", "analysis", "abstract", "advanced"] },
+        { "title": "Explaining a Technical or Scientific Concept Simply (Простое объяснение технической или научной концепции)", "level": 5, "tags": ["science", "technology", "explanation", "advanced"] },
+        { "title": "Negotiating a Contract or Agreement (Ведение переговоров по контракту или соглашению)", "level": 5, "tags": ["business", "negotiation", "formal", "advanced"] },
+        { "title": "Telling a Joke or an Anecdote with Cultural Nuances (Рассказ анекдота или истории с культурными нюансами)", "level": 5, "tags": ["culture", "humor", "storytelling", "advanced", "nuance"] },
+        { "title": "Hypothetical Scenarios: 'What would you do if...?' (Гипотетические сценарии: 'Что бы вы сделали, если...?)", "level": 5, "tags": ["hypothetical", "conditionals", "advanced"] }
+    ],
+    "Arabic": [
+        // Level 1: Basic Everyday Interactions (A1)
+        { "title": "Greetings & Basic Introductions (تحيات وتعارف أساسي)", "level": 1, "tags": ["greetings", "introductions", "basics"] },
+        { "title": "Ordering Coffee & a Snack (طلب قهوة ووجبة خفيفة)", "level": 1, "tags": ["food", "cafe", "ordering", "basics"] },
+        { "title": "Asking for Basic Information (ما هذا؟ أين الحمام؟)", "level": 1, "tags": ["questions", "information", "basics"] },
+        { "title": "Simple Grocery Shopping (التسوق البسيط للبقالة)", "level": 1, "tags": ["shopping", "food", "basics"] },
+        { "title": "Talking About Your Family (الحديث عن عائلتك)", "level": 1, "tags": ["family", "people", "introductions"] },
+        { "title": "Making a Simple Purchase (Clothing) (إجراء عملية شراء بسيطة - ملابس)", "level": 1, "tags": ["shopping", "clothing", "basics"] },
+        { "title": "Asking for and Giving the Time (السؤال عن الوقت وإخباره)", "level": 1, "tags": ["time", "questions", "basics"] },
+        { "title": "Talking About Hobbies (الحديث عن الهوايات)", "level": 1, "tags": ["hobbies", "leisure", "interests"] },
+
+        // Level 2: More Detailed Scenarios (A2)
+        { "title": "Ordering a Full Meal at a Restaurant (طلب وجبة كاملة في مطعم)", "level": 2, "tags": ["food", "restaurant", "ordering"] },
+        { "title": "Asking for Directions (طلب الاتجاهات)", "level": 2, "tags": ["directions", "travel", "city"] },
+        { "title": "Talking About Your Daily Routine (الحديث عن روتينك اليومي)", "level": 2, "tags": ["daily routine", "lifestyle", "verbs"] },
+        { "title": "Making Plans with a Friend (وضع خطط مع صديق)", "level": 2, "tags": ["social", "planning", "friends"] },
+        { "title": "Checking into a Hotel (تسجيل الدخول في فندق)", "level": 2, "tags": ["travel", "hotel", "accommodation"] },
+        { "title": "Talking About the Weather (الحديث عن الطقس)", "level": 2, "tags": ["weather", "small talk", "nature"] },
+        { "title": "A Simple Doctor's Visit (زيارة طبيب بسيطة)", "level": 2, "tags": ["health", "doctor", "body"] },
+        { "title": "Taking Public Transportation (استخدام وسائل النقل العام)", "level": 2, "tags": ["travel", "transportation", "city"] },
+
+        // Level 3: Handling Problems & More Complex Interactions (B1)
+        { "title": "Describing a Past Vacation (وصف إجازة سابقة)", "level": 3, "tags": ["travel", "past tense", "storytelling"] },
+        { "title": "Discussing a Movie or Book (مناقشة فيلم أو كتاب)", "level": 3, "tags": ["entertainment", "opinions", "media"] },
+        { "title": "Returning an Item to a Store (إرجاع سلعة إلى المتجر)", "level": 3, "tags": ["shopping", "problems", "communication"] },
+        { "title": "Making a Complaint (Hotel/Restaurant) (تقديم شكوى - فندق/مطعم)", "level": 3, "tags": ["problems", "communication", "travel", "food"] },
+        { "title": "Talking About Your Job or Studies (الحديث عن وظيفتك أو دراستك)", "level": 3, "tags": ["work", "education", "professions"] },
+        { "title": "Giving and Receiving Opinions (تقديم الآراء وتلقيها)", "level": 3, "tags": ["opinions", "discussion", "communication"] },
+        { "title": "Planning a Weekend Trip (التخطيط لرحلة نهاية الأسبوع)", "level": 3, "tags": ["travel", "planning", "leisure"] },
+        { "title": "Explaining a Simple Recipe (شرح وصفة طعام بسيطة)", "level": 3, "tags": ["food", "cooking", "instructions"] },
+
+        // Level 4: Abstract Topics & Formal Situations (B2)
+        { "title": "Discussing Future Goals and Aspirations (مناقشة الأهداف والتطلعات المستقبلية)", "level": 4, "tags": ["future", "goals", "discussion", "abstract"] },
+        { "title": "A Formal Job Interview (مقابلة عمل رسمية)", "level": 4, "tags": ["work", "formal", "interview", "professions"] },
+        { "title": "Debating Pros and Cons (مثال: الحياة في المدينة مقابل الريف)", "level": 4, "tags": ["debate", "opinions", "discussion", "abstract"] },
+        { "title": "Talking About Cultural Differences (الحديث عن الاختلافات الثقافية)", "level": 4, "tags": ["culture", "society", "discussion"] },
+        { "title": "Narrating a Story or Event in Detail (سرد قصة أو حدث بالتفصيل)", "level": 4, "tags": ["storytelling", "past tense", "narrative"] },
+        { "title": "Renting an Apartment (استئجار شقة)", "level": 4, "tags": ["housing", "money", "formal", "negotiation"] },
+        { "title": "Discussing Current Events (مناقشة الأحداث الجارية)", "level": 4, "tags": ["current events", "news", "society", "discussion"] },
+        { "title": "Giving Advice on a Complex Problem (تقديم المشورة بشأن مشكلة معقدة)", "level": 4, "tags": ["advice", "problems", "communication", "conditionals"] },
+
+        // Level 5: Advanced & Specialized Scenarios (C1/C2)
+        { "title": "Arguing a Point of View on a Social Issue (مناقشة وجهة نظر حول قضية اجتماعية)", "level": 5, "tags": ["debate", "society", "politics", "formal", "advanced"] },
+        { "title": "Participating in a Business Meeting (المشاركة في اجتماع عمل)", "level": 5, "tags": ["work", "business", "formal", "advanced"] },
+        { "title": "Discussing a piece of literature or art in depth (مناقشة عمل أدبي أو فني بعمق)", "level": 5, "tags": ["art", "literature", "analysis", "abstract", "advanced"] },
+        { "title": "Explaining a Technical or Scientific Concept Simply (شرح مفهوم تقني أو علمي ببساطة)", "level": 5, "tags": ["science", "technology", "explanation", "advanced"] },
+        { "title": "Negotiating a Contract or Agreement (التفاوض على عقد أو اتفاقية)", "level": 5, "tags": ["business", "negotiation", "formal", "advanced"] },
+        { "title": "Telling a Joke or an Anecdote with Cultural Nuances (إلقاء نكتة أو حكاية ذات دلالات ثقافية)", "level": 5, "tags": ["culture", "humor", "storytelling", "advanced", "nuance"] },
+        { "title": "Hypothetical Scenarios: 'What would you do if...?' (سيناريوهات افتراضية: 'ماذا ستفعل إذا...؟')", "level": 5, "tags": ["hypothetical", "conditionals", "advanced"] }
+    ],
+    "Hindi": [
+        // Level 1: Basic Everyday Interactions (A1)
+        { "title": "Greetings & Basic Introductions (नमस्ते और सामान्य परिचय)", "level": 1, "tags": ["greetings", "introductions", "basics"] },
+        { "title": "Ordering Tea or Coffee (चाय या कॉफी का ऑर्डर देना)", "level": 1, "tags": ["food", "cafe", "ordering", "basics"] },
+        { "title": "Asking for Basic Information (यह क्या है? शौचालय कहाँ है?)", "level": 1, "tags": ["questions", "information", "basics"] },
+        { "title": "Simple Grocery Shopping (सामान्य किराने की खरीदारी)", "level": 1, "tags": ["shopping", "food", "basics"] },
+        { "title": "Talking About Your Family (अपने परिवार के बारे में बात करना)", "level": 1, "tags": ["family", "people", "introductions"] },
+        { "title": "Making a Simple Purchase (Clothing) (एक साधारण खरीदारी करना - कपड़े)", "level": 1, "tags": ["shopping", "clothing", "basics"] },
+        { "title": "Asking for and Giving the Time (समय पूछना और बताना)", "level": 1, "tags": ["time", "questions", "basics"] },
+        { "title": "Talking About Hobbies (शौक के बारे में बात करना)", "level": 1, "tags": ["hobbies", "leisure", "interests"] },
+
+        // Level 2: More Detailed Scenarios (A2)
+        { "title": "Ordering a Full Meal at a Restaurant (रेस्तरां में पूरा भोजन ऑर्डर करना)", "level": 2, "tags": ["food", "restaurant", "ordering"] },
+        { "title": "Asking for Directions (रास्ता पूछना)", "level": 2, "tags": ["directions", "travel", "city"] },
+        { "title": "Talking About Your Daily Routine (अपनी दैनिक दिनचर्या के बारे में बात करना)", "level": 2, "tags": ["daily routine", "lifestyle", "verbs"] },
+        { "title": "Making Plans with a Friend (दोस्त के साथ योजना बनाना)", "level": 2, "tags": ["social", "planning", "friends"] },
+        { "title": "Checking into a Hotel (होटल में चेक-इन करना)", "level": 2, "tags": ["travel", "hotel", "accommodation"] },
+        { "title": "Talking About the Weather (मौसम के बारे में बात करना)", "level": 2, "tags": ["weather", "small talk", "nature"] },
+        { "title": "A Simple Doctor's Visit (एक साधारण डॉक्टर की मुलाकात)", "level": 2, "tags": ["health", "doctor", "body"] },
+        { "title": "Taking Public Transportation (सार्वजनिक परिवहन लेना)", "level": 2, "tags": ["travel", "transportation", "city"] },
+
+        // Level 3: Handling Problems & More Complex Interactions (B1)
+        { "title": "Describing a Past Vacation (पिछली छुट्टी का वर्णन करना)", "level": 3, "tags": ["travel", "past tense", "storytelling"] },
+        { "title": "Discussing a Movie or Book (किसी फिल्म या किताब पर चर्चा करना)", "level": 3, "tags": ["entertainment", "opinions", "media"] },
+        { "title": "Returning an Item to a Store (दुकान पर कोई सामान वापस करना)", "level": 3, "tags": ["shopping", "problems", "communication"] },
+        { "title": "Making a Complaint (Hotel/Restaurant) (शिकायत दर्ज करना - होटल/रेस्तरां)", "level": 3, "tags": ["problems", "communication", "travel", "food"] },
+        { "title": "Talking About Your Job or Studies (अपने काम या पढ़ाई के बारे में बात करना)", "level": 3, "tags": ["work", "education", "professions"] },
+        { "title": "Giving and Receiving Opinions (राय देना और लेना)", "level": 3, "tags": ["opinions", "discussion", "communication"] },
+        { "title": "Planning a Weekend Trip (सप्ताहांत यात्रा की योजना बनाना)", "level": 3, "tags": ["travel", "planning", "leisure"] },
+        { "title": "Explaining a Simple Recipe (एक साधारण नुस्खा समझाना)", "level": 3, "tags": ["food", "cooking", "instructions"] },
+
+        // Level 4: Abstract Topics & Formal Situations (B2)
+        { "title": "Discussing Future Goals and Aspirations (भविष्य के लक्ष्यों और आकांक्षाओं पर चर्चा करना)", "level": 4, "tags": ["future", "goals", "discussion", "abstract"] },
+        { "title": "A Formal Job Interview (एक औपचारिक नौकरी का इंटरव्यू)", "level": 4, "tags": ["work", "formal", "interview", "professions"] },
+        { "title": "Debating Pros and Cons (उदाहरण: शहर बनाम ग्रामीण जीवन)", "level": 4, "tags": ["debate", "opinions", "discussion", "abstract"] },
+        { "title": "Talking About Cultural Differences (सांस्कृतिक मतभेदों के बारे में बात करना)", "level": 4, "tags": ["culture", "society", "discussion"] },
+        { "title": "Narrating a Story or Event in Detail (किसी कहानी या घटना का विस्तार से वर्णन करना)", "level": 4, "tags": ["storytelling", "past tense", "narrative"] },
+        { "title": "Renting an Apartment (एक अपार्टमेंट किराए पर लेना)", "level": 4, "tags": ["housing", "money", "formal", "negotiation"] },
+        { "title": "Discussing Current Events (समसामयिक घटनाओं पर चर्चा करना)", "level": 4, "tags": ["current events", "news", "society", "discussion"] },
+        { "title": "Giving Advice on a Complex Problem (एक जटिल समस्या पर सलाह देना)", "level": 4, "tags": ["advice", "problems", "communication", "conditionals"] },
+
+        // Level 5: Advanced & Specialized Scenarios (C1/C2)
+        { "title": "Arguing a Point of View on a Social Issue (किसी सामाजिक मुद्दे पर अपने विचार को तर्क से प्रस्तुत करना)", "level": 5, "tags": ["debate", "society", "politics", "formal", "advanced"] },
+        { "title": "Participating in a Business Meeting (एक व्यावसायिक बैठक में भाग लेना)", "level": 5, "tags": ["work", "business", "formal", "advanced"] },
+        { "title": "Discussing a piece of literature or art in depth (साहित्य या कला के एक अंश पर गहराई से चर्चा करना)", "level": 5, "tags": ["art", "literature", "analysis", "abstract", "advanced"] },
+        { "title": "Explaining a Technical or Scientific Concept Simply (किसी तकनीकी या वैज्ञानिक अवधारणा को सरलता से समझाना)", "level": 5, "tags": ["science", "technology", "explanation", "advanced"] },
+        { "title": "Negotiating a Contract or Agreement (किसी अनुबंध या समझौते पर बातचीत करना)", "level": 5, "tags": ["business", "negotiation", "formal", "advanced"] },
+        { "title": "Telling a Joke or an Anecdote with Cultural Nuances (सांस्कृतिक बारीकियों के साथ एक चुटकुला या किस्सा सुनाना)", "level": 5, "tags": ["culture", "humor", "storytelling", "advanced", "nuance"] },
+        { "title": "Hypothetical Scenarios: 'What would you do if...?' (काल्पनिक परिदृश्य: 'अगर आप... होते तो क्या करते?')", "level": 5, "tags": ["hypothetical", "conditionals", "advanced"] }
+    ],
+    "Vietnamese": [
+        // Level 1: Basic Everyday Interactions
+        { "title": "Greetings & Basic Introductions (Chào hỏi và giới thiệu cơ bản)", "level": 1, "tags": ["greetings", "introductions", "basics"] },
+        { "title": "Ordering Coffee & a Snack (Gọi cà phê và đồ ăn nhẹ)", "level": 1, "tags": ["food", "cafe", "ordering", "basics"] },
+        { "title": "Asking for Basic Information (Cái này là gì? Nhà vệ sinh ở đâu?)", "level": 1, "tags": ["questions", "information", "basics"] },
+        { "title": "Simple Grocery Shopping (Mua sắm tạp hóa đơn giản)", "level": 1, "tags": ["shopping", "food", "basics"] },
+        { "title": "Talking About Your Family (Nói về gia đình bạn)", "level": 1, "tags": ["family", "people", "introductions"] },
+        { "title": "Making a Simple Purchase (Clothing) (Thực hiện một giao dịch mua đơn giản - quần áo)", "level": 1, "tags": ["shopping", "clothing", "basics"] },
+        { "title": "Asking for and Giving the Time (Hỏi và nói về thời gian)", "level": 1, "tags": ["time", "questions", "basics"] },
+        { "title": "Talking About Hobbies (Nói về sở thích)", "level": 1, "tags": ["hobbies", "leisure", "interests"] },
+
+        // Level 2: More Detailed Scenarios
+        { "title": "Ordering a Full Meal at a Restaurant (Gọi một bữa ăn đầy đủ tại nhà hàng)", "level": 2, "tags": ["food", "restaurant", "ordering"] },
+        { "title": "Asking for Directions (Hỏi đường)", "level": 2, "tags": ["directions", "travel", "city"] },
+        { "title": "Talking About Your Daily Routine (Nói về thói quen hàng ngày của bạn)", "level": 2, "tags": ["daily routine", "lifestyle", "verbs"] },
+        { "title": "Making Plans with a Friend (Lên kế hoạch với một người bạn)", "level": 2, "tags": ["social", "planning", "friends"] },
+        { "title": "Checking into a Hotel (Nhận phòng khách sạn)", "level": 2, "tags": ["travel", "hotel", "accommodation"] },
+        { "title": "Talking About the Weather (Nói về thời tiết)", "level": 2, "tags": ["weather", "small talk", "nature"] },
+        { "title": "A Simple Doctor's Visit (Một lần khám bác sĩ đơn giản)", "level": 2, "tags": ["health", "doctor", "body"] },
+        { "title": "Taking Public Transportation (Đi phương tiện giao thông công cộng)", "level": 2, "tags": ["travel", "transportation", "city"] },
+
+        // Level 3: Handling Problems & More Complex Interactions
+        { "title": "Describing a Past Vacation (Mô tả một kỳ nghỉ đã qua)", "level": 3, "tags": ["travel", "past tense", "storytelling"] },
+        { "title": "Discussing a Movie or Book (Thảo luận về một bộ phim hoặc cuốn sách)", "level": 3, "tags": ["entertainment", "opinions", "media"] },
+        { "title": "Returning an Item to a Store (Trả lại một món hàng cho cửa hàng)", "level": 3, "tags": ["shopping", "problems", "communication"] },
+        { "title": "Making a Complaint (Hotel/Restaurant) (Khiếu nại - Khách sạn/Nhà hàng)", "level": 3, "tags": ["problems", "communication", "travel", "food"] },
+        { "title": "Talking About Your Job or Studies (Nói về công việc hoặc việc học của bạn)", "level": 3, "tags": ["work", "education", "professions"] },
+        { "title": "Giving and Receiving Opinions (Đưa ra và nhận ý kiến)", "level": 3, "tags": ["opinions", "discussion", "communication"] },
+        { "title": "Planning a Weekend Trip (Lên kế hoạch cho chuyến đi cuối tuần)", "level": 3, "tags": ["travel", "planning", "leisure"] },
+        { "title": "Explaining a Simple Recipe (Giải thích một công thức nấu ăn đơn giản)", "level": 3, "tags": ["food", "cooking", "instructions"] },
+
+        // Level 4: Abstract Topics & Formal Situations
+        { "title": "Discussing Future Goals and Aspirations (Thảo luận về mục tiêu và khát vọng tương lai)", "level": 4, "tags": ["future", "goals", "discussion", "abstract"] },
+        { "title": "A Formal Job Interview (Một cuộc phỏng vấn xin việc trang trọng)", "level": 4, "tags": ["work", "formal", "interview", "professions"] },
+        { "title": "Debating Pros and Cons (Ví dụ: Lợi và hại của cuộc sống thành phố)", "level": 4, "tags": ["debate", "opinions", "discussion", "abstract"] },
+        { "title": "Talking About Cultural Differences (Nói về sự khác biệt văn hóa)", "level": 4, "tags": ["culture", "society", "discussion"] },
+        { "title": "Narrating a Story or Event in Detail (Kể lại một câu chuyện hoặc sự kiện chi tiết)", "level": 4, "tags": ["storytelling", "past tense", "narrative"] },
+        { "title": "Renting an Apartment (Thuê căn hộ)", "level": 4, "tags": ["housing", "money", "formal", "negotiation"] },
+        { "title": "Discussing Current Events (Thảo luận về các sự kiện hiện tại)", "level": 4, "tags": ["current events", "news", "society", "discussion"] },
+        { "title": "Giving Advice on a Complex Problem (Đưa ra lời khuyên về một vấn đề phức tạp)", "level": 4, "tags": ["advice", "problems", "communication", "conditionals"] },
+
+        // Level 5: Advanced & Specialized Scenarios
+        { "title": "Arguing a Point of View on a Social Issue (Tranh luận quan điểm về một vấn đề xã hội)", "level": 5, "tags": ["debate", "society", "politics", "formal", "advanced"] },
+        { "title": "Participating in a Business Meeting (Tham gia một cuộc họp kinh doanh)", "level": 5, "tags": ["work", "business", "formal", "advanced"] },
+        { "title": "Discussing a piece of literature or art in depth (Thảo luận chuyên sâu về một tác phẩm văn học hoặc nghệ thuật)", "level": 5, "tags": ["art", "literature", "analysis", "abstract", "advanced"] },
+        { "title": "Explaining a Technical or Scientific Concept Simply (Giải thích một khái niệm kỹ thuật hoặc khoa học một cách đơn giản)", "level": 5, "tags": ["science", "technology", "explanation", "advanced"] },
+        { "title": "Negotiating a Contract or Agreement (Đàm phán hợp đồng hoặc thỏa thuận)", "level": 5, "tags": ["business", "negotiation", "formal", "advanced"] },
+        { "title": "Telling a Joke or an Anecdote with Cultural Nuances (Kể một câu chuyện cười hoặc giai thoại có sắc thái văn hóa)", "level": 5, "tags": ["culture", "humor", "storytelling", "advanced", "nuance"] },
+        { "title": "Hypothetical Scenarios: 'What would you do if...?' (Các kịch bản giả định: 'Bạn sẽ làm gì nếu...?)", "level": 5, "tags": ["hypothetical", "conditionals", "advanced"] }
+    ],
+    "Mongolian": [
+        // Level 1: Basic Everyday Interactions
+        { "title": "Greetings & Basic Introductions (Мэндчилгээ ба үндсэн танилцуулга)", "level": 1, "tags": ["greetings", "introductions", "basics"] },
+        { "title": "Ordering Tea & a Snack (Цай болон зууш захиалах)", "level": 1, "tags": ["food", "cafe", "ordering", "basics"] },
+        { "title": "Asking for Basic Information (Энэ юу вэ? Ариун цэврийн өрөө хаана байна?)", "level": 1, "tags": ["questions", "information", "basics"] },
+        { "title": "Simple Grocery Shopping (Энгийн хүнсний дэлгүүрийн худалдан авалт)", "level": 1, "tags": ["shopping", "food", "basics"] },
+        { "title": "Talking About Your Family (Гэр бүлийнхээ тухай ярих)", "level": 1, "tags": ["family", "people", "introductions"] },
+        { "title": "Making a Simple Purchase (Clothing) (Энгийн худалдан авалт хийх - хувцас)", "level": 1, "tags": ["shopping", "clothing", "basics"] },
+        { "title": "Asking for and Giving the Time (Цаг асуух, хэлэх)", "level": 1, "tags": ["time", "questions", "basics"] },
+        { "title": "Talking About Hobbies (Сонирхол, хоббины тухай ярих)", "level": 1, "tags": ["hobbies", "leisure", "interests"] },
+
+        // Level 2: More Detailed Scenarios
+        { "title": "Ordering a Full Meal at a Restaurant (Ресторанд бүрэн хоол захиалах)", "level": 2, "tags": ["food", "restaurant", "ordering"] },
+        { "title": "Asking for Directions (Хаяг асуух)", "level": 2, "tags": ["directions", "travel", "city"] },
+        { "title": "Talking About Your Daily Routine (Өдөр тутмын амьдралын хэв маягийн тухай ярих)", "level": 2, "tags": ["daily routine", "lifestyle", "verbs"] },
+        { "title": "Making Plans with a Friend (Найзтайгаа хамт төлөвлөгөө гаргах)", "level": 2, "tags": ["social", "planning", "friends"] },
+        { "title": "Checking into a Hotel (Зочид буудалд бүртгүүлэх)", "level": 2, "tags": ["travel", "hotel", "accommodation"] },
+        { "title": "Talking About the Weather (Цаг агаарын тухай ярих)", "level": 2, "tags": ["weather", "small talk", "nature"] },
+        { "title": "A Simple Doctor's Visit (Энгийн эмчийн үзлэг)", "level": 2, "tags": ["health", "doctor", "body"] },
+        { "title": "Taking Public Transportation (Нийтийн тээврээр зорчих)", "level": 2, "tags": ["travel", "transportation", "city"] },
+
+        // Level 3: Handling Problems & More Complex Interactions
+        { "title": "Describing a Past Vacation (Өнгөрсөн амралтын тухай ярих)", "level": 3, "tags": ["travel", "past tense", "storytelling"] },
+        { "title": "Discussing a Movie or Book (Кино эсвэл номын тухай ярих)", "level": 3, "tags": ["entertainment", "opinions", "media"] },
+        { "title": "Returning an Item to a Store (Дэлгүүрт бараа буцаах)", "level": 3, "tags": ["shopping", "problems", "communication"] },
+        { "title": "Making a Complaint (Hotel/Restaurant) (Гомдол гаргах - Зочид буудал/Ресторан)", "level": 3, "tags": ["problems", "communication", "travel", "food"] },
+        { "title": "Talking About Your Job or Studies (Ажил, хичээлийн тухай ярих)", "level": 3, "tags": ["work", "education", "professions"] },
+        { "title": "Giving and Receiving Opinions (Санал солилцох)", "level": 3, "tags": ["opinions", "discussion", "communication"] },
+        { "title": "Planning a Weekend Trip (Амралтын өдрүүдийн аялал төлөвлөх)", "level": 3, "tags": ["travel", "planning", "leisure"] },
+        { "title": "Explaining a Simple Recipe (Энгийн жорыг тайлбарлах)", "level": 3, "tags": ["food", "cooking", "instructions"] },
+
+        // Level 4: Abstract Topics & Formal Situations
+        { "title": "Discussing Future Goals and Aspirations (Ирээдүйн зорилго, хүсэл эрмэлзлийн тухай ярих)", "level": 4, "tags": ["future", "goals", "discussion", "abstract"] },
+        { "title": "A Formal Job Interview (Албан ёсны ажлын ярилцлага)", "level": 4, "tags": ["work", "formal", "interview", "professions"] },
+        { "title": "Debating Pros and Cons (Жишээ нь: Хот ба хөдөөгийн амьдралын давуу тал)", "level": 4, "tags": ["debate", "opinions", "discussion", "abstract"] },
+        { "title": "Talking About Cultural Differences (Соёлын ялгааны тухай ярих)", "level": 4, "tags": ["culture", "society", "discussion"] },
+        { "title": "Narrating a Story or Event in Detail (Түүх, үйл явдлыг нарийн ширийн зүйлтэй нь ярих)", "level": 4, "tags": ["storytelling", "past tense", "narrative"] },
+        { "title": "Renting an Apartment (Орон сууц түрээслэх)", "level": 4, "tags": ["housing", "money", "formal", "negotiation"] },
+        { "title": "Discussing Current Events (Өнөөгийн үйл явдлуудыг хэлэлцэх)", "level": 4, "tags": ["current events", "news", "society", "discussion"] },
+        { "title": "Giving Advice on a Complex Problem (Нарийн төвөгтэй асуудалд зөвлөгөө өгөх)", "level": 4, "tags": ["advice", "problems", "communication", "conditionals"] },
+
+        // Level 5: Advanced & Specialized Scenarios
+        { "title": "Arguing a Point of View on a Social Issue (Нийгмийн асуудлаар өөрийн байр суурийг маргах)", "level": 5, "tags": ["debate", "society", "politics", "formal", "advanced"] },
+        { "title": "Participating in a Business Meeting (Бизнесийн уулзалтад оролцох)", "level": 5, "tags": ["work", "business", "formal", "advanced"] },
+        { "title": "Discussing a piece of literature or art in depth (Уран зохиол, урлагийн бүтээлийг гүнзгийрүүлэн хэлэлцэх)", "level": 5, "tags": ["art", "literature", "analysis", "abstract", "advanced"] },
+        { "title": "Explaining a Technical or Scientific Concept Simply (Техник, шинжлэх ухааны ойлголтыг энгийнээр тайлбарлах)", "level": 5, "tags": ["science", "technology", "explanation", "advanced"] },
+        { "title": "Negotiating a Contract or Agreement (Гэрээ, хэлэлцээр хийх)", "level": 5, "tags": ["business", "negotiation", "formal", "advanced"] },
+        { "title": "Telling a Joke or an Anecdote with Cultural Nuances (Соёлын нарийн утгатай хошигнол, онигоо ярих)", "level": 5, "tags": ["culture", "humor", "storytelling", "advanced", "nuance"] },
+        { "title": "Hypothetical Scenarios: 'What would you do if...?' (Таамаглал дэвшүүлсэн хувилбарууд: 'Хэрэв та... байсан бол юу хийх вэ?')", "level": 5, "tags": ["hypothetical", "conditionals", "advanced"] }
+    ],
+    "Polish": [
+        // Level 1: Basic Everyday Interactions (A1)
+        { "title": "Greetings & Basic Introductions (Powitania i podstawowe przedstawianie się)", "level": 1, "tags": ["greetings", "introductions", "basics"] },
+        { "title": "Ordering Coffee & a Snack (Zamawianie kawy i przekąski)", "level": 1, "tags": ["food", "cafe", "ordering", "basics"] },
+        { "title": "Asking for Basic Information (Co to jest? Gdzie jest łazienka?)", "level": 1, "tags": ["questions", "information", "basics"] },
+        { "title": "Simple Grocery Shopping (Proste zakupy spożywcze)", "level": 1, "tags": ["shopping", "food", "basics"] },
+        { "title": "Talking About Your Family (Rozmowa o rodzinie)", "level": 1, "tags": ["family", "people", "introductions"] },
+        { "title": "Making a Simple Purchase (Clothing) (Dokonywanie prostego zakupu - ubrania)", "level": 1, "tags": ["shopping", "clothing", "basics"] },
+        { "title": "Asking for and Giving the Time (Pytanie o czas i podawanie go)", "level": 1, "tags": ["time", "questions", "basics"] },
+        { "title": "Talking About Hobbies (Rozmowa o hobby)", "level": 1, "tags": ["hobbies", "leisure", "interests"] },
+
+        // Level 2: More Detailed Scenarios (A2)
+        { "title": "Ordering a Full Meal at a Restaurant (Zamawianie pełnego posiłku w restauracji)", "level": 2, "tags": ["food", "restaurant", "ordering"] },
+        { "title": "Asking for Directions (Pytanie o drogę)", "level": 2, "tags": ["directions", "travel", "city"] },
+        { "title": "Talking About Your Daily Routine (Rozmowa o codziennej rutynie)", "level": 2, "tags": ["daily routine", "lifestyle", "verbs"] },
+        { "title": "Making Plans with a Friend (Umawianie planów z przyjacielem)", "level": 2, "tags": ["social", "planning", "friends"] },
+        { "title": "Checking into a Hotel (Zameldowanie w hotelu)", "level": 2, "tags": ["travel", "hotel", "accommodation"] },
+        { "title": "Talking About the Weather (Rozmowa o pogodzie)", "level": 2, "tags": ["weather", "small talk", "nature"] },
+        { "title": "A Simple Doctor's Visit (Prosta wizyta u lekarza)", "level": 2, "tags": ["health", "doctor", "body"] },
+        { "title": "Taking Public Transportation (Korzystanie z transportu publicznego)", "level": 2, "tags": ["travel", "transportation", "city"] },
+
+        // Level 3: Handling Problems & More Complex Interactions (B1)
+        { "title": "Describing a Past Vacation (Opisywanie przeszłych wakacji)", "level": 3, "tags": ["travel", "past tense", "storytelling"] },
+        { "title": "Discussing a Movie or Book (Dyskutowanie o filmie lub książce)", "level": 3, "tags": ["entertainment", "opinions", "media"] },
+        { "title": "Returning an Item to a Store (Zwracanie towaru do sklepu)", "level": 3, "tags": ["shopping", "problems", "communication"] },
+        { "title": "Making a Complaint (Hotel/Restaurant) (Składanie reklamacji - Hotel/Restauracja)", "level": 3, "tags": ["problems", "communication", "travel", "food"] },
+        { "title": "Talking About Your Job or Studies (Rozmowa o pracy lub studiach)", "level": 3, "tags": ["work", "education", "professions"] },
+        { "title": "Giving and Receiving Opinions (Dawanie i przyjmowanie opinii)", "level": 3, "tags": ["opinions", "discussion", "communication"] },
+        { "title": "Planning a Weekend Trip (Planowanie wycieczki weekendowej)", "level": 3, "tags": ["travel", "planning", "leisure"] },
+        { "title": "Explaining a Simple Recipe (Wyjaśnianie prostego przepisu)", "level": 3, "tags": ["food", "cooking", "instructions"] },
+
+        // Level 4: Abstract Topics & Formal Situations (B2)
+        { "title": "Discussing Future Goals and Aspirations (Dyskutowanie przyszłych celów i aspiracji)", "level": 4, "tags": ["future", "goals", "discussion", "abstract"] },
+        { "title": "A Formal Job Interview (Formalna rozmowa kwalifikacyjna)", "level": 4, "tags": ["work", "formal", "interview", "professions"] },
+        { "title": "Debating Pros and Cons (Np. życie w mieście kontra na wsi)", "level": 4, "tags": ["debate", "opinions", "discussion", "abstract"] },
+        { "title": "Talking About Cultural Differences (Rozmowa o różnicach kulturowych)", "level": 4, "tags": ["culture", "society", "discussion"] },
+        { "title": "Narrating a Story or Event in Detail (Szczegółowe opowiadanie historii lub wydarzenia)", "level": 4, "tags": ["storytelling", "past tense", "narrative"] },
+        { "title": "Renting an Apartment (Wynajmowanie mieszkania)", "level": 4, "tags": ["housing", "money", "formal", "negotiation"] },
+        { "title": "Discussing Current Events (Dyskutowanie bieżących wydarzeń)", "level": 4, "tags": ["current events", "news", "society", "discussion"] },
+        { "title": "Giving Advice on a Complex Problem (Udzielanie porad w złożonym problemie)", "level": 4, "tags": ["advice", "problems", "communication", "conditionals"] },
+
+        // Level 5: Advanced & Specialized Scenarios (C1/C2)
+        { "title": "Arguing a Point of View on a Social Issue (Argumentowanie punktu widzenia na temat społeczny)", "level": 5, "tags": ["debate", "society", "politics", "formal", "advanced"] },
+        { "title": "Participating in a Business Meeting (Uczestnictwo w spotkaniu biznesowym)", "level": 5, "tags": ["work", "business", "formal", "advanced"] },
+        { "title": "Discussing a piece of literature or art in depth (Dogłębna dyskusja o dziele literackim lub sztuce)", "level": 5, "tags": ["art", "literature", "analysis", "abstract", "advanced"] },
+        { "title": "Explaining a Technical or Scientific Concept Simply (Wyjaśnianie koncepcji technicznej lub naukowej w prosty sposób)", "level": 5, "tags": ["science", "technology", "explanation", "advanced"] },
+        { "title": "Negotiating a Contract or Agreement (Negocjowanie umowy lub porozumienia)", "level": 5, "tags": ["business", "negotiation", "formal", "advanced"] },
+        { "title": "Telling a Joke or an Anecdote with Cultural Nuances (Opowiadanie dowcipu lub anegdoty z niuansami kulturowymi)", "level": 5, "tags": ["culture", "humor", "storytelling", "advanced", "nuance"] },
+        { "title": "Hypothetical Scenarios: 'What would you do if...?' (Scenariusze hipotetyczne: 'Co byś zrobił, gdyby...?)", "level": 5, "tags": ["hypothetical", "conditionals", "advanced"] }
+    ]
+};

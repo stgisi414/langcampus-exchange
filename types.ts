@@ -75,9 +75,11 @@ export interface UsageData {
   lastUsageDate: string; // Stored as 'YYYY-MM-DD'
 }
 
+export type TeachMeType = 'Grammar' | 'Vocabulary' | 'Conversation';
+
 export interface TeachMeCache {
   language: string;
-  type: string;
+  type: TeachMeType;
   topic: string;
   content: string;
 }

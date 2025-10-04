@@ -195,17 +195,21 @@ export const geminiTTS = onRequest(
         }
         const contentText = `<speak><lang xml:lang="${languageCode}">${processedText}</lang></speak>`;
         
-        // --- MODIFICATION: ROBUST VOICE SELECTION ---
-        // Attempt a direct lookup using both language and gender
-        let voiceConfig = voiceConfigMap[languageCode]?.[gender];
-
-        if (!voiceConfig) {
-            // Fallback to default English male voice if the requested voice is not found
+        // --- FIX: Replace Optional Chaining (?. ) with explicit checks to prevent initialization crash ---
+        const languageVoiceMap = voiceConfigMap[languageCode];
+        let voiceConfig;
+        
+        if (languageVoiceMap && languageVoiceMap[gender]) {
+            voiceConfig = languageVoiceMap[gender];
+        } else {
+            // Fallback logic
             logger.warn(`No specific voice found for ${languageCode} with gender ${gender}. Falling back to default English male.`);
-            // This is a robust fallback as "en-US" should always be defined in the map
-            voiceConfig = voiceConfigMap["en-US"].male;
+            
+            // Access the fallback safely
+            const fallbackVoiceMap = voiceConfigMap["en-US"];
+            voiceConfig = fallbackVoiceMap ? fallbackVoiceMap.male : {prebuiltVoiceConfig: {voiceName: "Kore"}};
         }
-        // --- END MODIFICATION ---
+        // --- END FIX ---
 
         const ttsUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${GEMINI_API_KEY}`;
         const payload = {

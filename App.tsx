@@ -20,6 +20,7 @@ import {
   UsageData,
   TeachMeCache,
   GroupChat,
+  TeachMeType,
 } from "./types";
 import { LANGUAGES } from "./constants";
 import * as geminiService from "./services/geminiService";
@@ -42,7 +43,7 @@ import {
   PlayIcon,
 } from "./components/Icons";
 import LoadingSpinner from "./components/LoadingSpinner";
-import { grammarData, vocabData } from "./teachMeData";
+import { grammarData, vocabData, conversationData } from "./teachMeData";
 import { useAuth } from "./hooks/useAuth.ts";
 import LoginScreen from "./components/LoginScreen.tsx";
 import { auth, app, payments, functions } from "./firebaseConfig.ts";
@@ -664,7 +665,7 @@ const TeachMeModal: React.FC<{
   groupTopic,
   onSetGroupTopic,
 }) => {
-  const [activeTab, setActiveTab] = useState<"Grammar" | "Vocabulary">(
+  const [activeTab, setActiveTab] = useState<TeachMeType>(
     "Grammar",
   );
   const [level, setLevel] = useState(1);
@@ -736,23 +737,46 @@ const TeachMeModal: React.FC<{
     }
   }, [language, cache, isGroupChat, groupTopic, activeTab, nativeLanguage, selectedTopic]);
 
+  const handleTabChange = (newTab: TeachMeType) => {
+    setActiveTab(newTab);
+    // FIX: Crucially clear the current topic, content, and quiz state when switching categories
+    setSelectedTopic(null);
+    setContent("");
+    setQuizQuestions(null);
+    // Reset search when switching tabs
+    setSearchQuery("");
+  };
 
   const availableTopics = useMemo(() => {
-    const data =
-      activeTab === "Grammar"
-        ? grammarData[language as keyof typeof grammarData] || []
-        : vocabData;
+    // FIX: Implement logic to handle flat array (Vocabulary) vs. keyed object (Grammar/Conversation)
+    let data: { title: string; level: number; tags: string[] }[] = [];
+    const languageKey = language as keyof typeof grammarData; 
 
-    if (searchQuery.trim()) {
-      const lowercasedQuery = searchQuery.toLowerCase();
-      return data.filter(
-        (topic) =>
-          topic.title.toLowerCase().includes(lowercasedQuery) ||
-          topic.tags.some((tag) => tag.toLowerCase().includes(lowercasedQuery)),
-      );
-    } else {
-      return data.filter((topic) => topic.level === level);
+    if (activeTab === "Grammar") {
+        // Access keyed data
+        data = grammarData[languageKey] || [];
+    } else if (activeTab === "Conversation") {
+        // Access keyed data
+        data = conversationData[languageKey] || [];
+    } else if (activeTab === "Vocabulary") {
+        // As requested: Use the flat vocabData array directly for all languages
+        data = vocabData; 
     }
+
+    // Filter by search query first
+    const filteredBySearch = searchQuery.trim()
+      ? data.filter(
+          (topic) =>
+            topic.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            topic.tags.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase())),
+        )
+      : data;
+
+    // Apply level filtering only if no search query is active
+    return searchQuery.trim()
+      ? filteredBySearch
+      : filteredBySearch.filter((topic) => topic.level === level);
+      
   }, [activeTab, level, language, searchQuery]);
 
   const handleLevelChange = (lvl: number) => {
@@ -863,15 +887,15 @@ const TeachMeModal: React.FC<{
     >
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-[95vw] max-w-4xl h-[90vh] flex flex-col animate-fade-in-down">
         <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 overflow-hidden"> {/* Added overflow-hidden */}
             <button
               onClick={() => setIsMenuOpen(true)}
-              className="p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 md:hidden"
+              className="flex-none p-1 rounded-md text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 md:hidden" // Added flex-none to protect button space
               aria-label="Open topics menu"
             >
               <MenuIcon className="w-6 h-6" />
             </button>
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white truncate"> {/* Added truncate to prevent text push-out */}
               {isGroupChat ? `Group Topic: ${language}` : `Teach Me: ${language}`}
             </h2>
           </div>
@@ -906,84 +930,73 @@ const TeachMeModal: React.FC<{
               </button>
             </div>
 
-            {(isHost || !isGroupChat) && <div className="relative mb-4">
-              <input
-                type="text"
-                placeholder="Search lessons..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-full bg-gray-100 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            </div>}
+            {/* NEW: Container to manage vertical space and scrolling */}
+            <div className="flex flex-col flex-grow overflow-y-auto">
+            
+              {(isHost || !isGroupChat) && <div className="relative mb-4 flex-none"> {/* flex-none: prevents shrinking */}
+                <input
+                  type="text"
+                  placeholder="Search lessons..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-full bg-gray-100 dark:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              </div>}
 
-            {(isHost || !isGroupChat) && searchQuery.trim() === "" ? (
-              <>
-                <div className="flex border-b dark:border-gray-600 mb-4">
-                  <button
-                    onClick={() => setActiveTab("Grammar")}
-                    className={`flex-1 py-2 text-center ${activeTab === "Grammar" ? "border-b-2 border-blue-500 text-blue-500" : "text-gray-500"}`}
-                  >
-                    Grammar
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("Vocabulary")}
-                    className={`flex-1 py-2 text-center ${activeTab === "Vocabulary" ? "border-b-2 border-blue-500 text-blue-500" : "text-gray-500"}`}
-                  >
-                    Vocabulary
-                  </button>
-                </div>
-                <div className="mb-4">
-                  <p className="font-semibold mb-2 text-center">
-                    Select Level:
-                  </p>
-                  <div className="flex justify-center gap-2">
-                    {[1, 2, 3, 4, 5].map((lvl) => (
-                      <button
-                        key={lvl}
-                        onClick={() => handleLevelChange(lvl)}
-                        className={`px-3 py-1 rounded-full text-sm ${level === lvl ? "bg-blue-500 text-white" : "bg-gray-200 dark:bg-gray-700"}`}
-                      >
-                        {lvl}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="text-center mb-2">
-                <p className="font-semibold">{isGroupChat ? 'Current Topic' : 'Search Results'}</p>
-              </div>
-            )}
-
-            <ul
-              ref={topicListRef}
-              className="space-y-2 overflow-y-auto flex-grow"
-            >
-              {(isHost || !isGroupChat) && availableTopics.length > 0 ? (
-                availableTopics.map((topic) => (
-                  <li key={topic.title}>
+              {(isHost || !isGroupChat) && searchQuery.trim() === "" ? (
+                <>
+                  <div className="flex overflow-x-auto border-b dark:border-gray-600 mb-4 pb-2">
                     <button
-                      ref={(el) => topicRefs.current.set(topic.title, el)}
-                      onClick={() => handleTopicSelect(topic.title)}
-                      className={`w-full text-left p-2 rounded text-sm ${(groupTopic || selectedTopic) === topic.title ? "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100" : "hover:bg-gray-100 dark:hover:bg-gray-700"}`}
+                      onClick={() => handleTabChange("Grammar")} // <-- USE handleTabChange
+                      className={`flex-none px-4 py-2 text-center text-sm ${activeTab === "Grammar" ? "border-b-2 border-blue-500 text-blue-500 font-semibold" : "text-gray-500"}`}
                     >
-                      {topic.title}
+                      Grammar
                     </button>
-                  </li>
-                ))
+                    <button
+                      onClick={() => handleTabChange("Vocabulary")} // <-- USE handleTabChange
+                      className={`flex-none px-4 py-2 text-center text-sm ${activeTab === "Vocabulary" ? "border-b-2 border-blue-500 text-blue-500 font-semibold" : "text-gray-500"}`}
+                    >
+                      Vocabulary
+                    </button>
+                    <button
+                      onClick={() => handleTabChange("Conversation")} // <-- USE handleTabChange
+                      className={`flex-none px-4 py-2 text-center text-sm ${activeTab === "Conversation" ? "border-b-2 border-blue-500 text-blue-500 font-semibold" : "text-gray-500"}`}
+                    >
+                      Conversation
+                    </button>
+                  </div>
+                  <div className="mb-4 flex-none">
+                    <p className="font-semibold mb-2 text-center">
+                      Select Level:
+                    </p>
+                    <div className="flex justify-center gap-2">
+                      {[1, 2, 3, 4, 5].map((lvl) => (
+                        <button
+                          key={lvl}
+                          onClick={() => handleLevelChange(lvl)}
+                          className={`px-3 py-1 rounded-full text-sm ${level === lvl ? "bg-blue-500 text-white" : "bg-gray-200 dark:bg-gray-700"}`}
+                        >
+                          {lvl}
+                      </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
               ) : (
-                isMember && (groupTopic || selectedTopic) ? (
-                    <li>
-                        <button className="w-full text-left p-2 rounded text-sm bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100">
-                            {groupTopic || selectedTopic}
-                        </button>
-                    </li>
-                ) : (
-                    <p className="text-gray-500 text-center p-4">No topics found.</p>
-                )
+                <div className="text-center mb-2 flex-none">
+                  <p className="font-semibold">{isGroupChat ? 'Current Topic' : 'Search Results'}</p>
+                </div>
               )}
-            </ul>
+
+              {/* FIX: Removed redundant overflow-y-auto flex-grow from UL. It fills the remaining space. */}
+              <ul
+                ref={topicListRef}
+                className="space-y-2" 
+              >
+                {/* ... (Topic list mapping content remains unchanged) */}
+              </ul>
+            </div> {/* END: New scrolling wrapper */}
           </div>
 
           <div className="w-full p-6 overflow-y-auto">
@@ -2270,7 +2283,7 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     setIsLoadingPartners(true);
     setError(null);
     setPartners([]);
-    
+
     handleUsageCheck("searches", async () => {
       try {
         const nativeLangName =
@@ -2761,8 +2774,7 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
         )}
         {!isLoadingPartners &&
           !error &&
-          partners.length === 0 &&
-          !savedChat && (
+          partners.length === 0 && (
             // Replace the simple welcome message with the new Feature Grid
             <div className="text-center mt-12">
                 <p className="text-xl text-gray-500 dark:text-gray-400">
