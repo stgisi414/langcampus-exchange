@@ -34,6 +34,25 @@ const cleanAndParseJson = (text: string) => {
   }
 };
 
+// ADD: A map to associate languages with various skin and hair tones.
+const colorMap: Record<string, { skin: string[], hair: string[] }> = {
+  'English': { skin: ['d08b5b', 'ae5d29', '614335'], hair: ['6a4e35', '2c1b18', 'b58143'] },
+  'Spanish': { skin: ['b26f3d', 'f2d3b1', 'd08b5b'], hair: ['2c1b18', '4d3313'] },
+  'French': { skin: ['f2d3b1', 'd08b5b'], hair: ['b58143', '906945', '4d3313'] },
+  'German': { skin: ['f2d3b1', 'd08b5b'], hair: ['b58143', '906945', 'e3c098'] },
+  'Italian': { skin: ['d08b5b', 'f2d3b1'], hair: ['2c1b18', '4d3313'] },
+  'Portuguese': { skin: ['b26f3d', 'd08b5b', '8d5524'], hair: ['2c1b18', '4d3313'] },
+  'Japanese': { skin: ['f2d3b1', 'ffdbb4'], hair: ['0e0e0e', '2c1b18'] },
+  'Korean': { skin: ['f2d3b1', 'ffdbb4'], hair: ['0e0e0e', '2c1b18'] },
+  'Chinese': { skin: ['f2d3b1', 'ffdbb4'], hair: ['0e0e0e', '2c1b18'] },
+  'Russian': { skin: ['f2d3b1', 'd08b5b'], hair: ['b58143', '906945', 'd06b3a'] },
+  'Arabic': { skin: ['ae5d29', '8d5524'], hair: ['0e0e0e', '2c1b18'] },
+  'Hindi': { skin: ['8d5524', 'ae5d29', '614335'], hair: ['0e0e0e', '2c1b18'] },
+  'Vietnamese': { skin: ['f2d3b1', 'ffdbb4'], hair: ['0e0e0e', '2c1b18'] },
+  'Mongolian': { skin: ['f2d3b1', 'd08b5b'], hair: ['0e0e0e', '2c1b18'] },
+  'Polish': { skin: ['f2d3b1', 'd08b5b'], hair: ['b58143', '906945'] },
+  'Esperanto': { skin: ['f2d3b1', 'd08b5b', 'ae5d29'], hair: ['b58143', '906945', '2c1b18'] }
+};
 
 /**
  * A helper function to call our secure Firebase Cloud Function proxy.
@@ -170,12 +189,38 @@ export const generatePartners = async (nativeLanguage: string, targetLanguage: s
         );
       })
       .map((p: any) => {
-        // Ensure the final object uses cleaned, consistent lowercase gender values
         const cleanedGender = p.gender?.replace(/\*\*/g, '').toLowerCase();
-        
+
+        const options = new URLSearchParams({
+            seed: p.name // The seed is still based on the name for consistency
+        });
+
+        const languageColors = colorMap[p.nativeLanguage] || colorMap['English'];
+        const skinColor = languageColors.skin[Math.floor(Math.random() * languageColors.skin.length)];
+        const hairColor = languageColors.hair[Math.floor(Math.random() * languageColors.hair.length)];
+
+        options.append('skinColor', skinColor);
+        options.append('hairColor', hairColor);
+
+        if (cleanedGender === 'female') {
+            options.append('facialHairProbability', '0'); // No beards for females
+            options.append('earringsProbability', '80'); // High chance of earrings
+            options.append('hair', 'pixie,dannyPhantom,full'); // Feminine hairstyles
+            options.append('eyebrows', 'up,eyelashesUp,eyelashesDown');
+            options.append('eyes', 'smiling,eyes,round');
+        } else {
+            options.append('earringsProbability', '0'); // No earrings for males
+            options.append('facialHairProbability', '40'); // Chance of facial hair
+            options.append('hair', 'fonze,dougFunny,mrT,,mrClean,turban'); // Masculine hairstyles
+            options.append('eyebrows', 'up,down');
+            options.append('eyes', 'eyes,round,smiling');
+        }
+
+        const avatarUrl = `https://api.dicebear.com/8.x/micah/svg?${options.toString()}`;
+
         return {
           ...p,
-          avatar: `https://api.dicebear.com/8.x/micah/svg?seed=${p.name}`,
+          avatar: avatarUrl, // Use the new fully customized URL
           gender: cleanedGender === 'female' ? 'female' : 'male',
         };
       });
