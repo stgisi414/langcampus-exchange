@@ -47,6 +47,7 @@ import {
   JourneymanIcon,
   ExpertIcon,
   MasterIcon,
+  YouTubeIcon,
 } from "./components/Icons";
 import LoadingSpinner from "./components/LoadingSpinner";
 import { grammarData, vocabData, conversationData } from "./teachMeData";
@@ -133,6 +134,54 @@ const FEATURES = [
         icon: MicrophoneIcon,
     },
 ];
+
+const VideoGalleryModal: React.FC<{
+  videos: YouTubeVideo[];
+  isLoading: boolean;
+  onClose: () => void;
+  topic: string;
+}> = ({ videos, isLoading, onClose, topic }) => {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-[60] p-4" role="dialog" aria-modal="true">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl h-[80vh] flex flex-col animate-fade-in-down">
+        <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white">Related Videos for "{topic}"</h2>
+          <button onClick={onClose} className="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200">
+            <CloseIcon className="w-6 h-6" />
+          </button>
+        </div>
+        <div className="flex-grow p-6 overflow-y-auto">
+          {isLoading ? (
+            <div className="flex justify-center items-center h-full">
+              <LoadingSpinner size="lg" />
+            </div>
+          ) : videos.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {videos.map(video => (
+                <a
+                  key={video.videoId}
+                  href={`https://www.youtube.com/watch?v=${video.videoId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group block bg-gray-100 dark:bg-gray-700 rounded-lg overflow-hidden shadow-md hover:shadow-xl transition-shadow"
+                >
+                  <img src={video.thumbnailUrl} alt={video.title} className="w-full h-32 object-cover" />
+                  <div className="p-3">
+                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-200 group-hover:text-blue-500 transition-colors line-clamp-2">
+                      {video.title}
+                    </p>
+                  </div>
+                </a>
+              ))}
+            </div>
+          ) : (
+            <p className="text-center text-gray-500">No related videos found.</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // User Profile Component
 const UserProfile: React.FC<{
@@ -502,6 +551,219 @@ const TutorialModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
   </div>
 );
 
+const MatchingQuestion: React.FC<{ question: Extract<QuizQuestion, { type: 'matching' }>, onAnswer: (answer: string[]) => void }> = ({ question, onAnswer }) => {
+  const [selectedTerm, setSelectedTerm] = useState<string | null>(null);
+  const [matches, setMatches] = useState<Record<string, string>>({});
+  const [shuffledDefs] = useState(() => [...question.pairs.map(p => p.definition)].sort(() => Math.random() - 0.5));
+  
+  const colors = [
+    "bg-green-100 dark:bg-green-900",
+    "bg-yellow-100 dark:bg-yellow-900",
+    "bg-pink-100 dark:bg-pink-900",
+    "bg-purple-100 dark:bg-purple-900",
+  ];
+  
+  const [matchColors, setMatchColors] = useState<Record<string, string>>({});
+
+  const handleTermClick = (term: string) => {
+    if (matches[term]) return; // Already matched
+    setSelectedTerm(term);
+  };
+
+  const handleDefClick = (def: string) => {
+    if (!selectedTerm || Object.values(matches).includes(def)) return;
+    const newMatches = { ...matches, [selectedTerm]: def };
+    setMatches(newMatches);
+    
+    // Assign a color to the new match
+    const matchIndex = Object.keys(newMatches).length - 1;
+    setMatchColors(prev => ({ ...prev, [selectedTerm]: colors[matchIndex % colors.length] }));
+
+    setSelectedTerm(null);
+  };
+
+  const isComplete = Object.keys(matches).length === question.pairs.length;
+
+  const handleSubmit = () => {
+    // The order of original pairs matters for grading
+    const formattedAnswers = question.pairs.map(p => `${p.term}-${matches[p.term] || ''}`);
+    onAnswer(formattedAnswers);
+  };
+
+  return (
+    <div className="mt-4 space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        {/* Terms Column */}
+        <div className="space-y-2">
+          {question.pairs.map(pair => {
+            const colorClass = matchColors[pair.term] || 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600';
+            const matched = !!matches[pair.term];
+            return (
+              <button
+                key={pair.term}
+                onClick={() => handleTermClick(pair.term)}
+                disabled={matched}
+                className={`w-full p-3 text-left rounded-lg transition-all text-sm
+                  ${selectedTerm === pair.term ? 'ring-2 ring-blue-500 bg-blue-100 dark:bg-blue-900' : ''}
+                  ${matched ? `${colorClass} text-gray-500 dark:text-gray-400` : colorClass}`}
+              >
+                {pair.term}
+              </button>
+            );
+          })}
+        </div>
+        {/* Definitions Column */}
+        <div className="space-y-2">
+          {shuffledDefs.map(def => {
+            const termForDef = Object.keys(matches).find(key => matches[key] === def);
+            const colorClass = termForDef ? matchColors[termForDef] : 'bg-gray-100 dark:bg-gray-700';
+            const matched = !!termForDef;
+            return (
+              <button
+                key={def}
+                onClick={() => handleDefClick(def)}
+                disabled={matched}
+                className={`w-full p-3 text-left rounded-lg transition-all text-sm
+                  ${selectedTerm ? 'cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600' : 'cursor-not-allowed'}
+                  ${matched ? `${colorClass} text-gray-500 dark:text-gray-400` : colorClass}`}
+              >
+                {def}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      {isComplete && (
+        <button onClick={handleSubmit} className="w-full mt-4 px-6 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600">
+          Submit Matches
+        </button>
+      )}
+    </div>
+  );
+};
+
+const SpeakingQuestion: React.FC<{ 
+  question: Extract<QuizQuestion, { type: 'speaking' }>, 
+  onAnswer: (answer: string) => void,
+  targetLanguage: string
+}> = ({ question, onAnswer, targetLanguage }) => {
+  const [isRecording, setIsRecording] = useState(false);
+  const [recorder, setRecorder] = useState<MediaRecorder | null>(null);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const targetLangCode = LANGUAGES.find(l => l.name === targetLanguage)?.code || 'en-US';
+
+  const handleStartRecording = async () => {
+    setAudioBlob(null);
+    setFeedback(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      const chunks: BlobPart[] = [];
+      mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunks, { type: mediaRecorder.mimeType });
+        setAudioBlob(blob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecorder(mediaRecorder);
+    } catch (err) {
+      console.error("Recording failed:", err);
+      setFeedback("Couldn't start recording. Please check microphone permissions.");
+    }
+  };
+
+  const handleStopRecording = () => {
+    if (recorder) {
+      recorder.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!audioBlob) return;
+    setIsProcessing(true);
+    setFeedback(null);
+    try {
+      const transcription = await geminiService.transcribeAudio(audioBlob, targetLangCode);
+      const aiFeedback = await geminiService.comparePronunciation(question.sentenceToRead, transcription, targetLanguage);
+      setFeedback(aiFeedback);
+    } catch (error) {
+      setFeedback("Sorry, there was an error processing your audio.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  return (
+    <div className="mt-4 text-center p-4 bg-gray-100 dark:bg-gray-700 rounded-lg">
+      <p className="text-xl font-semibold text-blue-600 dark:text-blue-300 mb-6 p-4 border dark:border-gray-600 rounded-md">
+        "{question.sentenceToRead}"
+      </p>
+      
+      {!audioBlob && !isRecording && (
+        <button onClick={handleStartRecording} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600">
+          <MicrophoneIcon className="w-6 h-6"/>
+          Start Recording
+        </button>
+      )}
+
+      {isRecording && (
+        <button onClick={handleStopRecording} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-red-500 text-white font-bold rounded-lg hover:bg-red-600 animate-pulse">
+          <StopIcon className="w-6 h-6"/>
+          Stop Recording
+        </button>
+      )}
+
+      {audioBlob && !isProcessing && !feedback && (
+        <button onClick={handleSubmit} className="w-full px-6 py-2 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600">
+          Submit for Feedback
+        </button>
+      )}
+
+      {isProcessing && <LoadingSpinner />}
+      
+      {feedback && (
+        <div className="mt-4 p-4 bg-white dark:bg-gray-800 rounded-lg">
+          <h4 className="font-bold mb-2">Feedback:</h4>
+          <p>{feedback}</p>
+          <button onClick={() => onAnswer("completed")} className="w-full mt-4 px-6 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600">
+            Continue
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ListeningQuestion: React.FC<{ question: Extract<QuizQuestion, { type: 'listening' }>, onAnswer: (answer: string) => void, onSpeak: (text: string) => void }> = ({ question, onAnswer, onSpeak }) => {
+    const [isPlaying, setIsPlaying] = useState(false);
+    
+    const handlePlay = () => {
+        if(isPlaying) return;
+        setIsPlaying(true);
+        onSpeak(question.correctAnswer);
+        setTimeout(() => setIsPlaying(false), 2000); // Prevent spamming
+    };
+    
+    return (
+        <div className="mt-4 space-y-4">
+            <button onClick={handlePlay} disabled={isPlaying} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 disabled:opacity-70">
+                <VolumeUpIcon className="w-6 h-6"/>
+                {isPlaying ? 'Playing...' : 'Play Audio'}
+            </button>
+            <form onSubmit={(e) => { e.preventDefault(); onAnswer((e.target as any).elements.transcript.value); }} className="flex gap-4">
+                <input name="transcript" placeholder="Type what you hear..." className="flex-grow px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-gray-100" />
+                <button type="submit" className="px-6 py-2 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600">Submit</button>
+            </form>
+        </div>
+    );
+};
+
 // Quiz Modal Component
 const QuizModal: React.FC<{
   questions: QuizQuestion[];
@@ -510,12 +772,15 @@ const QuizModal: React.FC<{
   onShareQuizResults: (
     topic: string,
     score: number,
+    totalGraded: number,
     questions: QuizQuestion[],
-    userAnswers: string[],
+    userAnswers: (string | string[])[],
   ) => Promise<void>;
-}> = ({ questions, topic, onClose, onShareQuizResults }) => {
+  onSpeakNote: (text: string, topic: string) => void;
+  targetLanguage: string;
+}> = ({ questions, topic, onClose, onShareQuizResults, onSpeakNote, targetLanguage }) => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [userAnswers, setUserAnswers] = useState<string[]>([]);
+  const [userAnswers, setUserAnswers] = useState<(string | string[])[]>([]);
   const [showResults, setShowResults] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
 
@@ -538,13 +803,33 @@ const QuizModal: React.FC<{
   }
 
   const currentQuestion = questions[currentQuestionIndex];
-  const score = userAnswers.reduce(
-    (acc, answer, index) =>
-      acc + (answer === questions[index].correctAnswer ? 1 : 0),
-    0,
-  );
+  const { score, totalGraded } = useMemo(() => {
+    let score = 0;
+    let totalGraded = 0;
+    userAnswers.forEach((answer, index) => {
+      const question = questions[index];
+      if (question.type === 'multiple-choice' || question.type === 'fill-in-the-blank') {
+        totalGraded++;
+        if (answer === question.correctAnswer) {
+          score++;
+        }
+      } else if (question.type === 'matching' && Array.isArray(answer)) {
+        totalGraded++;
+        if (answer.every((pair, i) => pair === `${question.pairs[i].term}-${question.pairs[i].definition}`)) {
+          score++;
+        }
+      } else if (question.type === 'speaking' || question.type === 'listening') {
+        // Not graded automatically, but we can give a point for completion
+        if (answer) { // If an answer was submitted
+            score++;
+            totalGraded++;
+        }
+      }
+    });
+    return { score, totalGraded };
+  }, [userAnswers, questions]);
 
-  const handleAnswer = (answer: string) => {
+  const handleAnswer = (answer: string | string[]) => {
     const newAnswers = [...userAnswers];
     newAnswers[currentQuestionIndex] = answer;
     setUserAnswers(newAnswers);
@@ -562,9 +847,50 @@ const QuizModal: React.FC<{
     if (isSharing) return;
     setIsSharing(true);
     
-    await onShareQuizResults(topic, score, questions, userAnswers);
+    await onShareQuizResults(topic, score, totalGraded, questions, userAnswers);
 
     setIsSharing(false);
+  };
+
+  const renderQuestion = () => {
+    switch (currentQuestion.type) {
+      case 'multiple-choice':
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            {currentQuestion.options.map((option, index) => {
+              const isSelected = userAnswers[currentQuestionIndex] === option;
+              return (
+                <button
+                  key={index}
+                  onClick={() => handleAnswer(option)}
+                  className={`p-4 rounded-lg text-left transition-colors duration-300 ${
+                    isSelected
+                      ? "bg-blue-500 text-white"
+                      : "bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
+                  }`}
+                >
+                  {option}
+                </button>
+              );
+            })}
+          </div>
+        );
+      case 'matching':
+        return <MatchingQuestion question={currentQuestion} onAnswer={handleAnswer} key={currentQuestionIndex} />;
+      case 'fill-in-the-blank':
+        return (
+            <form onSubmit={(e) => { e.preventDefault(); handleAnswer((e.target as any).elements.blank.value); }} className="mt-4 flex gap-4">
+                <input name="blank" className="flex-grow px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-gray-100" />
+                <button type="submit" className="px-6 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600">Submit</button>
+            </form>
+        );
+      case 'speaking':
+        return <SpeakingQuestion question={currentQuestion} onAnswer={handleAnswer} targetLanguage={targetLanguage} />;
+      case 'listening':
+        return <ListeningQuestion question={currentQuestion} onAnswer={handleAnswer} onSpeak={(text) => onSpeakNote(text, topic)} />;
+      default:
+        return <p>Unsupported question type.</p>;
+    }
   };
 
   return (
@@ -594,7 +920,7 @@ const QuizModal: React.FC<{
                 You scored
               </p>
               <p className="text-5xl font-bold text-blue-500">
-                {score} / {questions.length}
+                {score} / {totalGraded}
               </p>
             </div>
           ) : (
@@ -605,24 +931,7 @@ const QuizModal: React.FC<{
               <p className="text-xl font-semibold text-gray-900 dark:text-white">
                 {currentQuestion.question}
               </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                {currentQuestion.options.map((option, index) => {
-                  const isSelected = userAnswers[currentQuestionIndex] === option;
-                  return (
-                    <button
-                      key={index}
-                      onClick={() => handleAnswer(option)}
-                      className={`p-4 rounded-lg text-left transition-colors duration-300 ${
-                        isSelected
-                          ? "bg-blue-500 text-white"
-                          : "bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
-                      }`}
-                    >
-                      {option}
-                    </button>
-                  );
-                })}
-              </div>
+              {renderQuestion()}
             </div>
           )}
         </div>
@@ -660,8 +969,9 @@ const TeachMeModal: React.FC<{
   onShareQuizResults: (
     topic: string,
     score: number,
+    totalGraded: number,
     questions: QuizQuestion[],
-    userAnswers: string[],
+    userAnswers: (string | string[])[],
   ) => void;
   handleUsageCheck: (feature: UsageKey, action: () => void) => Promise<void>;
   isGroupChat: boolean;
@@ -704,6 +1014,9 @@ const TeachMeModal: React.FC<{
   const [showQuiz, setShowQuiz] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showVideoGallery, setShowVideoGallery] = useState(false);
+  const [youtubeVideos, setYoutubeVideos] = useState<YouTubeVideo[]>([]);
+  const [isLoadingVideos, setIsLoadingVideos] = useState(false);
   const topicListRef = useRef<HTMLUListElement>(null);
   const topicRefs = useRef<Map<string, HTMLButtonElement | null>>(new Map());
 
@@ -831,10 +1144,11 @@ const TeachMeModal: React.FC<{
   const handleShareAndClose = (
     topic: string,
     score: number,
+    totalGraded: number,
     questions: QuizQuestion[],
-    userAnswers: string[],
+    userAnswers: (string | string[])[],
   ) => {
-    onShareQuizResults(topic, score, questions, userAnswers);
+    onShareQuizResults(topic, score, totalGraded, questions, userAnswers);
     onClose();
   };
 
@@ -969,6 +1283,23 @@ const TeachMeModal: React.FC<{
       window.getSelection()?.removeAllRanges();
       
       alert(`Note added successfully to topic: ${(groupTopic || selectedTopic)!}`);
+    }
+  };
+
+  const handleFindVideos = async () => {
+    const currentTopic = groupTopic || selectedTopic;
+    if (!currentTopic) return;
+
+    setShowVideoGallery(true);
+    setIsLoadingVideos(true);
+    try {
+      const videos = await geminiService.searchYoutubeVideos(currentTopic, language);
+      setYoutubeVideos(videos);
+    } catch (error) {
+      console.error("Failed to fetch YouTube videos:", error);
+      setYoutubeVideos([]); // Clear videos on error
+    } finally {
+      setIsLoadingVideos(false);
     }
   };
 
@@ -1179,7 +1510,15 @@ const TeachMeModal: React.FC<{
             )}
           </div>
         </div>
-        <div className="flex justify-end p-4 border-t dark:border-gray-700 flex-shrink-0">
+        <div className="flex justify-between items-center p-4 border-t dark:border-gray-700 flex-shrink-0">
+          <button
+            onClick={handleFindVideos}
+            disabled={!(groupTopic || selectedTopic) || isLoading}
+            className="flex items-center gap-2 px-6 py-2 bg-red-500 text-white font-bold rounded-lg hover:bg-red-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
+          >
+            <YouTubeIcon className="w-5 h-5" />
+            Find Videos
+          </button>
           <button
             onClick={handleQuizMe}
             disabled={!(groupTopic || selectedTopic) || isLoading}
@@ -1195,6 +1534,16 @@ const TeachMeModal: React.FC<{
           topic={(groupTopic || selectedTopic)!}
           onClose={() => setShowQuiz(false)}
           onShareQuizResults={handleShareAndClose}
+          onSpeakNote={onSpeakNote}
+          targetLanguage={language}
+        />
+      )}
+      {showVideoGallery && (
+        <VideoGalleryModal
+          videos={youtubeVideos}
+          isLoading={isLoadingVideos}
+          onClose={() => setShowVideoGallery(false)}
+          topic={(groupTopic || selectedTopic) || ""}
         />
       )}
       {showNotes && (
@@ -1486,8 +1835,9 @@ interface ChatModalProps {
   onShareQuizResults: (
     topic: string,
     score: number,
+    totalGraded: number,
     questions: QuizQuestion[],
-    userAnswers: string[],
+    userAnswers: (string | string[])[],
   ) => void;
   userProfile: UserProfileData;
   handleUsageCheck: (feature: UsageKey, action: () => void) => Promise<void>;
@@ -2574,9 +2924,10 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   const handleShareQuizResults = (
     topic: string,
     score: number,
+    totalGraded: number,
     questions: QuizQuestion[],
-    userAnswers: string[],
-): Promise<void> => {
+    userAnswers: (string | string[])[],
+  ): Promise<void> => {
     
     // Mutex: Prevent multiple simultaneous executions of this function
     if (isSending) {
@@ -2591,26 +2942,39 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
             if (score > 0) {
               firestoreService.addXp(user.uid, score);
             }
-
             // 1. Prepare Message
-            let quizSummary = `I just took a quiz on "${topic}" and my score was ${score}/${questions.length}. `;
+            let quizSummary = `I just took a quiz on "${topic}" and my score was ${score}/${totalGraded}. `;
 
             const incorrectAnswers = questions
                 .map((q, index) => ({
-                    question: q.question,
+                    question: q,
                     userAnswer: userAnswers[index],
-                    correctAnswer: q.correctAnswer,
                 }))
-                .filter((item, index) => userAnswers[index] !== item.correctAnswer);
+                .filter((item, index) => {
+                    const question = item.question;
+                    const answer = userAnswers[index];
+                    if (question.type === 'multiple-choice' || question.type === 'fill-in-the-blank') {
+                        return answer !== question.correctAnswer;
+                    }
+                    if (question.type === 'matching' && Array.isArray(answer)) {
+                        return !answer.every((pair, i) => pair === `${question.pairs[i].term}-${question.pairs[i].definition}`);
+                    }
+                    if (question.type === 'listening' && typeof answer === 'string') {
+                        return answer.toLowerCase().trim() !== question.correctAnswer.toLowerCase().trim();
+                    }
+                    return false; // Speaking exercises are not graded here for correctness
+                });
 
             if (incorrectAnswers.length > 0) {
                 quizSummary += `I missed ${incorrectAnswers.length} question(s). I would like help understanding the following: `;
                 incorrectAnswers.forEach((item, index) => {
-                    quizSummary += `[Q${index + 1}: "${item.question}". My Answer: "${item.userAnswer}". Correct: "${item.correctAnswer}"]. `;
+                    if (item.question.type === 'multiple-choice' || item.question.type === 'fill-in-the-blank') {
+                        quizSummary += `[Q${index + 1}: "${item.question.question}". My Answer: "${item.userAnswer}". Correct: "${item.question.correctAnswer}"]. `;
+                    }
                 });
                 quizSummary = quizSummary.trim();
             } else {
-                quizSummary += "I got everything right, but I'd love some encouragement!";
+                quizSummary += "I did well, but I'd love some encouragement!";
             }
 
             const quizMessage: Message = {

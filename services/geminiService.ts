@@ -1,4 +1,4 @@
-import { Message, Partner, QuizQuestion, UserProfileData, TeachMeCache } from '../types';
+import { Message, Partner, QuizQuestion, UserProfileData, TeachMeCache, YouTubeVideo } from '../types';
 
 // Make sure this is the correct URL for your deployed Cloud Function.
 //const PROXY_URL = "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiProxy"; // Replace if yours is different
@@ -16,6 +16,10 @@ const TRANSCRIBE_PROXY_URL =
   process.env.NODE_ENV === 'development'
     ? "http://127.0.0.1:5001/langcampus-exchange/us-central1/transcribeAudio"
     : "https://us-central1-langcampus-exchange.cloudfunctions.net/transcribeAudio";
+const YOUTUBE_PROXY_URL =
+  process.env.NODE_ENV === 'development'
+    ? "http://127.0.0.1:5001/langcampus-exchange/us-central1/youtubeProxy"
+    : "https://us-central1-langcampus-exchange.cloudfunctions.net/youtubeProxy";
 
 /**
  * A helper function to safely parse JSON from the AI,
@@ -31,6 +35,30 @@ const cleanAndParseJson = (text: string) => {
   } catch (error) {
     console.error("Failed to parse cleaned JSON:", cleanedText);
     throw new Error("Invalid JSON response from AI.");
+  }
+};
+
+export const searchYoutubeVideos = async (topic: string, languageName: string): Promise<YouTubeVideo[]> => {
+  try {
+    const response = await fetch(YOUTUBE_PROXY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ topic, languageName }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("Error from YouTube proxy function:", errorText);
+      throw new Error(`YouTube proxy request failed: ${errorText}`);
+    }
+
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error("Error calling the YouTube proxy function:", error);
+    throw error;
   }
 };
 
@@ -367,12 +395,22 @@ export const getContent = async (topic: string, type: 'Grammar' | 'Vocabulary', 
     - Correct examples must be preceded by the "✅" emoji.
     - Incorrect examples must be preceded by the "❌" emoji and followed by a brief explanation of why it is incorrect.
 
+    **Formatting Guidelines:**
+    Use rich Markdown formatting to make the lesson easy to read and engaging. Specifically:
+    - Use headings (#, ##, ###) to structure the content.
+    - Use bold text (**text**) for emphasis on key terms.
+    - Use italic text (*text*) for highlighting or nuanced points.
+    - Use numbered lists (1., 2., 3.) for steps or ordered information.
+    - Use bulleted lists (* or -) for unordered information.
+    - Use inline code backticks (\`text\`) as an "accent font" to make specific words or short phrases stand out.
+    - Use HTML <u>text</u> tags for underlining when necessary.
+
     Language to Teach (Target Language): ${targetLanguage}
     Language of Instruction (Native Language): ${nativeLanguage}
     Topic Type: ${type}
     Selected Topic: "${topic}"
 
-    Please provide a detailed lesson on this topic, following all instructions above. Use Markdown for formatting (headings, bold text, lists).
+    Please provide a detailed lesson on this topic, following all instructions above.
     Return ONLY the lesson content in Markdown format. Do not include any conversational pleasantries or introductions.
     `;
   try {
@@ -385,39 +423,98 @@ export const getContent = async (topic: string, type: 'Grammar' | 'Vocabulary', 
   }
 };
 
+export const comparePronunciation = async (originalText: string, userTranscription: string, targetLanguage: string): Promise<string> => {
+  const prompt = `
+    You are a language pronunciation coach for ${targetLanguage}. Your task is to compare a user's transcribed speech to an original text and provide helpful feedback.
+
+    - **Original Text:** "${originalText}"
+    - **User's Transcription:** "${userTranscription}"
+
+    **Instructions:**
+    1.  Analyze the transcription against the original text. Be aware that speech-to-text can sometimes make phonetic mistakes (e.g., transcribing the letter "Q" as the word "you").
+    2.  If the transcription is identical or a very close phonetic match, congratulate the user on their excellent pronunciation.
+    3.  If there are differences, gently point them out. For example, if the original was "read" and the user said "red", explain the vowel sound difference.
+    4.  Keep the feedback encouraging, brief (2-4 sentences), and in English.
+
+    Now, provide your feedback.
+  `;
+  try {
+    const data = await callGeminiProxy(prompt);
+    return data.candidates[0].content.parts[0].text;
+  } catch (error) {
+    console.error("Error comparing pronunciation:", error);
+    return "Sorry, I couldn't analyze your speech right now.";
+  }
+};
+
 export const generateQuiz = async (topic: string, type: 'Grammar' | 'Vocabulary', targetLanguage: string, nativeLanguage: string, level: number): Promise<QuizQuestion[]> => {
   const questionLanguage = level === 1 ? nativeLanguage : targetLanguage;
   
   const prompt = `
     You are a language teacher creating a quiz for a student whose native language is ${nativeLanguage}.
     The student is learning ${targetLanguage}.
-    Your task is to generate a multiple-choice quiz based on the provided topic.
+    Your task is to generate a varied, 12-question quiz based on the provided topic.
 
     Topic: "${topic}"
     Quiz Level: ${level}
-    Number of Questions: 8
+    Number of Questions: 12
 
-    **IMPORTANT INSTRUCTIONS:**
-    1.  The quiz QUESTIONS must be written in: **${questionLanguage}**.
-    2.  The multiple-choice OPTIONS and the CORRECT ANSWER must be written in: **${targetLanguage}**.
-    3.  Your entire response MUST be a single, valid JSON array.
-    4.  Do NOT include any text, greetings, titles, answer keys, or explanations outside of the JSON array.
-    5.  Each element in the array must be a JSON object representing one question with three properties: "question", "options" (an array of 4 strings), and "correctAnswer".
+    **Question Type Distribution:**
+    - 6 questions (50%) must be 'multiple-choice'.
+    - 2 questions (~20%) must be 'matching'.
+    - 2 questions (~20%) must be 'fill-in-the-blank'.
+    - 1 question (~10%) must be a 'speaking' exercise.
+    - 1 question (~10%) must be a 'listening' exercise.
 
-    Example for a Level 1 quiz for an English speaker learning Spanish:
-    [
-      {
-        "question": "Which of these means 'the house'?",
-        "options": ["el libro", "la casa", "un gato", "la mesa"],
-        "correctAnswer": "la casa"
-      }
-    ]
+    **JSON Response Instructions:**
+    - Your entire response MUST be a single, valid JSON array of 12 question objects.
+    - Do NOT include any text, greetings, titles, or explanations outside of the JSON array.
+    - Each object must have a "type" property corresponding to the question type.
+
+    **JSON Object Formats:**
+    1.  **Multiple Choice:**
+        {
+          "type": "multiple-choice",
+          "question": "The question text in ${questionLanguage}",
+          "options": ["option1", "option2", "option3", "option4"], // Options in ${targetLanguage}
+          "correctAnswer": "the correct option text"
+        }
+    2.  **Matching:**
+        {
+          "type": "matching",
+          "question": "Match the terms with their definitions.", // In ${questionLanguage}
+          "pairs": [
+            { "term": "Term A", "definition": "Definition A" }, // Both in ${targetLanguage}
+            { "term": "Term B", "definition": "Definition B" },
+            { "term": "Term C", "definition": "Definition C" },
+            { "term": "Term D", "definition": "Definition D" }
+          ]
+        }
+    3.  **Fill in the Blank:**
+        {
+          "type": "fill-in-the-blank",
+          "question": "Sentence with a ___ blank.", // In ${targetLanguage}
+          "correctAnswer": "word" // In ${targetLanguage}
+        }
+    4.  **Speaking:**
+        {
+          "type": "speaking",
+          "question": "Please read the following aloud.", // In ${questionLanguage}
+          "sentenceToRead": " A short, relevant word, letter, or phrase from the topic in ${targetLanguage}."
+        } 
+    5.  **Listening:**
+        {
+          "type": "listening",
+          "question": "Listen and type what you hear.", // In ${questionLanguage}
+          "correctAnswer": "The sentence to be synthesized and transcribed." // In ${targetLanguage}
+          "sentenceToRead": "A relevant and simple sentence from the topic in ${targetLanguage}."
+        }
 
     Now, generate the JSON array for the quiz about "${topic}".
   `;
 
   try {
-    const data = await callGeminiProxy(prompt, "gemini-2.5-flash");
+    const data = await callGeminiProxy(prompt, "gemini-flash-2.5");
     const rawText = data.candidates[0].content.parts[0].text;
     const quizData = cleanAndParseJson(rawText);
 

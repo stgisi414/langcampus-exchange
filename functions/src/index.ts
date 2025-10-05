@@ -63,6 +63,70 @@ export const geminiProxy = onRequest(
   }
 );
 
+export const youtubeProxy = onRequest(
+  { secrets: ["GEMINI_API_KEY"] },
+  async (request: FunctionsRequest, response: ExpressResponse) => {
+    corsHandler(request, response, async () => {
+      if (request.method !== "POST") {
+        return response.status(405).send("Method Not Allowed");
+      }
+
+      const { topic, languageName } = request.body;
+      if (!topic || !languageName) {
+        return response.status(400).send("Bad Request: Missing topic or languageName");
+      }
+
+      const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+      if (!GEMINI_API_KEY) {
+        return response.status(500).send("Internal Server Error: API key not configured.");
+      }
+      
+      const db = getFirestore();
+      const cacheKey = `${languageName}_${topic}`.replace(/[^a-zA-Z0-9]/g, '_');
+      const cacheRef = db.collection('videoCache').doc(cacheKey);
+      const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+
+      try {
+        const cacheDoc = await cacheRef.get();
+        if (cacheDoc.exists && cacheDoc.data()?.timestamp > sevenDaysAgo) {
+          logger.info(`Serving YouTube search results from cache for key: ${cacheKey}`);
+          return response.status(200).json(cacheDoc.data()?.videos || []);
+        }
+
+        logger.info(`Fetching new YouTube search results for key: ${cacheKey}`);
+        const query = encodeURIComponent(`${languageName} lesson ${topic}`);
+        const youtubeApiUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${query}&key=${GEMINI_API_KEY}&maxResults=6&type=video&relevanceLanguage=en`;
+        
+        const youtubeResponse = await fetch(youtubeApiUrl);
+        if (!youtubeResponse.ok) {
+          const errorText = await youtubeResponse.text();
+          logger.error("Error from YouTube API:", errorText);
+          return response.status(youtubeResponse.status).send(errorText);
+        }
+
+        const data = await youtubeResponse.json();
+        
+        const videos = data.items.map((item: any) => ({
+          videoId: item.id.videoId,
+          title: item.snippet.title,
+          thumbnailUrl: item.snippet.thumbnails.medium.url,
+        }));
+        
+        // Save to cache
+        await cacheRef.set({
+          videos: videos,
+          timestamp: Date.now(),
+        });
+
+        return response.status(200).json(videos);
+      } catch (error) {
+        logger.error("Error calling YouTube API or handling cache:", error);
+        return response.status(500).send("Internal Server Error");
+      }
+    });
+  }
+);
+
 export const transcribeAudio = onRequest(
     (request: FunctionsRequest, response: ExpressResponse) => {
         corsHandler(request, response, async () => {
@@ -174,7 +238,6 @@ export const googleCloudTTS = onRequest(
     });
   }
 );
-
 
 export const createStripePortalLink = onRequest(
   { secrets: ["STRIPE_SECRET_KEY"] },

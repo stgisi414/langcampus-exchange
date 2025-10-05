@@ -36,10 +36,38 @@ export interface Message {
   timestamp?: number;
 }
 
-export interface QuizQuestion {
+export type QuizQuestion = {
+  type: 'multiple-choice';
   question: string;
   options: string[];
   correctAnswer: string;
+} | {
+  type: 'matching';
+  question: string;
+  pairs: { term: string; definition: string }[];
+} | {
+  type: 'fill-in-the-blank';
+  question: string; // The sentence with a blank, e.g., "I ___ to the store."
+  correctAnswer: string;
+} | {
+  type: 'speaking';
+  question: string; // The instruction text
+  sentenceToRead: string; // The actual sentence to read
+} | {
+  type: 'listening';
+  question: string; // The text to be synthesized into speech
+  correctAnswer: string; // The text the user should transcribe
+};
+
+export interface YouTubeVideo {
+  videoId: string;
+  title: string;
+  thumbnailUrl: string;
+}
+
+export interface YouTubeCache {
+  videos: YouTubeVideo[];
+  timestamp: number;
 }
 
 export interface SavedChat {
