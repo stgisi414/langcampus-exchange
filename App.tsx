@@ -82,42 +82,6 @@ interface AppContentProps {
   user: UserData;
 }
 
-// Helper function to convert raw PCM audio data to a playable WAV Blob
-const pcmToWav = (pcmData: Int16Array, sampleRate: number) => {
-  const numChannels = 1;
-  const bitsPerSample = 16;
-  const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
-  const blockAlign = numChannels * (bitsPerSample / 8);
-  const dataSize = pcmData.length * (bitsPerSample / 8);
-  const buffer = new ArrayBuffer(44 + dataSize);
-  const view = new DataView(buffer);
-
-  // RIFF header
-  view.setUint32(0, 0x52494646, false); // "RIFF"
-  view.setUint32(4, 36 + dataSize, true);
-  view.setUint32(8, 0x57415645, false); // "WAVE"
-
-  // fmt sub-chunk
-  view.setUint32(12, 0x666d7420, false); // "fmt "
-  view.setUint32(16, 16, true); // Sub-chunk size
-  view.setUint16(20, 1, true); // Audio format (1 for PCM)
-  view.setUint16(22, numChannels, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, byteRate, true);
-  view.setUint16(32, blockAlign, true);
-  view.setUint16(34, bitsPerSample, true);
-
-  // data sub-chunk
-  view.setUint32(36, 0x64617461, false); // "data"
-  view.setUint32(40, dataSize, true);
-
-  // Write PCM data
-  const pcm16 = new Int16Array(buffer, 44);
-  pcm16.set(pcmData);
-
-  return new Blob([view], { type: "audio/wav" });
-};
-
 const FeatureCard: React.FC<{
   title: string;
   description: string;
@@ -1430,7 +1394,7 @@ interface ChatModalProps {
   messages: Message[];
   onMessagesChange: React.Dispatch<React.SetStateAction<Message[]>>;
   onClose: () => void;
-  onSaveChat: (messages: Message[]) => void;
+  onSaveChat: (messages: Message[], showAlert?: boolean) => void;
   nativeLanguage: string;
   teachMeCache: TeachMeCache | null;
   setTeachMeCache: (cache: TeachMeCache | null) => void;
@@ -1460,8 +1424,6 @@ interface ChatModalProps {
   onTranscribeAndRespond: (audioBlob: Blob, languageCode: string, messagesSnapshot: Message[]) => Promise<void>;
   onAddNote: (noteText: string, topic: string) => void;
   onDeleteNote: (noteId: string) => void;
-  onReorderNotes: (newNotes: Note[]) => void;
-  onSpeakNote: (text: string, topic: string) => void;
   onReorderNotes: (newNotes: Note[]) => void;
   onSpeakNote: (text: string, topic: string) => void;
 }
@@ -1652,19 +1614,50 @@ const ChatModal: React.FC<ChatModalProps> = ({
   const partnerLanguageName = partnerLanguageObject.name;
   const partnerLanguageCode = partnerLanguageObject.code;
 
-  const handleSpeak = (text: string, index: number) => {
-    // Prevent multiple TTS requests while one is loading/playing
+  const handleSpeak = async (text: string, index: number) => { // Make async
     if (speakingMessageIndex !== null) {
       return;
     }
-    setSpeakingMessageIndex(index); // Set loading state for this message
+    setSpeakingMessageIndex(index);
 
-    // Use the reusable handler. The topic is not relevant for chat messages here, so we use an empty string.
-    onSpeakNote(text, ''); 
+    const gender = partner.gender || 'male';
+    
+    await handleUsageCheck("audioPlays", async () => {
+        try {
+            // 1. Tag text for SSML
+            const ssmlText = await geminiService.tagTextForTTS(text, partnerLanguageCode);
 
-    // Manually clear the speaking state after a delay or on user action (since onSpeakNote is fire-and-forget in this flow)
-    // A better approach is to clear it instantly, as the browser handles the speaking.
-    setSpeakingMessageIndex(null); 
+            // 2. Synthesize speech
+            const audioContent = await geminiService.synthesizeSpeech(
+                ssmlText,
+                partnerLanguageCode,
+                gender,
+            );
+            const audioBlob = new Blob([base64ToArrayBuffer(audioContent)], { type: 'audio/mpeg' });
+            const audioUrl = URL.createObjectURL(audioBlob);
+            const audio = new Audio(audioUrl);
+            
+            audio.play();
+
+            audio.onended = () => {
+                setSpeakingMessageIndex(null);
+            };
+
+        } catch (error) {
+            console.error("Error synthesizing speech, falling back to browser TTS:", error);
+            try {
+                if ('speechSynthesis' in window) {
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.lang = partnerLanguageCode;
+                    window.speechSynthesis.speak(utterance);
+                }
+            } catch (speechError) {
+                console.error("Browser speech synthesis failed to start:", speechError);
+            } finally {
+                setSpeakingMessageIndex(null); // Ensure state is cleared on error
+            }
+        }
+    });
   };
 
   const AudioPlayer: React.FC<{ audioUrl: string; duration: number }> = ({
@@ -1999,8 +1992,8 @@ const ChatModal: React.FC<ChatModalProps> = ({
           user={user}
           onAddNote={onAddNote}
           onDeleteNote={onDeleteNote}
-          onReorderNotes={handleReorderNotes}
-          onSpeakNote={handleSpeakNote}
+          onReorderNotes={onReorderNotes}
+          onSpeakNote={onSpeakNote}
         />
       )}
     </div>
@@ -2754,31 +2747,28 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     }
   };
 
-  const handleSpeakNote = useCallback((text: string, topic: string) => {
+  const handleSpeakNote = useCallback(async (text: string, topic: string) => { // Make async
     
-    // Inferred language logic remains the same (though simplified for notes)
-    // We assume notes are in the target language for simplicity or use the topic for context.
-    const languageMatch = topic.match(/^[A-Za-z]+:/);
-    const inferredLanguageName = languageMatch ? languageMatch[0].replace(':', '') : currentPartner?.nativeLanguage || targetLanguage;
+    const languageMatch = topic.match(/^[A-Za-z]+/);
+    const primaryLanguageName = languageMatch ? languageMatch[0].replace(':', '') : currentPartner?.nativeLanguage || targetLanguage;
     
     const languageObject = LANGUAGES.find(
-        (lang) => lang.name.toLowerCase() === inferredLanguageName.toLowerCase(),
+        (lang) => lang.name.toLowerCase() === primaryLanguageName.toLowerCase(),
     ) || LANGUAGES.find((lang) => lang.code === targetLanguage)!;
 
-    const languageCode = languageObject.code;
+    const primaryLanguageCode = languageObject.code;
     const gender = currentPartner?.gender || 'male'; 
 
-    handleUsageCheck("audioPlays", async () => {
+    await handleUsageCheck("audioPlays", async () => {
         try {
+            const ssmlText = await geminiService.tagTextForTTS(text, primaryLanguageCode);
             const audioContent = await geminiService.synthesizeSpeech(
-                text,
-                languageCode,
+                ssmlText,
+                primaryLanguageCode, // The primary language for the voice
                 gender,
             );
-            const pcmData = base64ToArrayBuffer(audioContent);
-            const pcm16 = new Int16Array(pcmData);
-            const wavBlob = pcmToWav(pcm16, 24000);
-            const audioUrl = URL.createObjectURL(wavBlob);
+            const audioBlob = new Blob([base64ToArrayBuffer(audioContent)], { type: 'audio/mpeg' });
+            const audioUrl = URL.createObjectURL(audioBlob);
             const audio = new Audio(audioUrl);
             
             audio.play();
@@ -2788,7 +2778,7 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
             try {
                 if ('speechSynthesis' in window) {
                     const utterance = new SpeechSynthesisUtterance(text);
-                    utterance.lang = languageCode;
+                    utterance.lang = primaryLanguageCode;
                     window.speechSynthesis.speak(utterance);
                 }
             } catch (speechError) {
@@ -2974,7 +2964,6 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
           onTranscribeAndRespond={handleTranscribeAndRespond}
           nudgeCount={nudgeCount} 
           onAddNudge={handleAddNudge}
-          user={user}
           onAddNote={handleAddNote}
           onDeleteNote={handleDeleteNote}
           onReorderNotes={handleReorderNotes}

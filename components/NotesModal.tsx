@@ -1,37 +1,34 @@
+// stgisi414/langcampus-exchange/langcampus-exchange-d54d52c6e809974f6d25393478b19cf01e2d62db/components/NotesModal.tsx
 import React, { useState } from 'react';
-import { CloseIcon, TrashIcon, Bars3Icon, VolumeUpIcon } from './Icons.tsx'; // <--- Import Bars3Icon, VolumeUpIcon
+import { CloseIcon, TrashIcon, Bars3Icon, VolumeUpIcon } from './Icons.tsx';
 import { Note } from '../types.ts';
 
 interface NotesModalProps {
   notes: Note[];
   onClose: () => void;
   onDeleteNote: (noteId: string) => void;
-  onReorderNotes: (newNotes: Note[]) => void; // <--- NEW PROP
-  onSpeakNote: (text: string, topic: string) => void; // <--- NEW PROP
+  onReorderNotes: (newNotes: Note[]) => void;
+  onSpeakNote: (text: string, topic: string) => void;
 }
 
 const NotesModal: React.FC<NotesModalProps> = ({ notes, onClose, onDeleteNote, onReorderNotes, onSpeakNote }) => {
   const [localNotes, setLocalNotes] = useState(notes);
   const [draggedItem, setDraggedItem] = useState<Note | null>(null);
+  const [draggedItemId, setDraggedItemId] = useState<string | null>(null);
 
-  // Sync local notes with props only when external data changes (e.g., add/delete)
-  // This is crucial for managing drag-and-drop state locally.
   React.useEffect(() => {
     setLocalNotes(notes);
   }, [notes]);
 
   const handleDragStart = (e: React.DragEvent<HTMLLIElement>, item: Note) => {
     setDraggedItem(item);
+    setDraggedItemId(item.id);
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', item.id); // Set ID for data transfer
-    // Set timeout to apply opacity change after the drag event begins
-    setTimeout(() => {
-      e.currentTarget.classList.add('opacity-50');
-    }, 0);
+    e.dataTransfer.setData('text/plain', item.id);
   };
 
   const handleDragOver = (e: React.DragEvent<HTMLLIElement>) => {
-    e.preventDefault(); // Necessary to allow drop
+    e.preventDefault();
     if (!draggedItem) return;
 
     const targetElement = e.currentTarget;
@@ -41,24 +38,21 @@ const NotesModal: React.FC<NotesModalProps> = ({ notes, onClose, onDeleteNote, o
     const targetIndex = localNotes.findIndex(n => n.id === targetId);
     const draggedIndex = localNotes.findIndex(n => n.id === draggedItem.id);
 
-    if (draggedIndex === targetIndex) return;
+    if (draggedIndex === targetIndex || draggedIndex === -1) return;
 
-    // Move the item locally for visual feedback
     const newNotes = [...localNotes];
-    newNotes.splice(draggedIndex, 1); // Remove the dragged item
-    newNotes.splice(targetIndex, 0, draggedItem); // Insert it at the target position
+    newNotes.splice(draggedIndex, 1);
+    newNotes.splice(targetIndex, 0, draggedItem);
 
     setLocalNotes(newNotes);
   };
 
-  const handleDragEnd = (e: React.DragEvent<HTMLLIElement>) => {
-    e.currentTarget.classList.remove('opacity-50');
+  const handleDragEnd = () => {
     setDraggedItem(null);
-    // CRITICAL: Call the reorder handler to persist the final local order to Firestore
-    // This is called on dragend, using the latest localNotes array.
-    onReorderNotes(localNotes); 
+    setDraggedItemId(null);
+    onReorderNotes(localNotes);
   };
-  
+
   const handleSpeak = (text: string, topic: string) => {
       onSpeakNote(text, topic);
   };
@@ -76,22 +70,20 @@ const NotesModal: React.FC<NotesModalProps> = ({ notes, onClose, onDeleteNote, o
           {notes && notes.length > 0 ? (
             <ul 
               className="space-y-3"
-              onDrop={handleDragEnd} // Final drop event triggers persist
-              onDragOver={(e) => e.preventDefault()} // Allow drops
+              onDragOver={(e) => e.preventDefault()}
             >
               {localNotes.map((note) => (
                 <li 
                   key={note.id} 
-                  data-id={note.id} // Set data attribute for dragOver
-                  draggable // Make the list item draggable
+                  data-id={note.id}
+                  draggable
                   onDragStart={(e) => handleDragStart(e, note)}
                   onDragOver={handleDragOver}
                   onDragEnd={handleDragEnd}
-                  className={`bg-gray-100 dark:bg-gray-700 p-4 rounded-lg flex justify-between items-center transition-shadow ${draggedItem?.id === note.id ? 'shadow-2xl' : 'shadow-md'}`}
+                  className={`bg-gray-100 dark:bg-gray-700 p-4 rounded-lg flex justify-between items-center transition-shadow ${draggedItemId === note.id ? 'opacity-50 shadow-2xl' : 'shadow-md'}`}
                 >
                   <div className="flex items-center space-x-3 w-full">
                     
-                    {/* NEW: Drag Icon */}
                     <Bars3Icon className="w-6 h-6 text-gray-500 cursor-move flex-shrink-0" title="Drag to reorder" />
                     
                     <div className="flex-grow">
@@ -103,7 +95,6 @@ const NotesModal: React.FC<NotesModalProps> = ({ notes, onClose, onDeleteNote, o
                   </div>
                   
                   <div className="flex items-center space-x-2 flex-shrink-0">
-                    {/* NEW: Playback Button */}
                     <button 
                         onClick={() => handleSpeak(note.text, note.topic)} 
                         className="p-1 text-blue-500 hover:text-blue-700 dark:hover:text-blue-300" 
@@ -112,7 +103,6 @@ const NotesModal: React.FC<NotesModalProps> = ({ notes, onClose, onDeleteNote, o
                       <VolumeUpIcon className="w-5 h-5" />
                     </button>
                     
-                    {/* Existing: Delete Button */}
                     <button 
                         onClick={() => onDeleteNote(note.id)} 
                         className="p-1 text-red-500 hover:text-red-700 dark:hover:text-red-300" 
@@ -125,7 +115,6 @@ const NotesModal: React.FC<NotesModalProps> = ({ notes, onClose, onDeleteNote, o
               ))}
             </ul>
           ) : (
-            // NEW: How to Add Notes Section
             <div className="text-center p-8 bg-blue-50 dark:bg-gray-700 rounded-lg border border-blue-200 dark:border-gray-600">
               <p className="text-lg font-semibold text-blue-700 dark:text-blue-300 mb-4">You have no saved notes yet.</p>
               <p className="text-gray-600 dark:text-gray-300 space-y-3 text-left">

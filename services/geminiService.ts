@@ -10,8 +10,8 @@ const PROXY_URL =
     : "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiProxy";
 const TTS_PROXY_URL =
    process.env.NODE_ENV === 'development'
-    ? "http://127.0.0.1:5001/langcampus-exchange/us-central1/geminiTTS"
-    : "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiTTS";
+    ? "http://127.0.0.1:5001/langcampus-exchange/us-central1/googleCloudTTS"
+    : "https://us-central1-langcampus-exchange.cloudfunctions.net/googleCloudTTS";
 const TRANSCRIBE_PROXY_URL =
   process.env.NODE_ENV === 'development'
     ? "http://127.0.0.1:5001/langcampus-exchange/us-central1/transcribeAudio"
@@ -61,6 +61,43 @@ const callGeminiProxy = async (prompt: string) => {
     console.error("Error calling the proxy function:", error);
     throw error;
   }
+};
+
+export const tagTextForTTS = async (text: string, primaryLanguageCode: string): Promise<string> => {
+    const prompt = `
+      Analyze the following text. Your primary language is ${primaryLanguageCode}.
+      For any words or phrases that are NOT in the primary language, wrap them in an SSML <lang> tag with the correct xml:lang code.
+      The final output must be a single, valid SSML string wrapped in a <speak> tag.
+      Do not include any other text or explanations.
+
+      Example:
+      Text: "Hello, that means 안녕하세요 in Korean."
+      Primary Language: en-US
+      Output: "<speak>Hello, that means <lang xml:lang="ko-KR">안녕하세요</lang> in Korean.</speak>"
+
+      Example 2:
+      Text: "I like to eat tacos."
+      Primary Language: en-US
+      Output: "<speak>I like to eat tacos.</speak>"
+
+      Now, process this text: "${text}"
+    `;
+
+    try {
+        const data = await callGeminiProxy(prompt);
+        let ssmlText = data.candidates[0].content.parts[0].text;
+        
+        ssmlText = ssmlText.replace(/^```(xml|ssml)?\s*/, '').replace(/```$/, '').trim();
+
+        if (ssmlText.startsWith('<speak>') && ssmlText.endsWith('</speak>')) {
+            return ssmlText;
+        } else {
+            return `<speak>${text}</speak>`;
+        }
+    } catch (error) {
+        console.error("Error tagging text for TTS:", error);
+        return `<speak>${text}</speak>`;
+    }
 };
 
 export const synthesizeSpeech = async (text: string, languageCode: string, gender: 'male' | 'female'): Promise<string> => {

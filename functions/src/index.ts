@@ -7,6 +7,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import { initializeApp, getApps } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { SpeechClient } from "@google-cloud/speech";
+import { TextToSpeechClient } from "@google-cloud/text-to-speech";
 
 if (getApps().length === 0) {
   initializeApp();
@@ -108,139 +109,58 @@ export const transcribeAudio = onRequest(
     }
 );
 
-const voiceConfigMap: Record<string, any> = {
-    "en-US": {
-        male: {prebuiltVoiceConfig: {voiceName: "Kore"}}, 
-        female: {prebuiltVoiceConfig: {voiceName: "Leda"}} 
-    },
-    "es-ES": {
-        male: {prebuiltVoiceConfig: {voiceName: "Puck"}}, 
-        female: {prebuiltVoiceConfig: {voiceName: "Andromeda"}} 
-    },
-    "fr-FR": {
-        male: {prebuiltVoiceConfig: {voiceName: "Orion"}}, 
-        female: {prebuiltVoiceConfig: {voiceName: "Leda"}} 
-    },
-    "de-DE": {
-        male: {prebuiltVoiceConfig: {voiceName: "Charon"}}, 
-        female: {prebuiltVoiceConfig: {voiceName: "Deneb"}} 
-    },
-    "ja-JP": {
-        male: {prebuiltVoiceConfig: {voiceName: "Orus"}}, 
-        female: {prebuiltVoiceConfig: {voiceName: "Aoede"}} 
-    },
-    "ko-KR": {
-        male: {prebuiltVoiceConfig: {voiceName: "Sirius"}}, 
-        female: {prebuiltVoiceConfig: {voiceName: "Adhara"}} 
-    },
-    "it-IT": {
-        male: {prebuiltVoiceConfig: {voiceName: "Fenrir"}}, 
-        female: {prebuiltVoiceConfig: {voiceName: "Lyra"}} 
-    },
-    "pt-BR": {
-        male: {prebuiltVoiceConfig: {voiceName: "Umbriel"}}, 
-        female: {prebuiltVoiceConfig: {voiceName: "Vega"}} 
-    },
-    "ru-RU": {
-        male: {prebuiltVoiceConfig: {voiceName: "Iapetus"}}, 
-        female: {prebuiltVoiceConfig: {voiceName: "Cassiopeia"}} 
-    },
-    "ar-XA": {
-        male: {prebuiltVoiceConfig: {voiceName: "Algieba"}}, 
-        female: {prebuiltVoiceConfig: {voiceName: "Rigel"}} 
-    },
-    "cmn-CN": {
-        male: {prebuiltVoiceConfig: {voiceName: "Achernar"}}, 
-        female: {prebuiltVoiceConfig: {voiceName: "Lyra"}} 
-    },
-    "hi-IN": {
-        male: {prebuiltVoiceConfig: {voiceName: "Alnilam"}}, 
-        female: {prebuiltVoiceConfig: {voiceName: "Chara"}} 
-    },
-    "vi-VN": {
-        male: {prebuiltVoiceConfig: {voiceName: "Gacrux"}}, 
-        female: {prebuiltVoiceConfig: {voiceName: "Fomalhaut"}} 
-    },
-    "pl-PL": {
-        male: {prebuiltVoiceConfig: {voiceName: "Pulcherrima"}}, 
-        female: {prebuiltVoiceConfig: {voiceName: "Lyra"}} 
-    },
-    "mn-MN": {
-        male: {prebuiltVoiceConfig: {voiceName: "Sadachbia"}}, 
-        female: {prebuiltVoiceConfig: {voiceName: "Mira"}} 
-    },
+const voiceMap: Record<string, any> = {
+    "en-US": { male: "en-US-Wavenet-D", female: "en-US-Wavenet-F" },
+    "es-ES": { male: "es-ES-Wavenet-B", female: "es-ES-Wavenet-C" },
+    "fr-FR": { male: "fr-FR-Wavenet-B", female: "fr-FR-Wavenet-A" },
+    "de-DE": { male: "de-DE-Wavenet-B", female: "de-DE-Wavenet-A" },
+    "ja-JP": { male: "ja-JP-Wavenet-C", female: "ja-JP-Wavenet-A" },
+    "ko-KR": { male: "ko-KR-Wavenet-C", female: "ko-KR-Wavenet-A" },
+    "it-IT": { male: "it-IT-Wavenet-B", female: "it-IT-Wavenet-A" },
+    "pt-BR": { male: "pt-BR-Wavenet-B", female: "pt-BR-Wavenet-A" },
+    "ru-RU": { male: "ru-RU-Wavenet-B", female: "ru-RU-Wavenet-A" },
+    "ar-XA": { male: "ar-XA-Wavenet-B", female: "ar-XA-Wavenet-A" },
+    "cmn-CN": { male: "cmn-CN-Wavenet-B", female: "cmn-CN-Wavenet-A" },
+    "hi-IN": { male: "hi-IN-Wavenet-B", female: "hi-IN-Wavenet-A" },
+    "vi-VN": { male: "vi-VN-Wavenet-D", female: "vi-VN-Wavenet-A" },
+    "pl-PL": { male: "pl-PL-Wavenet-B", female: "pl-PL-Wavenet-A" },
+    "mn-MN": { male: "mn-MN-Standard-B", female: "mn-MN-Standard-A" }, // Wavenet not available for Mongolian
 };
 
-// Use the correct, aliased types for Firebase onRequest handlers
-export const geminiTTS = onRequest(
-  { secrets: ["GEMINI_API_KEY"] },
+export const googleCloudTTS = onRequest(
   (request: FunctionsRequest, response: ExpressResponse) => {
     corsHandler(request, response, async () => {
-      logger.info("TTS Function started, CORS check passed.");
+      logger.info("googleCloudTTS Function started, CORS check passed.");
+
       if (request.method !== "POST") {
         return response.status(405).send("Method Not Allowed");
       }
-      const { text, languageCode, gender } = request.body; // <--- DESTRUCTURE GENDER
-      if (!text || !languageCode || !gender || (gender !== 'male' && gender !== 'female')) { // <--- VALIDATE GENDER
+
+      const { text, languageCode, gender } = request.body;
+      if (!text || !languageCode || !gender || (gender !== 'male' && gender !== 'female')) {
         return response.status(400).send("Bad Request: Missing text, languageCode, or invalid gender.");
       }
-      const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-      if (!GEMINI_API_KEY) {
-        return response.status(500).send("Internal Server Error: API key not configured.");
-      }
-      try {
-        let processedText = text;
-        if (text.trim().length <= 2) {
-          processedText = `<break time="150ms"/>${text}<break time="150ms"/>`;
-        }
-        const contentText = `<speak><lang xml:lang="${languageCode}">${processedText}</lang></speak>`;
-        
-        // --- FIX: Replace Optional Chaining (?. ) with explicit checks to prevent initialization crash ---
-        const languageVoiceMap = voiceConfigMap[languageCode];
-        let voiceConfig;
-        
-        if (languageVoiceMap && languageVoiceMap[gender]) {
-            voiceConfig = languageVoiceMap[gender];
-        } else {
-            // Fallback logic
-            logger.warn(`No specific voice found for ${languageCode} with gender ${gender}. Falling back to default English male.`);
-            
-            // Access the fallback safely
-            const fallbackVoiceMap = voiceConfigMap["en-US"];
-            voiceConfig = fallbackVoiceMap ? fallbackVoiceMap.male : {prebuiltVoiceConfig: {voiceName: "Kore"}};
-        }
-        // --- END FIX ---
 
-        const ttsUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${GEMINI_API_KEY}`;
-        const payload = {
-          "model": "gemini-2.5-flash-preview-tts",
-          "contents": [{"parts": [{"text": contentText}]}],
-          "generationConfig": {
-            "responseModalities": ["AUDIO"],
-            "speechConfig": {
-              "voiceConfig": voiceConfig, // Guaranteed to be an object now
-              "languageCode": languageCode,
-            },
-          },
+      try {
+        const ttsClient = new TextToSpeechClient();
+
+        const languageVoices = voiceMap[languageCode] || voiceMap["en-US"];
+        const voiceName = languageVoices[gender] || languageVoices['male'];
+
+        const isSsml = text.trim().startsWith('<speak>');
+        const input = isSsml ? { ssml: text } : { text: text };
+
+        const ttsRequest = {
+          input: input,
+          voice: { languageCode: languageCode, name: voiceName },
+          audioConfig: { audioEncoding: "MP3" as const },
         };
-        const ttsResponse = await fetch(ttsUrl, {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify(payload),
-        });
-        if (!ttsResponse.ok) {
-          const errorText = await ttsResponse.text();
-          logger.error("Error from Gemini TTS API:", errorText);
-          return response.status(ttsResponse.status).send(errorText);
-        }
-        const result = await ttsResponse.json();
-        const candidate = result?.candidates?.[0];
-        if (!candidate?.content?.parts) {
-          throw new Error("Invalid TTS API response structure.");
-        }
-        const audioPart = candidate.content.parts.find((part: any) => part.inlineData);
-        if (audioPart?.inlineData) {
-          return response.status(200).send({audioContent: audioPart.inlineData.data});
+
+        const [ttsResponse] = await ttsClient.synthesizeSpeech(ttsRequest);
+        
+        if (ttsResponse.audioContent) {
+          const audioContent = Buffer.from(ttsResponse.audioContent).toString('base64');
+          return response.status(200).send({ audioContent: audioContent });
         } else {
           throw new Error("No audio data received from TTS API.");
         }
@@ -251,6 +171,7 @@ export const geminiTTS = onRequest(
     });
   }
 );
+
 
 export const createStripePortalLink = onRequest(
   { secrets: ["STRIPE_SECRET_KEY"] },
