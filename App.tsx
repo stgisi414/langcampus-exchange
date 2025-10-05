@@ -662,6 +662,7 @@ const TeachMeModal: React.FC<{
   const selectionRef = useRef<{ text: string; range: Range } | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const floatingButtonRef = useRef<HTMLButtonElement>(null);
+  const selectionTimeoutRef = useRef<number | null>(null);
 
   const isHost = isGroupChat && userIsGroupCreator;
   const isMember = isGroupChat && !userIsGroupCreator;
@@ -835,75 +836,88 @@ const TeachMeModal: React.FC<{
     }
   };
 
-  const handleMouseUp = (e: React.MouseEvent<HTMLDivElement>) => { 
-    // CRITICAL FIX 1: If the user clicked the floating button, skip the selection cleanup logic.
-    if (floatingButtonRef.current && floatingButtonRef.current.contains(e.target as Node)) {
-        return;
-    }
-    
-    const selection = window.getSelection();
-    const selectedText = selection?.toString().trim() || '';
+   const processSelection = (selection: Selection | null) => {
+    const selectedText = selection?.toString().trim() ?? '';
 
-    if (user.subscription !== 'subscriber') { 
-      setButtonPosition(null);
-      selectionRef.current = null;
-      return;
-    }
-
-    if (selection && selection.rangeCount > 0 && selectedText.length > 0 && selectedText.length <= 200) {
+    if (
+      user.subscription === 'subscriber' &&
+      selection &&
+      selection.rangeCount > 0 &&
+      selectedText.length > 0 &&
+      selectedText.length <= 200
+    ) {
       const range = selection.getRangeAt(0);
-      
-      // CRITICAL FIX 2: Capture the text and its range.
-      selectionRef.current = { text: selectedText, range: range.cloneRange() };
-      
-      const rect = range.getBoundingClientRect();
-      const containerRect = contentRef.current?.getBoundingClientRect();
-      
-      if (containerRect) {
-        // --- FIX: NEW LOGIC FOR RESPONSIVE POSITIONING ---
-        // Use a consistent breakpoint (md = 768px)
-        const isMobile = window.innerWidth < 768; 
+      if (contentRef.current && contentRef.current.contains(range.commonAncestorContainer)) {
+        selectionRef.current = { text: selectedText, range: range.cloneRange() };
+
+        const rect = range.getBoundingClientRect();
+        const containerRect = contentRef.current.getBoundingClientRect();
         
-        let targetButtonTop;
-        
+        const isMobile = window.innerWidth < 768;
+        let topPos;
+
         if (isMobile) {
-            // Mobile (Position BELOW selection): Target spot is rect.bottom + 10px.
-            // Since the CSS subtracts 40px, we add 40px to compensate.
-            targetButtonTop = (rect.bottom + 10) + 40;
+            // Position button BELOW selection on mobile
+            topPos = rect.bottom - containerRect.top + (contentRef.current.scrollTop || 0) + 5;
         } else {
-            // Desktop (Position ABOVE selection): Target spot is rect.top.
-            // The CSS then subtracts 40px, placing the button above.
-            targetButtonTop = rect.top;
+            // Position button ABOVE selection on desktop
+            topPos = rect.top - containerRect.top + (contentRef.current.scrollTop || 0) - 45;
         }
 
-        // Apply scrolling and container offset to get the final coordinate relative to the contentRef div
         setButtonPosition({
-          top: targetButtonTop - containerRect.top + (contentRef.current?.scrollTop || 0),
+          top: topPos,
           left: rect.left - containerRect.left + (rect.width / 2),
         });
       }
-      
-      // CRITICAL FIX 3: Manually clear the visual highlight now.
-      selection.removeAllRanges();
-
     } else {
-      // If no new text is selected, just hide the button.
       setButtonPosition(null);
+      selectionRef.current = null;
     }
   };
 
+  // FIX 1: Restore the original onMouseUp handler for DESKTOP
+  const handleMouseUp = () => {
+    processSelection(window.getSelection());
+  };
+
+  // FIX 2: Add a new useEffect specifically for MOBILE, using 'selectionchange'
+  useEffect(() => {
+    const handleMobileSelection = () => {
+        processSelection(window.getSelection());
+    };
+
+    const debouncedHandler = () => {
+      if (selectionTimeoutRef.current) {
+        clearTimeout(selectionTimeoutRef.current);
+      }
+      selectionTimeoutRef.current = window.setTimeout(handleMobileSelection, 300);
+    };
+
+    const isMobileDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    if (isMobileDevice) {
+        document.addEventListener('selectionchange', debouncedHandler);
+    }
+
+    return () => {
+      if (isMobileDevice) {
+        document.removeEventListener('selectionchange', debouncedHandler);
+      }
+      if (selectionTimeoutRef.current) {
+        clearTimeout(selectionTimeoutRef.current);
+      }
+    };
+  }, [user.subscription]); 
+
+
   const handleAddNote = () => {
-    // Check if both selection data and a topic exist
     if (selectionRef.current && (groupTopic || selectedTopic)) {
-      
-      // CRITICAL FIX 5: Call the save function
       onAddNote(selectionRef.current.text, (groupTopic || selectedTopic)!);
       
-      // CRITICAL FIX 6: Clear the temporary state variables.
+      // Clean up state
       selectionRef.current = null;
       setButtonPosition(null);
-
-      // Add confirmation message for user feedback.
+      window.getSelection()?.removeAllRanges();
+      
       alert(`Note added successfully to topic: ${(groupTopic || selectedTopic)!}`);
     }
   };
@@ -1056,13 +1070,17 @@ const TeachMeModal: React.FC<{
             </div>
           </div>
 
+          {/* FIX 3: Restore onMouseUp for desktop and remove other selection handlers */}
           <div className="w-full p-6 overflow-y-auto relative" ref={contentRef} onMouseUp={handleMouseUp} onScroll={() => setButtonPosition(null)}>
             {buttonPosition && (
               <button
                 ref={floatingButtonRef}
-                onClick={handleAddNote}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleAddNote();
+                }}
                 className="absolute z-10 px-3 py-1 bg-blue-500 text-white text-sm font-bold rounded-lg shadow-lg hover:bg-blue-600 transition-transform transform -translate-x-1/2"
-                style={{ top: `${buttonPosition.top - 40}px`, left: `${buttonPosition.left}px` }}
+                style={{ top: `${buttonPosition.top}px`, left: `${buttonPosition.left}px` }}
               >
                 Add to Notes
               </button>

@@ -2339,6 +2339,45 @@ export const grammarData = {
         { "title": "Quadriliteral & Further Derived Verb Forms", "level": 5, "tags": ["verbs", "verb forms", "quadriliteral verbs", "morphology", "advanced"] },
         { "title": "Classical Arabic Grammar Concepts (مفاهيم النحو العربي التقليدي)", "level": 5, "tags": ["grammar history", "classical arabic", "linguistics", "naḥw"] },
         { "title": "Discourse Markers & Cohesion in Texts", "level": 5, "tags": ["discourse markers", "linking words", "cohesion", "text structure", "formal language"] }
+    ],
+    "Esperanto": [
+        // Level 1
+        { "title": "The Esperanto Alphabet & Pronunciation (La Alfabeto kaj Elparolo)", "level": 1, "tags": ["basics", "pronunciation", "alphabet"] },
+        { "title": "The Definite Article 'la' (La Difina Artikolo 'la')", "level": 1, "tags": ["basics", "articles", "la"] },
+        { "title": "Nouns (-o) and Adjectives (-a) (Substantivoj kaj Adjektivoj)", "level": 1, "tags": ["basics", "nouns", "adjectives", "endings"] },
+        { "title": "Personal Pronouns (Personaj Pronomoj - mi, vi, li, ŝi, ĝi, ni, ili)", "level": 1, "tags": ["basics", "pronouns"] },
+        { "title": "The Verb 'esti' (to be) (La Verbo 'esti')", "level": 1, "tags": ["basics", "verbs", "esti"] },
+        { "title": "Present Tense of Verbs (-as) (Prezenco de Verboj -as)", "level": 1, "tags": ["basics", "verbs", "present tense", "as"] },
+        { "title": "Introduction to the Accusative Case (-n) (Enkonduko al la Akuzativo -n)", "level": 1, "tags": ["basics", "cases", "accusative", "n"] },
+        { "title": "Simple Questions (Simplaj Demandoj - ĉu)", "level": 1, "tags": ["basics", "questions", "ĉu"] },
+
+        // Level 2
+        { "title": "Past Tense (-is) and Future Tense (-os) (Imperfekto kaj Futuro)", "level": 2, "tags": ["verbs", "tense", "past tense", "future tense", "is", "os"] },
+        { "title": "Plurals (-j) and Accusative Plural (-jn) (Pluralo kaj Akuzativa Pluralo)", "level": 2, "tags": ["nouns", "adjectives", "plural", "accusative", "j", "jn"] },
+        { "title": "Adverbs (-e) (Adverboj -e)", "level": 2, "tags": ["adverbs", "endings", "e"] },
+        { "title": "The Table of Correlatives (Tabelvortoj)", "level": 2, "tags": ["correlatives", "tabelvortoj", "vocabulary"] },
+        { "title": "Possessive Adjectives (Posedaj Adjektivoj - mia, via, ŝia, lia...)", "level": 2, "tags": ["adjectives", "possessives"] },
+        { "title": "Basic Prepositions (Bazaj Prepozicioj - en, sur, sub, al, de)", "level": 2, "tags": ["prepositions", "location"] },
+
+        // Level 3
+        { "title": "Conditional Mood (-us) and Imperative Mood (-u) (Kondicionalo kaj Imperativo)", "level": 3, "tags": ["verbs", "mood", "conditional", "imperative", "us", "u"] },
+        { "title": "The Infinitive (-i) (La Infinitivo -i)", "level": 3, "tags": ["verbs", "infinitive", "i"] },
+        { "title": "Introduction to Affixes (Enkonduko al Afiksoj - mal-, -in-, -il-, -ej-)", "level": 3, "tags": ["word formation", "affixes", "vocabulary"] },
+        { "title": "Participles: Active (-ant-, -int-, -ont-) (Aktivaj Participoj)", "level": 3, "tags": ["verbs", "participles", "active"] },
+        { "title": "Participles: Passive (-at-, -it-, -ot-) (Pasivaj Participoj)", "level": 3, "tags": ["verbs", "participles", "passive"] },
+        { "title": "Comparisons (Komparado - pli, malpli, plej)", "level": 3, "tags": ["comparisons", "adjectives", "adverbs"] },
+
+        // Level 4
+        { "title": "Advanced Affixes (Progresintaj Afiksoj - ge-, -aĉ-, -eg-, -et-)", "level": 4, "tags": ["word formation", "affixes", "vocabulary", "advanced"] },
+        { "title": "Using Participles as Nouns, Adjectives, and Adverbs (Uzi Participojn)", "level": 4, "tags": ["participles", "adjectives", "adverbs", "nouns"] },
+        { "title": "Complex Sentences & Conjunctions (Kompleksaj Frazoj kaj Konjunkcioj)", "level": 4, "tags": ["syntax", "conjunctions", "clauses"] },
+        { "title": "Direct and Indirect Speech (Rekta kaj Nerekta Parolado)", "level": 4, "tags": ["reported speech", "syntax"] },
+
+        // Level 5
+        { "title": "Nuances of Word Order for Emphasis (Nuancoj de Vortordo por Emfazo)", "level": 5, "tags": ["syntax", "word order", "style", "emphasis"] },
+        { "title": "Figurative Language & Idioms (Frazologiaĵoj kaj Idiomaĵoj)", "level": 5, "tags": ["vocabulary", "idioms", "figurative language"] },
+        { "title": "Advanced Correlative Usage (Progresinta Uzo de Tabelvortoj)", "level": 5, "tags": ["correlatives", "tabelvortoj", "advanced"] },
+        { "title": "Gerunds and complex verb forms (Gerundioj kaj kompleksaj verbformoj)", "level": 5, "tags": ["verbs", "gerunds", "advanced"] }
     ]
 };
 
@@ -3211,5 +3250,24 @@ export const conversationData = {
         { "title": "Negotiating a Contract or Agreement (Negocjowanie umowy lub porozumienia)", "level": 5, "tags": ["business", "negotiation", "formal", "advanced"] },
         { "title": "Telling a Joke or an Anecdote with Cultural Nuances (Opowiadanie dowcipu lub anegdoty z niuansami kulturowymi)", "level": 5, "tags": ["culture", "humor", "storytelling", "advanced", "nuance"] },
         { "title": "Hypothetical Scenarios: 'What would you do if...?' (Scenariusze hipotetyczne: 'Co byś zrobił, gdyby...?)", "level": 5, "tags": ["hypothetical", "conditionals", "advanced"] }
+    ],
+    "Esperanto": [
+        // Level 1
+        { "title": "Greetings & Basic Introductions (Salutoj kaj Bazaj Prezentoj)", "level": 1, "tags": ["greetings", "introductions", "basics"] },
+        { "title": "Ordering Coffee (Mendi Kafon)", "level": 1, "tags": ["food", "cafe", "ordering", "basics"] },
+        { "title": "Asking for Basic Information (Demandi Bazajn Informojn)", "level": 1, "tags": ["questions", "information", "basics"] },
+        // Level 2
+        { "title": "Ordering a Meal at a Restaurant (Mendi Manĝon en Restoracio)", "level": 2, "tags": ["food", "restaurant", "ordering"] },
+        { "title": "Asking for Directions (Demandi pri Direktoj)", "level": 2, "tags": ["directions", "travel", "city"] },
+        { "title": "Making Plans with a Friend (Fari Planojn kun Amiko)", "level": 2, "tags": ["social", "planning", "friends"] },
+        // Level 3
+        { "title": "Describing a Past Trip (Priskribi Pasintan Vojaĝon)", "level": 3, "tags": ["travel", "past tense", "storytelling"] },
+        { "title": "Discussing a Favorite Movie (Diskuti pri Preferata Filmo)", "level": 3, "tags": ["entertainment", "opinions", "media"] },
+        // Level 4
+        { "title": "Discussing Future Career Goals (Diskuti Estontajn Karierajn Celojn)", "level": 4, "tags": ["future", "goals", "work", "discussion", "abstract"] },
+        { "title": "Debating Pros and Cons (Debati avantaĝojn kaj malavantaĝojn)", "level": 4, "tags": ["debate", "opinions", "discussion", "abstract"] },
+        // Level 5
+        { "title": "Debating a Complex Social Issue (Debati Kompleksan Socian Temon)", "level": 5, "tags": ["debate", "society", "politics", "formal", "advanced"] },
+        { "title": "Discussing Hypothetical Situations (Diskuti Hipotezajn Situaciojn)", "level": 5, "tags": ["hypothetical", "conditionals", "advanced"] }
     ]
 };
