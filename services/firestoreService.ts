@@ -87,6 +87,17 @@ export const deleteChatFromFirestore = async (userId: string) => {
   await updateDoc(userRef, { savedChat: null });
 };
 
+export const updateLanguagePreference = async (
+  userId: string, 
+  field: 'nativeLanguage' | 'targetLanguage', 
+  value: string
+) => {
+  const userRef = doc(db, "customers", userId);
+  await updateDoc(userRef, {
+    [field]: value,
+  });
+};
+
 export const saveTeachMeCacheInFirestore = async (userId: string, cache: TeachMeCache) => {
   const userRef = doc(db, "customers", userId);
   await updateDoc(userRef, { teachMeCache: cache });

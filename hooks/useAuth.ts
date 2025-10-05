@@ -5,6 +5,7 @@ import { doc, onSnapshot, Unsubscribe, collection, query, where } from 'firebase
 import { auth, db } from '../firebaseConfig';
 import { initializeUserProfile } from '../services/firestoreService';
 import { UserData, SubscriptionStatus } from '../types';
+import { LANGUAGES } from '../constants.js';
 
 export const useAuth = () => {
   const [user, setUser] = useState<UserData | null>(null);
@@ -37,6 +38,9 @@ export const useAuth = () => {
               photoURL: authUser.photoURL,
               ...customerData,
               subscription: prevUser?.subscription || 'free',
+              // FIX: Ensure new fields are initialized to avoid undefined errors
+              nativeLanguage: customerData.nativeLanguage || LANGUAGES[0].code, 
+              targetLanguage: customerData.targetLanguage || LANGUAGES[1].code,
             } as UserData));
             
             setLoading(false);

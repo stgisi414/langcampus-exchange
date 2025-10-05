@@ -63,22 +63,24 @@ const callGeminiProxy = async (prompt: string) => {
   }
 };
 
-export const tagTextForTTS = async (text: string, primaryLanguageCode: string): Promise<string> => {
+export const tagTextForTTS = async (text: string, primaryLanguageCode: string, foreignVoiceName: string): Promise<string> => { 
     const prompt = `
-      Analyze the following text. Your primary language is ${primaryLanguageCode}.
-      For any words or phrases that are NOT in the primary language, wrap them in an SSML <lang> tag with the correct xml:lang code.
-      The final output must be a single, valid SSML string wrapped in a <speak> tag.
-      Do not include any other text or explanations.
+      Analyze the following text. Your task is to prepare it for multilingual Text-to-Speech (TTS) synthesis.
+      The entire message will be spoken using the primary voice for ${primaryLanguageCode}.
+      
+      The voice model for the *foreign* language part is guaranteed to be "${foreignVoiceName}".
+      
+      **Instruction:**
+      1. Identify all text segments that belong to a language **other than** ${primaryLanguageCode}.
+      2. For each identified segment, wrap the entire segment in a <voice> tag with the name attribute set to the foreign voice name.
+      3. Do NOT wrap punctuation, parenthetical translations, or the other half of a split language phrase if it is the base language.
+      4. The final result MUST be a single, valid SSML string enclosed in a single <speak> tag.
+      
+      **Example 1 (Input: "결제 (Payment)", Primary: en-US, Foreign Voice: ko-KR-Wavenet-A):**
+      Output: "<speak><voice name="ko-KR-Wavenet-A">결제</voice> (Payment)</speak>"
 
-      Example:
-      Text: "Hello, that means 안녕하세요 in Korean."
-      Primary Language: en-US
-      Output: "<speak>Hello, that means <lang xml:lang="ko-KR">안녕하세요</lang> in Korean.</speak>"
-
-      Example 2:
-      Text: "I like to eat tacos."
-      Primary Language: en-US
-      Output: "<speak>I like to eat tacos.</speak>"
+      **Example 2 (Input: "I like to eat 볶음밥.", Primary: en-US, Foreign Voice: ko-KR-Wavenet-A):**
+      Output: "<speak>I like to eat <voice name="ko-KR-Wavenet-A">볶음밥</voice>.</speak>"
 
       Now, process this text: "${text}"
     `;
@@ -92,6 +94,8 @@ export const tagTextForTTS = async (text: string, primaryLanguageCode: string): 
         if (ssmlText.startsWith('<speak>') && ssmlText.endsWith('</speak>')) {
             return ssmlText;
         } else {
+            // Fallback for Gemini errors, which should be rare with this detailed prompt
+            logger.error("Gemini returned non-SSML, using fallback:", ssmlText);
             return `<speak>${text}</speak>`;
         }
     } catch (error) {

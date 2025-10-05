@@ -22,7 +22,7 @@ import {
   GroupChat,
   TeachMeType,
 } from "./types";
-import { LANGUAGES } from "./constants";
+import { LANGUAGES, VOICE_MAP } from "./constants";
 import * as geminiService from "./services/geminiService";
 import * as groupService from "./services/groupService";
 import * as storageService from "./services/storageService";
@@ -835,7 +835,7 @@ const TeachMeModal: React.FC<{
     }
   };
 
-  const handleMouseUp = (e: React.MouseEvent<HTMLDivElement>) => { // <--- NOTE: Added 'e: React.MouseEvent<HTMLDivElement>' parameter
+  const handleMouseUp = (e: React.MouseEvent<HTMLDivElement>) => { 
     // CRITICAL FIX 1: If the user clicked the floating button, skip the selection cleanup logic.
     if (floatingButtonRef.current && floatingButtonRef.current.contains(e.target as Node)) {
         return;
@@ -860,8 +860,25 @@ const TeachMeModal: React.FC<{
       const containerRect = contentRef.current?.getBoundingClientRect();
       
       if (containerRect) {
+        // --- FIX: NEW LOGIC FOR RESPONSIVE POSITIONING ---
+        // Use a consistent breakpoint (md = 768px)
+        const isMobile = window.innerWidth < 768; 
+        
+        let targetButtonTop;
+        
+        if (isMobile) {
+            // Mobile (Position BELOW selection): Target spot is rect.bottom + 10px.
+            // Since the CSS subtracts 40px, we add 40px to compensate.
+            targetButtonTop = (rect.bottom + 10) + 40;
+        } else {
+            // Desktop (Position ABOVE selection): Target spot is rect.top.
+            // The CSS then subtracts 40px, placing the button above.
+            targetButtonTop = rect.top;
+        }
+
+        // Apply scrolling and container offset to get the final coordinate relative to the contentRef div
         setButtonPosition({
-          top: rect.top - containerRect.top + (contentRef.current?.scrollTop || 0),
+          top: targetButtonTop - containerRect.top + (contentRef.current?.scrollTop || 0),
           left: rect.left - containerRect.left + (rect.width / 2),
         });
       }
@@ -870,7 +887,7 @@ const TeachMeModal: React.FC<{
       selection.removeAllRanges();
 
     } else {
-      // FIX 4: If no new text is selected, just hide the button.
+      // If no new text is selected, just hide the button.
       setButtonPosition(null);
     }
   };
@@ -1614,23 +1631,47 @@ const ChatModal: React.FC<ChatModalProps> = ({
   const partnerLanguageName = partnerLanguageObject.name;
   const partnerLanguageCode = partnerLanguageObject.code;
 
-  const handleSpeak = async (text: string, index: number) => { // Make async
+  const handleSpeak = async (text: string, index: number) => {
     if (speakingMessageIndex !== null) {
       return;
     }
     setSpeakingMessageIndex(index);
 
+    const partnerLanguageObject =
+      LANGUAGES.find(
+        (lang) =>
+          lang.name.toLowerCase() === partner.nativeLanguage.toLowerCase(),
+      ) || LANGUAGES.find((lang) => lang.code === "en-US")!;
+
+    // Base voice will be the partner's native language (the language the user is learning)
+    const baseLangCode = partnerLanguageObject.code;
     const gender = partner.gender || 'male';
     
+    // The voice to switch TO (user's native language voice)
+    const foreignLangCode = user.nativeLanguage || 'en-US'; 
+    
+    // Get the explicit voice name for the secondary language (user's native language voice)
+    const voiceMapForForeignLang = VOICE_MAP[foreignLangCode];
+    let foreignVoiceName: string | undefined;
+    if (voiceMapForForeignLang) {
+        foreignVoiceName = voiceMapForForeignLang[gender] || voiceMapForForeignLang['male'];
+    }
+    // Guaranteed fallback voice name
+    const finalForeignVoice = foreignVoiceName || VOICE_MAP['en-US']['male']; 
+
     await handleUsageCheck("audioPlays", async () => {
         try {
-            // 1. Tag text for SSML
-            const ssmlText = await geminiService.tagTextForTTS(text, partnerLanguageCode);
+            // 1. Tag text for SSML, passing the base language and the explicit foreign voice name
+            const ssmlText = await geminiService.tagTextForTTS(
+                text, 
+                baseLangCode, // Primary language of the text is the partner's language
+                finalForeignVoice // Voice to switch TO (user's native language voice)
+            );
 
             // 2. Synthesize speech
             const audioContent = await geminiService.synthesizeSpeech(
                 ssmlText,
-                partnerLanguageCode,
+                baseLangCode,
                 gender,
             );
             const audioBlob = new Blob([base64ToArrayBuffer(audioContent)], { type: 'audio/mpeg' });
@@ -1648,7 +1689,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
             try {
                 if ('speechSynthesis' in window) {
                     const utterance = new SpeechSynthesisUtterance(text);
-                    utterance.lang = partnerLanguageCode;
+                    utterance.lang = baseLangCode;
                     window.speechSynthesis.speak(utterance);
                 }
             } catch (speechError) {
@@ -2012,10 +2053,12 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 // AppContent Component - now receives user as a prop
 const AppContent: React.FC<AppContentProps> = ({ user }) => {
   const [nativeLanguage, setNativeLanguage] = useState<string>(
-    () => localStorage.getItem("nativeLanguage") || LANGUAGES[0].code,
+    // FIX: Read from user.nativeLanguage, fall back to user.uid's persistence, then LANGUAGES[0].code
+    () => user?.nativeLanguage || localStorage.getItem("nativeLanguage") || LANGUAGES[0].code,
   );
   const [targetLanguage, setTargetLanguage] = useState<string>(
-    () => localStorage.getItem("targetLanguage") || LANGUAGES[1].code,
+    // FIX: Read from user.targetLanguage, fall back to user.uid's persistence, then LANGUAGES[1].code
+    () => user?.targetLanguage || localStorage.getItem("targetLanguage") || LANGUAGES[1].code,
   );
   const [partners, setPartners] = useState<Partner[]>([]);
   const [isLoadingPartners, setIsLoadingPartners] = useState(false);
@@ -2041,8 +2084,11 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   const [nudgeCount, setNudgeCount] = useState(0);
 
   useEffect(() => {
-    localStorage.setItem("nativeLanguage", nativeLanguage);
-  }, [nativeLanguage]);
+    // FIX: Remove localStorage.setItem("nativeLanguage", nativeLanguage);
+    if (user && user.nativeLanguage !== nativeLanguage) {
+      firestoreService.updateLanguagePreference(user.uid, 'nativeLanguage', nativeLanguage);
+    }
+  }, [nativeLanguage, user]); // Added user dependency
 
   const handleAddNudge = useCallback((response: Message, messagesSnapshot: Message[]) => {
     // Check if the conversation length has NOT changed since the timer started.
@@ -2057,12 +2103,13 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   }, [currentChatMessages.length]); // Re-create if messages.length changes
 
   useEffect(() => {
-    localStorage.setItem("targetLanguage", targetLanguage);
-    // Removed the conflicting setPartners([]) line here.
-    // The line deleting from Firestore is removed. The local component state
-    // will now handle the UI update gracefully without a flicker.
+    // FIX: Remove localStorage.setItem("targetLanguage", targetLanguage);
+    if (user && user.targetLanguage !== targetLanguage) {
+      firestoreService.updateLanguagePreference(user.uid, 'targetLanguage', targetLanguage);
+    }
+    // Removed setPartners([]) as this is no longer done here, it will be done on refresh or manually.
     setNudgeCount(0); 
-  }, [targetLanguage]);
+  }, [targetLanguage, user]);
 
   useEffect(() => {
     // 1. Clean up any existing listener
@@ -2747,24 +2794,37 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     }
   };
 
-  const handleSpeakNote = useCallback(async (text: string, topic: string) => { // Make async
+  const handleSpeakNote = useCallback(async (text: string, topic: string) => {
     
-    const languageMatch = topic.match(/^[A-Za-z]+/);
-    const primaryLanguageName = languageMatch ? languageMatch[0].replace(':', '') : currentPartner?.nativeLanguage || targetLanguage;
+    // The base language for the TTS request is the Target Language (the lesson language)
+    const baseLangCode = targetLanguage;
+    const gender = currentPartner?.gender || 'male';
     
-    const languageObject = LANGUAGES.find(
-        (lang) => lang.name.toLowerCase() === primaryLanguageName.toLowerCase(),
-    ) || LANGUAGES.find((lang) => lang.code === targetLanguage)!;
-
-    const primaryLanguageCode = languageObject.code;
-    const gender = currentPartner?.gender || 'male'; 
+    // The voice to switch TO is the *user's native language* for translation/explanation text.
+    const foreignLangCode = user.nativeLanguage || 'en-US'; 
+    
+    // Get the explicit voice name for the secondary language (user's native language voice)
+    const voiceMapForForeignLang = VOICE_MAP[foreignLangCode];
+    let foreignVoiceName: string | undefined;
+    if (voiceMapForForeignLang) {
+        foreignVoiceName = voiceMapForForeignLang[gender] || voiceMapForForeignLang['male'];
+    }
+    // Guaranteed fallback voice name
+    const finalForeignVoice = foreignVoiceName || VOICE_MAP['en-US']['male']; 
 
     await handleUsageCheck("audioPlays", async () => {
         try {
-            const ssmlText = await geminiService.tagTextForTTS(text, primaryLanguageCode);
+            // 1. Tag text for SSML, passing the base language and the explicit foreign voice name
+            const ssmlText = await geminiService.tagTextForTTS(
+                text, 
+                baseLangCode, // Primary language of the text is the target language
+                finalForeignVoice // Voice to switch TO (user's native language voice)
+            );
+
+            // 2. Synthesize speech: The request uses the *target language* as the base code for the primary voice
             const audioContent = await geminiService.synthesizeSpeech(
                 ssmlText,
-                primaryLanguageCode, // The primary language for the voice
+                baseLangCode, // The primary language code for the voice model
                 gender,
             );
             const audioBlob = new Blob([base64ToArrayBuffer(audioContent)], { type: 'audio/mpeg' });
@@ -2774,11 +2834,11 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
             audio.play();
 
         } catch (error) {
-            console.error("Error synthesizing speech, falling back to browser TTS:", error);
+            console.error("Error synthesizing speech for note, falling back to browser TTS:", error);
             try {
                 if ('speechSynthesis' in window) {
                     const utterance = new SpeechSynthesisUtterance(text);
-                    utterance.lang = primaryLanguageCode;
+                    utterance.lang = baseLangCode;
                     window.speechSynthesis.speak(utterance);
                 }
             } catch (speechError) {
@@ -2786,7 +2846,7 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
             }
         }
     });
-  }, [currentPartner, targetLanguage, handleUsageCheck]);
+  }, [currentPartner, targetLanguage, handleUsageCheck, user.nativeLanguage, user.uid]);
 
   const savedChat = user?.savedChat || null;
 
@@ -2794,12 +2854,17 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans flex flex-col">
       <header className="bg-white dark:bg-gray-800 shadow-md p-4 flex flex-col md:flex-row justify-between items-center gap-4">
         <h1 className="text-3xl font-bold text-blue-600 dark:text-blue-400 flex items-center">
-          <img
-            src="/logo.png"
-            alt="Langcampus Exchange Logo"
-            className="h-16 w-16 mr-3"
-          />
-          Langcampus Exchange
+          <div 
+            onClick={() => window.location.reload()}
+            className="text-3xl font-bold text-blue-600 dark:text-blue-400 flex items-center cursor-pointer hover:opacity-80 transition-opacity"
+          >
+            <img
+              src="/logo.png"
+              alt="Langcampus Exchange Logo"
+              className="h-16 w-16 mr-3"
+            />
+            Langcampus Exchange
+          </div>
         </h1>
         <div className="flex flex-wrap items-center justify-center md:justify-end gap-4">
           <LanguageSelector
