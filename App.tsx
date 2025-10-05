@@ -551,11 +551,39 @@ const TutorialModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
   </div>
 );
 
+// Define a new interface to hold the original data plus a unique ID
+interface PairWithId {
+  id: string;
+  term: string;
+  definition: string;
+}
+
 const MatchingQuestion: React.FC<{ question: Extract<QuizQuestion, { type: 'matching' }>, onAnswer: (answer: string[]) => void }> = ({ question, onAnswer }) => {
-  const [selectedTerm, setSelectedTerm] = useState<string | null>(null);
-  const [matches, setMatches] = useState<Record<string, string>>({});
-  const [shuffledDefs] = useState(() => [...question.pairs.map(p => p.definition)].sort(() => Math.random() - 0.5));
   
+  // 1. Generate unique IDs for the original pairs
+  const initialPairs: PairWithId[] = React.useMemo(() => {
+    return question.pairs.map((p, index) => ({
+      ...p,
+      id: `term-${index}`, // Unique ID for each term
+    }));
+  }, [question.pairs]);
+
+  // 2. Generate unique IDs for definitions and shuffle them for display
+  const [shuffledDefsWithId] = useState<PairWithId[]>(() => {
+    const defs = question.pairs.map((p, index) => ({
+        ...p,
+        // CRUCIAL: Use a consistent ID for the definition, regardless of shuffle position
+        id: `def-${index}`, 
+        definition: p.definition,
+    }));
+    return defs.sort(() => Math.random() - 0.5);
+  });
+
+  // Map Term ID to Definition ID
+  const [selectedTermId, setSelectedTermId] = useState<string | null>(null); 
+  const [matches, setMatches] = useState<Record<string, string>>({}); // Maps Term ID to Matched Definition ID
+  
+  // ... (rest of colors array and matchColors state remains the same)
   const colors = [
     "bg-green-100 dark:bg-green-900",
     "bg-yellow-100 dark:bg-yellow-900",
@@ -565,46 +593,50 @@ const MatchingQuestion: React.FC<{ question: Extract<QuizQuestion, { type: 'matc
   
   const [matchColors, setMatchColors] = useState<Record<string, string>>({});
 
-  const handleTermClick = (term: string) => {
-    if (matches[term]) return; // Already matched
-    setSelectedTerm(term);
+  const handleTermClick = (termId: string) => {
+    if (matches[termId]) return; // Already matched
+    setSelectedTermId(termId);
   };
 
-  const handleDefClick = (def: string) => {
-    if (!selectedTerm || Object.values(matches).includes(def)) return;
-    const newMatches = { ...matches, [selectedTerm]: def };
+  const handleDefClick = (defId: string) => {
+    if (!selectedTermId || Object.values(matches).includes(defId)) return;
+    
+    const newMatches = { ...matches, [selectedTermId]: defId };
     setMatches(newMatches);
     
-    // Assign a color to the new match
     const matchIndex = Object.keys(newMatches).length - 1;
-    setMatchColors(prev => ({ ...prev, [selectedTerm]: colors[matchIndex % colors.length] }));
+    setMatchColors(prev => ({ ...prev, [selectedTermId]: colors[matchIndex % colors.length] }));
 
-    setSelectedTerm(null);
+    setSelectedTermId(null);
   };
 
   const isComplete = Object.keys(matches).length === question.pairs.length;
 
   const handleSubmit = () => {
-    // The order of original pairs matters for grading
-    const formattedAnswers = question.pairs.map(p => `${p.term}-${matches[p.term] || ''}`);
+    // FIX: Output the unambiguous ID-based string for grading: "term-id:matched-def-id"
+    const formattedAnswers = initialPairs.map(termPair => {
+        const defId = matches[termPair.id];
+        return `${termPair.id}:${defId}`;
+    });
+
     onAnswer(formattedAnswers);
   };
 
   return (
     <div className="mt-4 space-y-4">
       <div className="grid grid-cols-2 gap-4">
-        {/* Terms Column */}
+        {/* Terms Column - Note use of pair.id for key and handler */}
         <div className="space-y-2">
-          {question.pairs.map(pair => {
-            const colorClass = matchColors[pair.term] || 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600';
-            const matched = !!matches[pair.term];
+          {initialPairs.map(pair => {
+            const colorClass = matchColors[pair.id] || 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600';
+            const matched = !!matches[pair.id];
             return (
               <button
-                key={pair.term}
-                onClick={() => handleTermClick(pair.term)}
+                key={pair.id} // Use ID as the unique key
+                onClick={() => handleTermClick(pair.id)} // Pass ID to handler
                 disabled={matched}
                 className={`w-full p-3 text-left rounded-lg transition-all text-sm
-                  ${selectedTerm === pair.term ? 'ring-2 ring-blue-500 bg-blue-100 dark:bg-blue-900' : ''}
+                  ${selectedTermId === pair.id ? 'ring-2 ring-blue-500 bg-blue-100 dark:bg-blue-900' : ''}
                   ${matched ? `${colorClass} text-gray-500 dark:text-gray-400` : colorClass}`}
               >
                 {pair.term}
@@ -612,22 +644,23 @@ const MatchingQuestion: React.FC<{ question: Extract<QuizQuestion, { type: 'matc
             );
           })}
         </div>
-        {/* Definitions Column */}
+        {/* Definitions Column - Note use of defPair.id for key and handler */}
         <div className="space-y-2">
-          {shuffledDefs.map(def => {
-            const termForDef = Object.keys(matches).find(key => matches[key] === def);
-            const colorClass = termForDef ? matchColors[termForDef] : 'bg-gray-100 dark:bg-gray-700';
-            const matched = !!termForDef;
+          {shuffledDefsWithId.map(defPair => {
+            // Find the Term ID that matched this Definition ID
+            const termIdForDef = Object.keys(matches).find(termId => matches[termId] === defPair.id);
+            const colorClass = termIdForDef ? matchColors[termIdForDef] : 'bg-gray-100 dark:bg-gray-700';
+            const matched = !!termIdForDef;
             return (
               <button
-                key={def}
-                onClick={() => handleDefClick(def)}
+                key={defPair.id} // Use ID as the unique key
+                onClick={() => handleDefClick(defPair.id)} // Pass ID to handler
                 disabled={matched}
                 className={`w-full p-3 text-left rounded-lg transition-all text-sm
-                  ${selectedTerm ? 'cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600' : 'cursor-not-allowed'}
+                  ${selectedTermId ? 'cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600' : 'cursor-not-allowed'}
                   ${matched ? `${colorClass} text-gray-500 dark:text-gray-400` : colorClass}`}
               >
-                {def}
+                {defPair.definition}
               </button>
             );
           })}
@@ -813,10 +846,19 @@ const QuizModal: React.FC<{
         if (answer === question.correctAnswer) {
           score++;
         }
+      // FIX: Update matching logic to use the new ID-based answer format
       } else if (question.type === 'matching' && Array.isArray(answer)) {
         totalGraded++;
-        if (answer.every((pair, i) => pair === `${question.pairs[i].term}-${question.pairs[i].definition}`)) {
-          score++;
+        
+        const isCorrect = question.pairs.every((pair, i) => {
+            // The correct answer for the Nth term is the Nth term ID mapped to the Nth definition ID.
+            const correctPairId = `term-${i}:def-${i}`;
+            // The user's answer array is guaranteed to be in the order of the terms displayed (which is the original order).
+            return answer[i] === correctPairId;
+        });
+
+        if (isCorrect) {
+            score++;
         }
       } else if (question.type === 'speaking' || question.type === 'listening') {
         // Not graded automatically, but we can give a point for completion
@@ -2956,8 +2998,13 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
                     if (question.type === 'multiple-choice' || question.type === 'fill-in-the-blank') {
                         return answer !== question.correctAnswer;
                     }
+                    // FIX: Update the grading logic in handleShareQuizResults to use the ID-based answer format.
                     if (question.type === 'matching' && Array.isArray(answer)) {
-                        return !answer.every((pair, i) => pair === `${question.pairs[i].term}-${question.pairs[i].definition}`);
+                        return !question.pairs.every((pair, i) => {
+                            // The correct answer for the Nth pair is the Nth term ID mapped to the Nth definition ID.
+                            const correctPairId = `term-${i}:def-${i}`;
+                            return answer[i] === correctPairId;
+                        });
                     }
                     if (question.type === 'listening' && typeof answer === 'string') {
                         return answer.toLowerCase().trim() !== question.correctAnswer.toLowerCase().trim();
