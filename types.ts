@@ -96,6 +96,7 @@ export interface UserData {
   email: string | null;
   displayName: string | null;
   photoURL: string | null;
+  xp?: number;
 
   nativeLanguage: string;
   targetLanguage: string;

@@ -362,6 +362,11 @@ export const getContent = async (topic: string, type: 'Grammar' | 'Vocabulary', 
 
     **IMPORTANT INSTRUCTION:** Write the entire explanation in the student's NATIVE language (${nativeLanguage}). However, all examples of the target language must be clearly presented in ${targetLanguage}, followed by a translation into ${nativeLanguage}.
 
+    **Correct and Incorrect Examples:**
+    For each key point, provide at least one correct example and one incorrect example.
+    - Correct examples must be preceded by the "✅" emoji.
+    - Incorrect examples must be preceded by the "❌" emoji and followed by a brief explanation of why it is incorrect.
+
     Language to Teach (Target Language): ${targetLanguage}
     Language of Instruction (Native Language): ${nativeLanguage}
     Topic Type: ${type}

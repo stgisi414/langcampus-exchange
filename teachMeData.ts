@@ -580,6 +580,7 @@ export const grammarData = {
         { "title": "Verbs Followed by Gerund OR Infinitive with Similar Meaning (like, love, hate, prefer, start, begin, continue)", "level": 3, "tags": ["verbs", "gerunds", "infinitives", "verb patterns", "similar meaning"] },
         { "title": "Verbs Followed by Gerund OR Infinitive with Different Meaning (stop, try, remember, forget, regret)", "level": 3, "tags": ["verbs", "gerunds", "infinitives", "verb patterns", "different meaning"] },
         { "title": "Bare Infinitive (Infinitive without 'to' - after modals, let, make)", "level": 3, "tags": ["verbs", "infinitives", "bare infinitive", "modals", "let", "make"] },
+        { "title": "Using 'Get' + Adjective for Changes of State (e.g., get hungry, get tired)", "level": 3, "tags": ["verbs", "adjectives", "get-passive", "change of state", "inchoative"] },
 
         // Original: { "title": "Modal Verbs: Must / Have to (Obligation)", "level": 3, "tags": ["verbs", "modals", "must", "have to"] }
         { "title": "Modal Verb 'Must': Expressing Strong Obligation (I must finish this)", "level": 3, "tags": ["verbs", "modals", "must", "usage", "obligation", "strong"] },
@@ -746,7 +747,11 @@ export const grammarData = {
         { "title": "Common Phrasal Verbs: Group 1 (e.g., look up, take off, give up)", "level": 4, "tags": ["verbs", "phrasal verbs", "vocabulary", "examples"] },
         { "title": "Common Phrasal Verbs: Group 2 (e.g., get on, run out of, look forward to)", "level": 4, "tags": ["verbs", "phrasal verbs", "vocabulary", "examples"] },
         { "title": "Understanding Meaning from Context (Phrasal Verbs often have multiple meanings)", "level": 4, "tags": ["verbs", "phrasal verbs", "meaning", "context"] },
-
+        { "title": "Common Phrasal Verbs with 'Get' (e.g., get up, get over, get along)", "level": 4, "tags": ["verbs", "phrasal verbs", "vocabulary", "get"] },
+        { "title": "Common Phrasal Verbs with 'Take' (e.g., take off, take up, take after)", "level": 4, "tags": ["verbs", "phrasal verbs", "vocabulary", "take"] },
+        { "title": "Common Phrasal Verbs with 'Make' (e.g., make up, make out, make for)", "level": 4, "tags": ["verbs", "phrasal verbs", "vocabulary", "make"] },
+        { "title": "Common Phrasal Verbs with 'Put' (e.g., put up with, put off, put on)", "level": 4, "tags": ["verbs", "phrasal verbs", "vocabulary", "put"] },
+        
         // Advanced (Level 5)
         // Original: { "title": "Future Perfect Continuous", "level": 5, "tags": ["verbs", "perfect tenses", "future tense", "continuous"] }
         { "title": "Future Perfect Continuous: Introduction (Duration of action up to a future point)", "level": 5, "tags": ["verbs", "perfect tenses", "future perfect continuous", "introduction"] },

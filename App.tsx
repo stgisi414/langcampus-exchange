@@ -42,6 +42,11 @@ import {
   StopIcon,
   PlayIcon,
   ClipboardListIcon,
+  NoviceIcon,
+  ApprenticeIcon,
+  JourneymanIcon,
+  ExpertIcon,
+  MasterIcon,
 } from "./components/Icons";
 import LoadingSpinner from "./components/LoadingSpinner";
 import { grammarData, vocabData, conversationData } from "./teachMeData";
@@ -133,6 +138,7 @@ const FEATURES = [
 const UserProfile: React.FC<{
   profile: { name: string; hobbies: string; bio: string };
   subscriptionStatus: SubscriptionStatus;
+  xp: number;
   onProfileChange: (profile: {
     name: string;
     hobbies: string;
@@ -152,10 +158,21 @@ const UserProfile: React.FC<{
   usageData,
   isUpgrading,
   isCancelling,
+  xp,
 }) => {
   // <-- ADD isCancelling HERE
   const [isOpen, setIsOpen] = useState(false);
   const [localProfile, setLocalProfile] = useState(profile);
+
+   const getRank = (xp: number) => {
+    if (xp <= 50) return { name: "Novice", Icon: NoviceIcon, color: "text-gray-400", nextLevelXp: 51, nextLevelName: "Apprentice" };
+    if (xp <= 500) return { name: "Apprentice", Icon: ApprenticeIcon, color: "text-green-500", nextLevelXp: 501, nextLevelName: "Journeyman" };
+    if (xp <= 5000) return { name: "Journeyman", Icon: JourneymanIcon, color: "text-blue-500", nextLevelXp: 5001, nextLevelName: "Expert" };
+    if (xp <= 50000) return { name: "Expert", Icon: ExpertIcon, color: "text-purple-500", nextLevelXp: 50001, nextLevelName: "Master" };
+    return { name: "Master", Icon: MasterIcon, color: "text-yellow-500", nextLevelXp: null, nextLevelName: null };
+  };
+
+  const rank = getRank(xp);
 
   useEffect(() => {
     setLocalProfile(profile);
@@ -257,6 +274,34 @@ const UserProfile: React.FC<{
                     onChange={handleChange}
                     className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 dark:text-gray-100"
                   ></textarea>
+                </div>
+                <div className="border-t dark:border-gray-700 mt-4 pt-4">
+                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    Rank & XP
+                  </h3>
+                  <div className="flex items-center justify-between gap-3 mt-1">
+                    <div className="flex items-center gap-3">
+                      <rank.Icon className={`w-8 h-8 ${rank.color}`} />
+                      <div>
+                        <p className={`text-lg font-semibold ${rank.color}`}>
+                          {rank.name}
+                        </p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          {xp.toLocaleString()} XP
+                        </p>
+                      </div>
+                    </div>
+                    {rank.nextLevelXp && rank.nextLevelName && (
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                          {(rank.nextLevelXp - xp).toLocaleString()} XP
+                        </p>
+                         <p className="text-xs text-gray-500 dark:text-gray-400">
+                          to {rank.nextLevelName}
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="border-t dark:border-gray-700 mt-4 pt-4">
                   <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
@@ -529,7 +574,7 @@ const QuizModal: React.FC<{
       aria-modal="true"
     >
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-xl max-h-[90vh] flex flex-col animate-fade-in-down">
-        <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
+        <div className="flex justify-between items-center p-4 border-b dark:border-gray-700 flex-shrink-0">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">
             {showResults ? "Quiz Results" : `Quiz: ${topic}`}
           </h2>
@@ -542,15 +587,48 @@ const QuizModal: React.FC<{
           </button>
         </div>
 
-        {showResults ? (
-          <div className="p-6 text-center space-y-4">
-            <p className="text-2xl text-gray-800 dark:text-gray-200">
-              You scored
-            </p>
-            <p className="text-5xl font-bold text-blue-500">
-              {score} / {questions.length}
-            </p>
-            <div className="mt-4 flex justify-center gap-4">
+        <div className="flex-grow overflow-y-auto">
+          {showResults ? (
+            <div className="p-6 text-center space-y-4">
+              <p className="text-2xl text-gray-800 dark:text-gray-200">
+                You scored
+              </p>
+              <p className="text-5xl font-bold text-blue-500">
+                {score} / {questions.length}
+              </p>
+            </div>
+          ) : (
+            <div className="p-6 space-y-4">
+              <p className="text-lg text-gray-800 dark:text-gray-200">
+                Question {currentQuestionIndex + 1} of {questions.length}
+              </p>
+              <p className="text-xl font-semibold text-gray-900 dark:text-white">
+                {currentQuestion.question}
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                {currentQuestion.options.map((option, index) => {
+                  const isSelected = userAnswers[currentQuestionIndex] === option;
+                  return (
+                    <button
+                      key={index}
+                      onClick={() => handleAnswer(option)}
+                      className={`p-4 rounded-lg text-left transition-colors duration-300 ${
+                        isSelected
+                          ? "bg-blue-500 text-white"
+                          : "bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {showResults && (
+            <div className="flex-shrink-0 p-4 border-t dark:border-gray-700 flex justify-center gap-4">
               <button
                 onClick={onClose}
                 disabled={isSharing}
@@ -566,34 +644,6 @@ const QuizModal: React.FC<{
                 {isSharing ? "Sharing..." : "Discuss with Pal"}
               </button>
             </div>
-          </div>
-        ) : (
-          <div className="p-6 space-y-4">
-            <p className="text-lg text-gray-800 dark:text-gray-200">
-              Question {currentQuestionIndex + 1} of {questions.length}
-            </p>
-            <p className="text-xl font-semibold text-gray-900 dark:text-white">
-              {currentQuestion.question}
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-              {currentQuestion.options.map((option, index) => {
-                const isSelected = userAnswers[currentQuestionIndex] === option;
-                return (
-                  <button
-                    key={index}
-                    onClick={() => handleAnswer(option)}
-                    className={`p-4 rounded-lg text-left transition-colors duration-300 ${
-                      isSelected
-                        ? "bg-blue-500 text-white"
-                        : "bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600"
-                    }`}
-                  >
-                    {option}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
         )}
       </div>
     </div>
@@ -2211,6 +2261,7 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
 
         if (activeGroup) {
             // Group Chat Logic (Remains the same - not subject to this bug)
+            firestoreService.addXp(user.uid, 1);
             await groupService.addMessageToGroup(activeGroup.id, userMessage);
             if (messageToSend.toLowerCase().startsWith('@bot')) {
                 setIsSending(true);
@@ -2246,7 +2297,10 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
             const messagesContext = [...currentChatMessages, userMessage];
 
             try {
-                // 3. Fetch AI response
+                // 3. Add XP for sending a message
+                firestoreService.addXp(user.uid, 1);
+
+                // 4. Fetch AI response
                 const aiResponse = await geminiService.getChatResponse(
                     messagesContext,
                     currentPartner!, // currentPartner is guaranteed here
@@ -2533,6 +2587,11 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
 
     return new Promise<void>(async (resolve) => {
         try {
+            // 0. Add XP for correct answers
+            if (score > 0) {
+              firestoreService.addXp(user.uid, score);
+            }
+
             // 1. Prepare Message
             let quizSummary = `I just took a quiz on "${topic}" and my score was ${score}/${questions.length}. `;
 
@@ -2906,6 +2965,7 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
           </button>
           <UserProfile
             profile={userProfile}
+            xp={user.xp || 0}
             onProfileChange={handleProfileChange}
             onUpgradeClick={() => {
               setSubscriptionModalReason("manual");

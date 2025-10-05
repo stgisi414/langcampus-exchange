@@ -40,6 +40,7 @@ export const initializeUserProfile = async (uid: string, user: User) => {
       savedChat: data?.savedChat || null,
       teachMeCache: data?.teachMeCache || null,
       notes: data?.notes || [], // This ensures 'notes' is always an array
+      xp: data?.xp || 0,
       usage: data?.usage || {
         searches: 0,
         messages: 0,
@@ -54,6 +55,18 @@ export const initializeUserProfile = async (uid: string, user: User) => {
   }
 };
 
+/**
+ * Adds a specified amount of XP to a user's profile.
+ * @param userId The UID of the user.
+ * @param amount The amount of XP to add.
+ */
+export const addXp = async (userId: string, amount: number) => {
+  if (amount <= 0) return;
+  const userRef = doc(db, "customers", userId);
+  await updateDoc(userRef, {
+    xp: increment(amount)
+  });
+};
 
 export const updateUserProfile = async (userId: string, profileData: { name: string; hobbies: string; bio: string; }) => {
   const userRef = doc(db, "customers", userId); // Target 'customers' collection
