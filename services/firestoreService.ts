@@ -173,3 +173,11 @@ export const deleteNoteFromFirestore = async (userId: string, noteId: string) =>
     }
   }
 };
+
+export const reorderNotesInFirestore = async (userId: string, newNotes: Note[]) => {
+  const userRef = doc(db, "customers", userId);
+  // Overwrite the existing notes array with the newly ordered array
+  await updateDoc(userRef, {
+    notes: newNotes
+  });
+};

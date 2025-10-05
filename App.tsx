@@ -657,6 +657,8 @@ const TeachMeModal: React.FC<{
   user: UserData;
   onAddNote: (noteText: string, topic: string) => void;
   onDeleteNote: (noteId: string) => void;
+  onReorderNotes: (newNotes: Note[]) => void;
+  onSpeakNote: (text: string, topic: string) => void;
 }> = ({
   language,
   onClose,
@@ -672,6 +674,8 @@ const TeachMeModal: React.FC<{
   user,
   onAddNote,
   onDeleteNote,
+  onReorderNotes,
+  onSpeakNote,
 }) => {
   const [activeTab, setActiveTab] = useState<"Grammar" | "Vocabulary" | "Conversation">(
     "Grammar",
@@ -693,6 +697,7 @@ const TeachMeModal: React.FC<{
   const [buttonPosition, setButtonPosition] = useState<{ top: number; left: number } | null>(null);
   const selectionRef = useRef<{ text: string; range: Range } | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const floatingButtonRef = useRef<HTMLButtonElement>(null);
 
   const isHost = isGroupChat && userIsGroupCreator;
   const isMember = isGroupChat && !userIsGroupCreator;
@@ -866,14 +871,27 @@ const TeachMeModal: React.FC<{
     }
   };
 
-  const handleMouseUp = () => {
-    if (user.subscription !== 'subscriber') return;
+  const handleMouseUp = (e: React.MouseEvent<HTMLDivElement>) => { // <--- NOTE: Added 'e: React.MouseEvent<HTMLDivElement>' parameter
+    // CRITICAL FIX 1: If the user clicked the floating button, skip the selection cleanup logic.
+    if (floatingButtonRef.current && floatingButtonRef.current.contains(e.target as Node)) {
+        return;
+    }
+    
     const selection = window.getSelection();
     const selectedText = selection?.toString().trim() || '';
 
+    if (user.subscription !== 'subscriber') { 
+      setButtonPosition(null);
+      selectionRef.current = null;
+      return;
+    }
+
     if (selection && selection.rangeCount > 0 && selectedText.length > 0 && selectedText.length <= 200) {
       const range = selection.getRangeAt(0);
+      
+      // CRITICAL FIX 2: Capture the text and its range.
       selectionRef.current = { text: selectedText, range: range.cloneRange() };
+      
       const rect = range.getBoundingClientRect();
       const containerRect = contentRef.current?.getBoundingClientRect();
       
@@ -883,19 +901,29 @@ const TeachMeModal: React.FC<{
           left: rect.left - containerRect.left + (rect.width / 2),
         });
       }
+      
+      // CRITICAL FIX 3: Manually clear the visual highlight now.
+      selection.removeAllRanges();
+
     } else {
-      selectionRef.current = null;
+      // FIX 4: If no new text is selected, just hide the button.
       setButtonPosition(null);
     }
   };
 
   const handleAddNote = () => {
+    // Check if both selection data and a topic exist
     if (selectionRef.current && (groupTopic || selectedTopic)) {
+      
+      // CRITICAL FIX 5: Call the save function
       onAddNote(selectionRef.current.text, (groupTopic || selectedTopic)!);
       
+      // CRITICAL FIX 6: Clear the temporary state variables.
       selectionRef.current = null;
       setButtonPosition(null);
-      window.getSelection()?.removeAllRanges();
+
+      // Add confirmation message for user feedback.
+      alert(`Note added successfully to topic: ${(groupTopic || selectedTopic)!}`);
     }
   };
 
@@ -1050,6 +1078,7 @@ const TeachMeModal: React.FC<{
           <div className="w-full p-6 overflow-y-auto relative" ref={contentRef} onMouseUp={handleMouseUp} onScroll={() => setButtonPosition(null)}>
             {buttonPosition && (
               <button
+                ref={floatingButtonRef}
                 onClick={handleAddNote}
                 className="absolute z-10 px-3 py-1 bg-blue-500 text-white text-sm font-bold rounded-lg shadow-lg hover:bg-blue-600 transition-transform transform -translate-x-1/2"
                 style={{ top: `${buttonPosition.top - 40}px`, left: `${buttonPosition.left}px` }}
@@ -1124,6 +1153,8 @@ const TeachMeModal: React.FC<{
             notes={user.notes || []}
             onClose={() => setShowNotes(false)}
             onDeleteNote={onDeleteNote}
+            onReorderNotes={onReorderNotes}
+            onSpeakNote={onSpeakNote}
         />
       )}
     </div>
@@ -1429,6 +1460,10 @@ interface ChatModalProps {
   onTranscribeAndRespond: (audioBlob: Blob, languageCode: string, messagesSnapshot: Message[]) => Promise<void>;
   onAddNote: (noteText: string, topic: string) => void;
   onDeleteNote: (noteId: string) => void;
+  onReorderNotes: (newNotes: Note[]) => void;
+  onSpeakNote: (text: string, topic: string) => void;
+  onReorderNotes: (newNotes: Note[]) => void;
+  onSpeakNote: (text: string, topic: string) => void;
 }
 
 const ChatModal: React.FC<ChatModalProps> = ({
@@ -1461,6 +1496,8 @@ const ChatModal: React.FC<ChatModalProps> = ({
   onTranscribeAndRespond,
   onAddNote,
   onDeleteNote,
+  onReorderNotes,
+  onSpeakNote,
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
@@ -1471,8 +1508,8 @@ const ChatModal: React.FC<ChatModalProps> = ({
   const quizSharedRef = useRef(false); 
   const [recorder, setRecorder] = useState<MediaRecorder | null>(null);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
-  const [speakingMessageIndex, setSpeakingMessageIndex] = useState<number | null>(null);
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [speakingMessageIndex, setSpeakingMessageIndex] = useState<number | null>(null);
 
   useEffect(() => {
     // 1. Clear any existing timer when dependencies change (new message, sending status, etc.)
@@ -1616,56 +1653,18 @@ const ChatModal: React.FC<ChatModalProps> = ({
   const partnerLanguageCode = partnerLanguageObject.code;
 
   const handleSpeak = (text: string, index: number) => {
-    // Prevent another TTS request while one is already loading/playing
+    // Prevent multiple TTS requests while one is loading/playing
     if (speakingMessageIndex !== null) {
       return;
     }
+    setSpeakingMessageIndex(index); // Set loading state for this message
 
-    handleUsageCheck("audioPlays", async () => {
-      setSpeakingMessageIndex(index); // Disable button & show loading state
-      try {
-        const partnerGender = partner.gender || 'male';
-        
-        const audioContent = await geminiService.synthesizeSpeech(
-          text,
-          partnerLanguageCode,
-          partnerGender,
-        );
-        const pcmData = base64ToArrayBuffer(audioContent);
-        const pcm16 = new Int16Array(pcmData);
-        const wavBlob = pcmToWav(pcm16, 24000);
-        const audioUrl = URL.createObjectURL(wavBlob);
-        const audio = new Audio(audioUrl);
-        
-        audio.onended = () => setSpeakingMessageIndex(null);
-        audio.onerror = () => {
-            console.error("Audio playback error.");
-            setSpeakingMessageIndex(null);
-        };
-        audio.play();
+    // Use the reusable handler. The topic is not relevant for chat messages here, so we use an empty string.
+    onSpeakNote(text, ''); 
 
-      } catch (error) {
-        // Fallback to browser's built-in speech synthesis
-        console.error("Error synthesizing speech, falling back to browser TTS:", error);
-        try {
-            if ('speechSynthesis' in window) {
-                const utterance = new SpeechSynthesisUtterance(text);
-                utterance.lang = partnerLanguageCode;
-                utterance.onend = () => setSpeakingMessageIndex(null);
-                utterance.onerror = (e) => {
-                    console.error("Browser TTS error:", e);
-                    setSpeakingMessageIndex(null);
-                };
-                window.speechSynthesis.speak(utterance);
-            } else {
-                 setSpeakingMessageIndex(null); // No TTS available
-            }
-        } catch (speechError) {
-            console.error("Browser speech synthesis failed to start:", speechError);
-            setSpeakingMessageIndex(null);
-        }
-      }
-    });
+    // Manually clear the speaking state after a delay or on user action (since onSpeakNote is fire-and-forget in this flow)
+    // A better approach is to clear it instantly, as the browser handles the speaking.
+    setSpeakingMessageIndex(null); 
   };
 
   const AudioPlayer: React.FC<{ audioUrl: string; duration: number }> = ({
@@ -2000,6 +1999,8 @@ const ChatModal: React.FC<ChatModalProps> = ({
           user={user}
           onAddNote={onAddNote}
           onDeleteNote={onDeleteNote}
+          onReorderNotes={handleReorderNotes}
+          onSpeakNote={handleSpeakNote}
         />
       )}
     </div>
@@ -2662,7 +2663,6 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
       }
   };
 
-
   const handleUpgrade = async () => {
     if (!user) return;
     setIsUpgrading(true);
@@ -2745,6 +2745,58 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     hobbies: user?.hobbies || "",
     bio: user?.bio || "",
   };
+
+  const handleReorderNotes = (newNotes: Note[]) => {
+    if (user) {
+        // Optimistic UI update is not possible here as the state lives in the user object
+        firestoreService.reorderNotesInFirestore(user.uid, newNotes);
+        // The user state will be updated via the useAuth hook listener
+    }
+  };
+
+  const handleSpeakNote = useCallback((text: string, topic: string) => {
+    
+    // Inferred language logic remains the same (though simplified for notes)
+    // We assume notes are in the target language for simplicity or use the topic for context.
+    const languageMatch = topic.match(/^[A-Za-z]+:/);
+    const inferredLanguageName = languageMatch ? languageMatch[0].replace(':', '') : currentPartner?.nativeLanguage || targetLanguage;
+    
+    const languageObject = LANGUAGES.find(
+        (lang) => lang.name.toLowerCase() === inferredLanguageName.toLowerCase(),
+    ) || LANGUAGES.find((lang) => lang.code === targetLanguage)!;
+
+    const languageCode = languageObject.code;
+    const gender = currentPartner?.gender || 'male'; 
+
+    handleUsageCheck("audioPlays", async () => {
+        try {
+            const audioContent = await geminiService.synthesizeSpeech(
+                text,
+                languageCode,
+                gender,
+            );
+            const pcmData = base64ToArrayBuffer(audioContent);
+            const pcm16 = new Int16Array(pcmData);
+            const wavBlob = pcmToWav(pcm16, 24000);
+            const audioUrl = URL.createObjectURL(wavBlob);
+            const audio = new Audio(audioUrl);
+            
+            audio.play();
+
+        } catch (error) {
+            console.error("Error synthesizing speech, falling back to browser TTS:", error);
+            try {
+                if ('speechSynthesis' in window) {
+                    const utterance = new SpeechSynthesisUtterance(text);
+                    utterance.lang = languageCode;
+                    window.speechSynthesis.speak(utterance);
+                }
+            } catch (speechError) {
+                console.error("Browser speech synthesis failed to start:", speechError);
+            }
+        }
+    });
+  }, [currentPartner, targetLanguage, handleUsageCheck]);
 
   const savedChat = user?.savedChat || null;
 
@@ -2925,6 +2977,8 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
           user={user}
           onAddNote={handleAddNote}
           onDeleteNote={handleDeleteNote}
+          onReorderNotes={handleReorderNotes}
+          onSpeakNote={handleSpeakNote}
         />
       )}
       {showSubscriptionModal && (
