@@ -140,11 +140,12 @@ export const transcribeAudio = onRequest(
             }
 
             let encoding: any;
-            if (mimeType === 'audio/webm') {
+            // FIX: Use startsWith to handle codecs (e.g., audio/webm;codecs=opus) and video/webm (common audio stream format)
+            if (mimeType.startsWith('audio/webm') || mimeType.startsWith('video/webm')) {
                 encoding = 'WEBM_OPUS';
-            } else if (mimeType === 'audio/mp4') {
+            } else if (mimeType.startsWith('audio/mp4')) {
                 encoding = 'MP4_AUDIO'; // Corrected value
-            } else if (mimeType === 'audio/wav') {
+            } else if (mimeType.startsWith('audio/wav')) {
                 encoding = 'LINEAR16'; // Added support for WAV
             } else {
                 return response.status(400).send("Unsupported audio format");
