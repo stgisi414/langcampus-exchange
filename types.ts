@@ -57,6 +57,7 @@ export type QuizQuestion = {
   type: 'listening';
   question: string; // The text to be synthesized into speech
   correctAnswer: string; // The text the user should transcribe
+  sentenceToRead: string; // The actual sentence to read
 };
 
 export interface YouTubeVideo {

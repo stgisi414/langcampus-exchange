@@ -70,6 +70,7 @@ import PrivacyPolicy from "./components/PrivacyPolicy.tsx";
 import GroupJoinPage from "./components/GroupJoinPage.tsx";
 import GroupNotFound from "./components/GroupNotFound.tsx";
 import NotesModal from "./components/NotesModal.tsx";
+import RecordRTC from 'recordrtc';
 
 // Helper for localStorage (Removed as we are using Firestore for persistence)
 
@@ -681,41 +682,89 @@ const SpeakingQuestion: React.FC<{
   targetLanguage: string
 }> = ({ question, onAnswer, targetLanguage }) => {
   const [isRecording, setIsRecording] = useState(false);
-  const [recorder, setRecorder] = useState<MediaRecorder | null>(null);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  
+  const [audioDuration, setAudioDuration] = useState(0);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const audioStreamRef = useRef<MediaStream | null>(null);
+  const recorderRef = useRef<RecordRTC | null>(null);
+
+  const startTimer = useCallback(() => {
+    setAudioDuration(0);
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = setInterval(() => {
+      setAudioDuration((prev) => prev + 1);
+    }, 1000);
+  }, []);
+
+  const stopTimer = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, []);
 
   const targetLangCode = LANGUAGES.find(l => l.name === targetLanguage)?.code || 'en-US';
 
-  const handleStartRecording = async () => {
-    setAudioBlob(null);
-    setFeedback(null);
+  const handleStartRecording = useCallback(async () => {
+    if (isRecording) return;
+  
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      const chunks: BlobPart[] = [];
-      mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(chunks, { type: mediaRecorder.mimeType });
-        setAudioBlob(blob);
-        stream.getTracks().forEach(track => track.stop());
+      audioStreamRef.current = stream;
+  
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+  
+      const options: RecordRTC.Options = {
+        type: 'audio',
+        mimeType: isIOS ? 'audio/mp4' : 'audio/webm',
+        numberOfAudioChannels: 1,
+        sampleRate: 48000,
+        bufferSize: 16384,
+        disableLogs: true,
       };
-      mediaRecorder.start();
+  
+      const browserIsSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+      if (browserIsSafari) {
+        options.recorderType = RecordRTC.StereoAudioRecorder;
+      }
+  
+      const newRecorder = new RecordRTC(stream, options);
+      newRecorder.startRecording();
+      
+      recorderRef.current = newRecorder;
+      setAudioBlob(null);
+      setFeedback(null);
       setIsRecording(true);
-      setRecorder(mediaRecorder);
-    } catch (err) {
-      console.error("Recording failed:", err);
-      setFeedback("Couldn't start recording. Please check microphone permissions.");
-    }
-  };
-
-  const handleStopRecording = () => {
-    if (recorder) {
-      recorder.stop();
+      startTimer();
+  
+    } catch (error) {
+      console.error("Error starting recording:", error);
+      alert("Could not start recording. Please check microphone permissions.");
       setIsRecording(false);
+      stopTimer();
     }
-  };
+  }, [isRecording, startTimer, stopTimer]);
+
+  const handleStopRecording = useCallback(() => {
+    if (recorderRef.current) {
+      recorderRef.current.stopRecording(() => {
+        const blob = recorderRef.current!.getBlob();
+        setAudioBlob(blob);
+  
+        if (audioStreamRef.current) {
+          audioStreamRef.current.getTracks().forEach(track => track.stop());
+          audioStreamRef.current = null;
+        }
+        recorderRef.current?.destroy();
+        recorderRef.current = null;
+      });
+      setIsRecording(false);
+      stopTimer();
+    }
+  }, [stopTimer]);
 
   const handleSubmit = async () => {
     if (!audioBlob) return;
@@ -730,6 +779,12 @@ const SpeakingQuestion: React.FC<{
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const formatTime = (seconds: number) => {
+    const min = Math.floor(seconds / 60);
+    const sec = seconds % 60;
+    return `${min.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
   };
 
   return (
@@ -748,7 +803,7 @@ const SpeakingQuestion: React.FC<{
       {isRecording && (
         <button onClick={handleStopRecording} className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-red-500 text-white font-bold rounded-lg hover:bg-red-600 animate-pulse">
           <StopIcon className="w-6 h-6"/>
-          Stop Recording
+          Stop Recording... {formatTime(audioDuration)}
         </button>
       )}
 
@@ -779,7 +834,7 @@ const ListeningQuestion: React.FC<{ question: Extract<QuizQuestion, { type: 'lis
     const handlePlay = () => {
         if(isPlaying) return;
         setIsPlaying(true);
-        onSpeak(question.correctAnswer);
+        onSpeak(question.sentenceToRead);
         setTimeout(() => setIsPlaying(false), 2000); // Prevent spamming
     };
     
@@ -1949,6 +2004,8 @@ const ChatModal: React.FC<ChatModalProps> = ({
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const inactivityTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [speakingMessageIndex, setSpeakingMessageIndex] = useState<number | null>(null);
+  const audioStreamRef = useRef<MediaStream | null>(null);
+  const recorderRef = useRef<RecordRTC | null>(null);
 
   useEffect(() => {
     // 1. Clear any existing timer when dependencies change (new message, sending status, etc.)
@@ -2029,47 +2086,61 @@ const ChatModal: React.FC<ChatModalProps> = ({
   }, []);
 
   const handleStartRecording = useCallback(async () => {
-    if (isRecording || recorder) return;
-
+    if (isRecording) return;
+  
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: "audio/webm",
-      });
-
-      const chunks: BlobPart[] = [];
-
-      mediaRecorder.ondataavailable = (e) => {
-        chunks.push(e.data);
+      audioStreamRef.current = stream;
+  
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+  
+      const options: RecordRTC.Options = {
+        type: 'audio',
+        mimeType: isIOS ? 'audio/mp4' : 'audio/webm',
+        numberOfAudioChannels: 1,
+        sampleRate: 48000,
+        bufferSize: 16384,
+        disableLogs: true,
       };
-
-      mediaRecorder.onstop = () => {
-        const blob = new Blob(chunks, { type: "audio/webm" });
-        setRecordedBlob(blob);
-        stream.getTracks().forEach((track) => track.stop());
-        setIsRecording(false);
-        setRecorder(null);
-        stopTimer();
-      };
-
-      mediaRecorder.start();
-      setRecorder(mediaRecorder);
+  
+      const browserIsSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+      if (browserIsSafari) {
+        options.recorderType = RecordRTC.StereoAudioRecorder;
+      }
+  
+      const newRecorder = new RecordRTC(stream, options);
+      newRecorder.startRecording();
+      
+      recorderRef.current = newRecorder;
       setRecordedBlob(null);
       setIsRecording(true);
       startTimer();
+  
     } catch (error) {
       console.error("Error starting recording:", error);
       alert("Could not start recording. Please check microphone permissions.");
       setIsRecording(false);
       stopTimer();
     }
-  }, [isRecording, recorder, startTimer, stopTimer]);
+  }, [isRecording, startTimer, stopTimer]);
 
   const handleStopRecording = useCallback(() => {
-    if (recorder && recorder.state === "recording") {
-      recorder.stop();
+    if (recorderRef.current) {
+      recorderRef.current.stopRecording(() => {
+        const blob = recorderRef.current!.getBlob();
+        setRecordedBlob(blob);
+  
+        if (audioStreamRef.current) {
+          audioStreamRef.current.getTracks().forEach(track => track.stop());
+          audioStreamRef.current = null;
+        }
+        recorderRef.current?.destroy();
+        recorderRef.current = null;
+      });
+      setIsRecording(false);
+      stopTimer();
     }
-  }, [recorder]);
+  }, [stopTimer]);
 
   const handleCancelRecording = useCallback(() => {
     handleStopRecording();
@@ -3091,20 +3162,29 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
                 }
             } else {
                 // Solo Chat Logic - FIX: Get response immediately to prevent useEffect loop.
-                
-                // 3a. Immediately get the AI response for the new message
-                const aiResponse = await geminiService.getChatResponse(
-                    [...currentChatMessages, quizMessage], // Pass current messages + new quiz message
-                    currentPartner || partners[0], 
-                    true, // Corrections are implicitly on for quiz results
-                    userProfile,
-                    teachMeCache,
-                    false // Not a group chat
-                );
-                
-                // 3b. Single atomic update: add both the user's quiz message and the AI's reply.
-                // This prevents the ChatModal useEffect from being triggered by a lone user message.
-                setCurrentChatMessages((prev) => [...prev, quizMessage, aiResponse]);
+                try {
+                    // 3a. Immediately get the AI response for the new message
+                    const aiResponse = await geminiService.getChatResponse(
+                        [...currentChatMessages, quizMessage], // Pass current messages + new quiz message
+                        currentPartner || partners[0], 
+                        true, // Corrections are implicitly on for quiz results
+                        userProfile,
+                        teachMeCache,
+                        false // Not a group chat
+                    );
+                    
+                    // 3b. Single atomic update: add both the user's quiz message and the AI's reply.
+                    // This prevents the ChatModal useEffect from being triggered by a lone user message.
+                    setCurrentChatMessages((prev) => [...prev, quizMessage, aiResponse]);
+                } catch (error) {
+                    console.error("Error getting quiz results response:", error);
+                    const errorMessage: Message = {
+                        sender: "ai",
+                        text: "Sorry, I had trouble analyzing the quiz results. Please try again.",
+                        timestamp: Date.now()
+                    };
+                    setCurrentChatMessages((prev) => [...prev, quizMessage, errorMessage]);
+                }
             }
 
             // 4. Update UI context for chat

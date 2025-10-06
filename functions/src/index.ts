@@ -134,27 +134,31 @@ export const transcribeAudio = onRequest(
                 return response.status(405).send("Method Not Allowed");
             }
 
-            const { audioBytes, languageCode } = request.body;
-            if (!audioBytes || !languageCode) {
-                return response.status(400).send("Bad Request: Missing audioBytes or languageCode");
+            const { audioBytes, languageCode, mimeType } = request.body;
+            if (!audioBytes || !languageCode || !mimeType) {
+                return response.status(400).send("Bad Request: Missing audioBytes, languageCode, or mimeType");
+            }
+
+            let encoding: any;
+            if (mimeType === 'audio/webm') {
+                encoding = 'WEBM_OPUS';
+            } else if (mimeType === 'audio/mp4') {
+                encoding = 'MP4_AUDIO'; // Corrected value
+            } else if (mimeType === 'audio/wav') {
+                encoding = 'LINEAR16'; // Added support for WAV
+            } else {
+                return response.status(400).send("Unsupported audio format");
             }
 
             try {
-                // Initialize the client here, just before it's needed.
                 const speechClient = new SpeechClient();
-
-                const audio = {
-                    content: audioBytes,
-                };
+                const audio = { content: audioBytes };
                 const config = {
-                    encoding: "WEBM_OPUS" as const,
-                    sampleRateHertz: 48000,
+                    encoding: encoding,
+                    sampleRateHertz: 48000, // Use a supported sample rate
                     languageCode: languageCode,
                 };
-                const requestPayload = {
-                    audio: audio,
-                    config: config,
-                };
+                const requestPayload = { audio: audio, config: config };
 
                 const [operation] = await speechClient.longRunningRecognize(requestPayload);
                 const [transcriptionResponse] = await operation.promise();

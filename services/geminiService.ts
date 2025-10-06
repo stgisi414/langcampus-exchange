@@ -508,7 +508,7 @@ export const generateQuiz = async (topic: string, type: 'Grammar' | 'Vocabulary'
         {
           "type": "listening",
           "question": "Listen and type what you hear.", // In ${questionLanguage}
-          "correctAnswer": "The sentence to be synthesized and transcribed." // In ${targetLanguage}
+          "correctAnswer": "The sentence to be synthesized and transcribed.", // In ${targetLanguage}
           "sentenceToRead": "A relevant and simple sentence from the topic in ${targetLanguage}."
         }
 
@@ -533,7 +533,6 @@ export const generateQuiz = async (topic: string, type: 'Grammar' | 'Vocabulary'
 
 export const transcribeAudio = async (audioBlob: Blob, languageCode: string): Promise<string> => {
   try {
-    // Convert Blob to a base64 string
     const reader = new FileReader();
     const base64String = await new Promise<string>((resolve, reject) => {
       reader.onload = () => resolve((reader.result as string).split(',')[1]);
@@ -543,10 +542,12 @@ export const transcribeAudio = async (audioBlob: Blob, languageCode: string): Pr
 
     const response = await fetch(TRANSCRIBE_PROXY_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ audioBytes: base64String, languageCode }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        audioBytes: base64String, 
+        languageCode,
+        mimeType: audioBlob.type // Pass the blob's MIME type
+      }),
     });
 
     if (!response.ok) {
