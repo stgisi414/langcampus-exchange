@@ -828,14 +828,21 @@ const SpeakingQuestion: React.FC<{
   );
 };
 
-const ListeningQuestion: React.FC<{ question: Extract<QuizQuestion, { type: 'listening' }>, onAnswer: (answer: string) => void, onSpeak: (text: string) => void }> = ({ question, onAnswer, onSpeak }) => {
+const ListeningQuestion: React.FC<{ question: Extract<QuizQuestion, { type: 'listening' }>, onAnswer: (answer: string) => void, onSpeak: (text: string) => Promise<void> }> = ({ question, onAnswer, onSpeak }) => {
     const [isPlaying, setIsPlaying] = useState(false);
     
-    const handlePlay = () => {
+    // FIX: Make handlePlay async and await onSpeak to ensure the button is disabled 
+    // for the entire duration of TTS generation and audio playback.
+    const handlePlay = async () => {
         if(isPlaying) return;
         setIsPlaying(true);
-        onSpeak(question.sentenceToRead);
-        setTimeout(() => setIsPlaying(false), 2000); // Prevent spamming
+        try {
+            await onSpeak(question.sentenceToRead);
+        } catch (error) {
+             console.error("Error playing listening question audio:", error);
+        } finally {
+             setIsPlaying(false);
+        }
     };
     
     return (
@@ -3362,8 +3369,8 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     }
   };
 
-  const handleSpeakNote = useCallback(async (text: string, topic: string) => {
-    
+  const handleSpeakNote = useCallback(async (text: string, topic: string): Promise<void> => {
+
     // The base language for the TTS request is the Target Language (the lesson language)
     const baseLangCode = targetLanguage;
     const gender = currentPartner?.gender || 'male';
@@ -3380,39 +3387,64 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     // Guaranteed fallback voice name
     const finalForeignVoice = foreignVoiceName || VOICE_MAP['en-US']['male']; 
 
-    await handleUsageCheck("audioPlays", async () => {
-        try {
-            // 1. Tag text for SSML, passing the base language and the explicit foreign voice name
-            const ssmlText = await geminiService.tagTextForTTS(
-                text, 
-                baseLangCode, // Primary language of the text is the target language
-                finalForeignVoice // Voice to switch TO (user's native language voice)
-            );
+    return new Promise<void>(async (resolve) => {
+      await handleUsageCheck("audioPlays", async () => {
+          try {
+              // 1. Tag text for SSML, passing the base language and the explicit foreign voice name
+              const ssmlText = await geminiService.tagTextForTTS(
+                  text, 
+                  baseLangCode, // Primary language of the text is the target language
+                  finalForeignVoice // Voice to switch TO (user's native language voice)
+              );
 
-            // 2. Synthesize speech: The request uses the *target language* as the base code for the primary voice
-            const audioContent = await geminiService.synthesizeSpeech(
-                ssmlText,
-                baseLangCode, // The primary language code for the voice model
-                gender,
-            );
-            const audioBlob = new Blob([base64ToArrayBuffer(audioContent)], { type: 'audio/mpeg' });
-            const audioUrl = URL.createObjectURL(audioBlob);
-            const audio = new Audio(audioUrl);
-            
-            audio.play();
+              // 2. Synthesize speech: The request uses the *target language* as the base code for the primary voice
+              const audioContent = await geminiService.synthesizeSpeech(
+                  ssmlText,
+                  baseLangCode, // The primary language code for the voice model
+                  gender,
+              );
+              const audioBlob = new Blob([base64ToArrayBuffer(audioContent)], { type: 'audio/mpeg' });
+              const audioUrl = URL.createObjectURL(audioBlob);
+              const audio = new Audio(audioUrl);
+              
+              audio.play();
 
-        } catch (error) {
-            console.error("Error synthesizing speech for note, falling back to browser TTS:", error);
-            try {
-                if ('speechSynthesis' in window) {
-                    const utterance = new SpeechSynthesisUtterance(text);
-                    utterance.lang = baseLangCode;
-                    window.speechSynthesis.speak(utterance);
-                }
-            } catch (speechError) {
-                console.error("Browser speech synthesis failed to start:", speechError);
-            }
-        }
+              // Wait for the audio to finish playing before resolving the Promise
+              audio.onended = () => {
+                  resolve();
+              };
+              
+              // Add an error handler to resolve the promise if playback fails immediately
+              audio.onerror = () => {
+                  console.error("Audio playback failed or stopped unexpectedly.");
+                  resolve(); 
+              };
+
+          } catch (error) {
+              console.error("Error synthesizing speech for note, falling back to browser TTS:", error);
+              try {
+                  if ('speechSynthesis' in window) {
+                      const utterance = new SpeechSynthesisUtterance(text);
+                      utterance.lang = baseLangCode;
+                      utterance.onend = () => resolve(); // Resolve when browser speech is done
+                      window.speechSynthesis.speak(utterance);
+                  } else {
+                      resolve(); // Resolve immediately if no fallback is available
+                  }
+              } catch (speechError) {
+                  console.error("Browser speech synthesis failed to start:", speechError);
+                  resolve(); // Resolve on error
+              }
+          }
+      });
+      
+      // Add a safety timeout in case of promise hang (e.g. if handleUsageCheck fails to call its inner function)
+      setTimeout(() => {
+          if (process.env.NODE_ENV !== 'production') {
+              console.warn("handleSpeakNote timed out and forced resolution.");
+          }
+          resolve();
+      }, 15000); // 15 second safety timeout
     });
   }, [currentPartner, targetLanguage, handleUsageCheck, user.nativeLanguage, user.uid]);
 
