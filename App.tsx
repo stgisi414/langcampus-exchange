@@ -1232,7 +1232,7 @@ const TeachMeModal: React.FC<{
       
       // Setup the timeout promise
       const timeout = new Promise<string>((_, reject) => {
-          setTimeout(() => reject(new Error('Content fetch timed out after 30 seconds.')), 30000);
+          setTimeout(() => reject(new Error('Content fetch timed out after 60 seconds.')), 60000);
       });
 
       try {
@@ -1276,7 +1276,7 @@ const TeachMeModal: React.FC<{
         if (!isCurrentFetch) return; 
 
         if (error.message && error.message.includes('timed out')) {
-            newContent = "Failed to load content: The request timed out after 30 seconds. Please try again.";
+            newContent = "Failed to load content: The request timed out after 60 seconds. Please try again.";
         } else {
             newContent = "Failed to load content. Please try again. (Check console for API error)";
         }
