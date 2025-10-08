@@ -1303,11 +1303,12 @@ const TeachMeModal: React.FC<{
 
   }, [
     selectedTopic, 
-    groupChat?.topic, 
+    groupChat?.topic, // This is the key dependency for group mode
     language, 
     nativeLanguage, 
     activeTab, 
-    setCache
+    setCache, 
+    cache
   ]);
 
   // This is the function that runs when a topic button is clicked.
@@ -1325,6 +1326,8 @@ const TeachMeModal: React.FC<{
       console.log("DEBUG: T-01: User is HOSt. Updating group topic in Firestore.");
       onSetGroupTopic(topic);
       setSelectedTopic(null); // Clear local solo topic state
+      // DO NOT return here. Let the loading state persist.
+      // The useEffect will handle turning isLoading off when the new prop arrives.
       return; 
     }
 

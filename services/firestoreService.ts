@@ -85,7 +85,7 @@ export const addXp = async (userId: string, amount: number) => {
   });
 };
 
-export const updateUserProfile = async (userId: string, profileData: { name: string; hobbies: string; bio: string; }) => {
+export const updateUserProfile = async (userId: string, profileData: UserProfileData) => {
   const userRef = doc(db, "customers", userId); // Target 'customers' collection
   await updateDoc(userRef, {
     name: profileData.name,
