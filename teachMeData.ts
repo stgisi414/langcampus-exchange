@@ -3299,10 +3299,18 @@ export const conversationData = {
 
 export const pg13ConversationData: Record<string, any[]> = {
     "English": [
-        { "title": "Discussing a War Movie (Historical Context)", "level": 3, "tags": ["entertainment", "history", "violence", "discussion"] },
-        { "title": "Debating the Ethics of Superheroes", "level": 4, "tags": ["debate", "ethics", "violence", "abstract"] },
-        { "title": "Analyzing Conflict in a Historical Event", "level": 4, "tags": ["history", "war", "conflict", "analysis"] },
-        { "title": "Joogs, licks and beyond", "level": 4.5, "tags": ["hood tricks"]}
+        { "title": "Planning a Heist", "level": 4, "tags": ["crime", "planning", "teamwork", "storytelling"] },
+        { "title": "Surviving a Zombie Apocalypse", "level": 3, "tags": ["survival", "zombies", "apocalypse", "teamwork"] },
+        { "title": "Debating Superhero Ethics", "level": 4, "tags": ["superheroes", "ethics", "debate", "abstract"] },
+        { "title": "Describing a Fictional Battle", "level": 3, "tags": ["creative writing", "action", "description", "storytelling"] },
+        { "title": "Interrogating a Suspect (Roleplay)", "level": 4, "tags": ["crime", "roleplay", "mystery", "deduction"] },
+        { "title": "Planning a Rebellion", "level": 5, "tags": ["politics", "strategy", "rebellion", "storytelling"] },
+        { "title": "A Spy's Secret Rendezvous", "level": 3, "tags": ["espionage", "spy", "mystery", "roleplay"] },
+        { "title": "Escaping a Deathtrap", "level": 3, "tags": ["action", "problem-solving", "adventure", "roleplay"] },
+        { "title": "Negotiating a Hostage Situation (Roleplay)", "level": 5, "tags": ["negotiation", "crime", "roleplay", "high-stakes"] },
+        { "title": "Infiltrating an Enemy Base", "level": 4, "tags": ["stealth", "action", "spy", "planning"] },
+        { "title": "Discussing a War Movie", "level": 3, "tags": ["entertainment", "history", "violence", "discussion"] },
+        { "title": "Analyzing Conflict in a Historical Event", "level": 4, "tags": ["history", "war", "conflict", "analysis"] }
     ],
     "Spanish": [
         { "title": "Hablar de una Película de Guerra (Contexto Histórico)", "level": 3, "tags": ["entretenimiento", "historia", "violencia", "discusión"] },
@@ -3327,27 +3335,57 @@ export const pg13ConversationData: Record<string, any[]> = {
 
 export const pg13GrammarData: Record<string, any[]> = {
     // Add empty arrays for all supported languages
-    "English": [], "Spanish": [], "French": [], "German": [], "Italian": [], "Portuguese": [], 
+    "English": [
+        { "title": "Using Imperatives for Commands in Battle", "level": 3, "tags": ["imperatives", "commands", "action", "grammar"] },
+        { "title": "Conditional Clauses for Tactical Planning", "level": 4, "tags": ["conditionals", "if-clauses", "strategy", "grammar"] },
+        { "title": "Active vs. Passive Voice in Action Sequences", "level": 4, "tags": ["passive voice", "active voice", "writing", "action", "grammar"] },
+        { "title": "Modal Verbs for Survival Scenarios", "level": 3, "tags": ["modals", "survival", "possibility", "obligation", "grammar"] },
+        { "title": "Reported Speech for Relaying Intelligence", "level": 4, "tags": ["reported speech", "espionage", "communication", "grammar"] },
+        { "title": "Advanced Conjunctions for Complex Strategies", "level": 5, "tags": ["conjunctions", "strategy", "planning", "writing", "grammar"] },
+        { "title": "Using Participles to Describe Action", "level": 4, "tags": ["participles", "writing", "action", "description", "grammar"] },
+        { "title": "Narrative Tenses for Action Storytelling", "level": 3, "tags": ["narrative tenses", "past tense", "storytelling", "writing", "grammar"] },
+        { "title": "Figurative Language in Action Scenes (Similes & Metaphors)", "level": 5, "tags": ["figurative language", "similes", "metaphors", "writing", "description"] },
+        { "title": "Rhetorical Questions in Persuasive Arguments", "level": 4, "tags": ["rhetorical questions", "persuasion", "debate", "grammar"] }
+    ], "Spanish": [], "French": [], "German": [], "Italian": [], "Portuguese": [], 
     "Japanese": [], "Korean": [], "Chinese": [], "Russian": [], "Arabic": [], "Hindi": [], 
     "Vietnamese": [], "Mongolian": [], "Polish": [], "Esperanto": [],
 };
 
-export const pg13VocabData: any[] = [];
+export const pg13VocabData: any[] = [
+    { "title": "Heist & Espionage Vocabulary", "level": 4, "tags": ["crime", "spy", "heist", "vocabulary"] },
+    { "title": "Zombie Apocalypse Survival Gear", "level": 3, "tags": ["survival", "zombies", "gear", "vocabulary"] },
+    { "title": "Military & Tactical Terminology", "level": 4, "tags": ["military", "tactics", "war", "vocabulary"] },
+    { "title": "Superhero Powers & Weaknesses", "level": 3, "tags": ["superheroes", "powers", "fantasy", "vocabulary"] },
+    { "title": "Types of Fictional Weapons", "level": 3, "tags": ["weapons", "fantasy", "sci-fi", "vocabulary"] },
+    { "title": "Words to Describe a Fight Scene", "level": 4, "tags": ["action", "fighting", "writing", "vocabulary"] },
+    { "title": "Political Rebellion Vocabulary", "level": 5, "tags": ["politics", "rebellion", "revolution", "vocabulary"] },
+    { "title": "Interrogation Vocabulary", "level": 4, "tags": ["crime", "interrogation", "deception", "vocabulary"] },
+    { "title": "Words for Deception & Betrayal", "level": 4, "tags": ["deception", "betrayal", "social", "vocabulary"] },
+    { "title": "Post-Apocalyptic Vocabulary", "level": 3, "tags": ["apocalypse", "survival", "dystopia", "vocabulary"] }
+];
 
 export const r21PlusConversationData: Record<string, any[]> = {
     "English": [
         { "title": "Ordering Drinks at a Bar", "level": 2, "tags": ["social", "nightlife", "alcohol", "ordering"] },
         { "title": "Discussing Nightlife in Your City", "level": 3, "tags": ["social", "city", "nightlife", "lifestyle"] },
         { "title": "Debating Drug Legalization Policies", "level": 5, "tags": ["debate", "politics", "drugs", "society", "advanced"] },
-        { "title": "Blasting off with DMT", "level": 7, "tags": ["psychedelic"]},   
         { "title": "Talking About Dating and Relationships", "level": 4, "tags": ["relationships", "dating", "social", "sex"] },
+        { "title": "Discussing a Breakup", "level": 4, "tags": ["relationships", "breakups", "emotions", "social"] },
+        { "title": "Planning a Bachelor/Bachelorette Party", "level": 3, "tags": ["social", "party", "planning", "nightlife"] },
+        { "title": "Debating Controversial Political Topics", "level": 5, "tags": ["politics", "debate", "society", "controversial", "advanced"] },
+        { "title": "A Deep Conversation About Life and Regrets", "level": 5, "tags": ["philosophy", "life", "regrets", "deep talk", "abstract"] },
+        { "title": "Flirting at a Bar (Roleplay)", "level": 3, "tags": ["social", "flirting", "dating", "roleplay", "nightlife"] },
+        { "title": "Discussing Relationship Dealbreakers", "level": 4, "tags": ["relationships", "dating", "dealbreakers", "discussion"] },
+        { "title": "A Conversation About a Hangover", "level": 2, "tags": ["social", "humor", "hangover", "nightlife"] },
+        { "title": "Gossip Session with a Friend", "level": 3, "tags": ["social", "gossip", "friends", "casual"] },
+        { "title": "Discussing a Difficult Moral Dilemma", "level": 5, "tags": ["ethics", "philosophy", "dilemma", "debate", "abstract"] },
+        { "title": "First Date Jitters and Expectations", "level": 3, "tags": ["dating", "relationships", "first date", "emotions"] }
     ],
     "Spanish": [
         { "title": "Pedir Bebidas en un Bar", "level": 2, "tags": ["social", "vida nocturna", "alcohol", "pedir"] },
         { "title": "Hablar de la Vida Nocturna en tu Ciudad", "level": 3, "tags": ["social", "ciudad", "vida nocturna", "estilo de vida"] },
         { "title": "Debatir Políticas de Legalización de Drogas", "level": 5, "tags": ["debate", "política", "drogas", "sociedad", "avanzado"] },
     ],
-    // ADD EMPTY ARRAYS FOR OTHER LANGUAGES TO AVOID CRASHES/FALLBACKS
     "French": [], 
     "German": [],
     "Italian": [],
@@ -3366,9 +3404,31 @@ export const r21PlusConversationData: Record<string, any[]> = {
 
 export const r21PlusGrammarData: Record<string, any[]> = {
     // Add empty arrays for all supported languages
-    "English": [], "Spanish": [], "French": [], "German": [], "Italian": [], "Portuguese": [], 
+    "English": [
+        { "title": "Using the Subjunctive Mood for Wishes and Regrets", "level": 5, "tags": ["subjunctive", "wishes", "regrets", "grammar", "advanced"] },
+        { "title": "Advanced Modal Verbs for Speculation & Deduction", "level": 5, "tags": ["modals", "speculation", "deduction", "grammar", "advanced"] },
+        { "title": "The Nuances of Sarcasm and Irony", "level": 5, "tags": ["sarcasm", "irony", "pragmatics", "communication", "nuance"] },
+        { "title": "Formal vs. Informal Language in Social Settings", "level": 3, "tags": ["register", "formal", "informal", "social", "communication"] },
+        { "title": "Using Idioms and Slang in Casual Conversation", "level": 4, "tags": ["idioms", "slang", "colloquialisms", "vocabulary", "casual"] },
+        { "title": "Hedging and Softening Language in Debates", "level": 4, "tags": ["hedging", "softening", "debate", "communication", "pragmatics"] },
+        { "title": "Expressing Complex Emotions with Adjectives and Adverbs", "level": 4, "tags": ["emotions", "adjectives", "adverbs", "description", "psychology"] },
+        { "title": "Direct and Indirect Speech in Gossip", "level": 3, "tags": ["reported speech", "gossip", "communication", "grammar"] },
+        { "title": "Using Question Tags for Confirmation and Confrontation", "level": 3, "tags": ["question tags", "confirmation", "confrontation", "grammar"] },
+        { "title": "Collocations for Dating and Relationships", "level": 4, "tags": ["collocations", "dating", "relationships", "vocabulary"] }
+    ], "Spanish": [], "French": [], "German": [], "Italian": [], "Portuguese": [], 
     "Japanese": [], "Korean": [], "Chinese": [], "Russian": [], "Arabic": [], "Hindi": [], 
     "Vietnamese": [], "Mongolian": [], "Polish": [], "Esperanto": [],
 };
 
-export const r21PlusVocabData: any[] = [];
+export const r21PlusVocabData: any[] = [
+    { "title": "Cocktails and Bar Terminology", "level": 3, "tags": ["drinks", "alcohol", "bar", "nightlife", "vocabulary"] },
+    { "title": "Dating App Vocabulary and Slang", "level": 3, "tags": ["dating", "relationships", "slang", "technology", "vocabulary"] },
+    { "title": "Political & Philosophical Terminology", "level": 5, "tags": ["politics", "philosophy", "debate", "abstract", "vocabulary"] },
+    { "title": "Words to Describe Complex Emotions", "level": 5, "tags": ["emotions", "psychology", "feelings", "adjectives", "vocabulary"] },
+    { "title": "Slang for Money and Work", "level": 4, "tags": ["money", "work", "slang", "colloquialisms", "vocabulary"] },
+    { "title": "Breakup and Divorce Vocabulary", "level": 4, "tags": ["relationships", "breakups", "divorce", "vocabulary"] },
+    { "title": "Hangover Cures and Vocabulary", "level": 2, "tags": ["hangover", "health", "nightlife", "vocabulary"] },
+    { "title": "Gossip and Rumor Vocabulary", "level": 3, "tags": ["gossip", "rumors", "social", "vocabulary"] },
+    { "title": "Moral Dilemma Vocabulary", "level": 5, "tags": ["ethics", "philosophy", "dilemma", "vocabulary"] },
+    { "title": "Flirting and Compliments", "level": 3, "tags": ["flirting", "compliments", "dating", "social", "vocabulary"] }
+];
