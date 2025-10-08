@@ -87,14 +87,15 @@ const colorMap: Record<string, { skin: string[], hair: string[] }> = {
  * @param prompt The text prompt to send to the Gemini API.
  * @returns The JSON response from the API.
  */
-const callGeminiProxy = async (prompt: string) => {
+const callGeminiProxy = async (prompt: string, model: string = "gemini-2.5-flash") => {
   try {
     const response = await fetch(PROXY_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ prompt }),
+      // CRITICAL FIX: Explicitly send model to the proxy, defaulting to fast.
+      body: JSON.stringify({ prompt, model }),
     });
 
     if (!response.ok) {
@@ -418,7 +419,8 @@ export const getContent = async (topic: string, type: 'Grammar' | 'Vocabulary', 
     Return ONLY the lesson content in Markdown format. Do not include any conversational pleasantries or introductions.
     `;
   try {
-    const data = await callGeminiProxy(prompt);
+    // CRITICAL FIX: Pass the model name explicitly to the helper function
+    const data = await callGeminiProxy(prompt, "gemini-2.5-pro"); // Use Pro for complex lesson generation
     // The response is expected to be Markdown text directly
     return data.candidates[0].content.parts[0].text;
   } catch (error) {
