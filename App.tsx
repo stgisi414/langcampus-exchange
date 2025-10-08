@@ -2456,7 +2456,12 @@ const ChatModal: React.FC<ChatModalProps> = ({
                       duration={msg.audioDuration || 0}
                     />
                   ) : (
-                    <p>{msg.text}</p>
+                    <div
+                      className="prose dark:prose-invert max-w-none break-words"
+                      dangerouslySetInnerHTML={{
+                        __html: (window as any).marked.parse(msg.text),
+                      }}
+                    ></div>
                   )}
 
                   {!msg.audioUrl && (
@@ -3063,7 +3068,12 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
               firestoreService.addXp(user.uid, score);
             }
             // 1. Prepare Message
-            let quizSummary = `I just took a quiz on "${topic}" and my score was ${score}/${totalGraded}. `;
+            let quizSummary = `**Quiz Results Summary**
+
+                              - **Topic:** ${topic}
+                              - **Score:** ${score}/${totalGraded}
+
+                              `;
 
             const incorrectAnswers = questions
                 .map((q, index) => ({
@@ -3072,68 +3082,93 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
                 }))
                 .filter((item, index) => {
                     const question = item.question;
-                    const answer = userAnswers[index];
+                    const answer = userAnswers[index]; // 'answer' can be undefined/null if skipped
+
                     if (question.type === 'multiple-choice' || question.type === 'fill-in-the-blank') {
+                        // This is safe even if 'answer' is undefined, as the comparison coerces.
                         return answer !== question.correctAnswer;
                     }
-                    // FIX: Update the grading logic in handleShareQuizResults to use the ID-based answer format.
                     if (question.type === 'matching' && Array.isArray(answer)) {
                         return !question.pairs.every((pair, i) => {
-                            // The correct answer for the Nth pair is the Nth term ID mapped to the Nth definition ID.
                             const correctPairId = `term-${i}:def-${i}`;
                             return answer[i] === correctPairId;
                         });
                     }
-                    if (question.type === 'listening' && typeof answer === 'string') {
-                        return answer.toLowerCase().trim() !== question.correctAnswer.toLowerCase().trim();
+                    // CRITICAL FIX: Add explicit checks to ensure both values are strings before calling string methods.
+                    if (question.type === 'listening') {
+                        const listeningQuestion = question as Extract<QuizQuestion, { type: 'listening' }>;
+                        
+                        if (typeof answer === 'string' && typeof listeningQuestion.correctAnswer === 'string') {
+                            return answer.toLowerCase().trim() !== listeningQuestion.correctAnswer.toLowerCase().trim();
+                        }
+                        // If the user skipped, or the data is malformed, we don't treat it as incorrect here.
+                        return false;
                     }
-                    return false; // Speaking exercises are not graded here for correctness
+                    return false;
                 });
 
             if (incorrectAnswers.length > 0) {
-                quizSummary += `I missed ${incorrectAnswers.length} question(s). I would like help understanding the following: `;
-                // Reworked loop to include all relevant incorrect answers in the summary
+                quizSummary += `**I missed ${incorrectAnswers.length} question(s). I need help with the following:**
+
+                                  `;
                 incorrectAnswers.forEach((item, index) => {
                     const question = item.question;
-                    const userAnswer = item.userAnswer;
-                    
+                    const rawUserAnswer = item.userAnswer;
+                    const userAnswer = (typeof rawUserAnswer === 'string' || typeof rawUserAnswer === 'number') ? String(rawUserAnswer) : '*(Skipped/Missing)*';
+
+                    quizSummary += `### Question ${index + 1}
+                                  **Question:** ${question.question}
+
+                                  `;
+
                     if (question.type === 'multiple-choice' || question.type === 'fill-in-the-blank') {
-                        quizSummary += `[Q${index + 1} (MC/Fill): "${question.question}". My Answer: "${userAnswer}". Correct: "${question.correctAnswer}"]. `;
+                        quizSummary += `- **My Answer:** \`${userAnswer}\`
+                        - **Correct Answer:** \`${question.correctAnswer}\`
+
+                        `;
                     } 
                     else if (question.type === 'matching' && Array.isArray(userAnswer)) {
                         const matchingQuestion = question as Extract<QuizQuestion, { type: 'matching' }>;
-                        let matchDetails = "";
-                        
-                        // userAnswer is an array of strings like ["term-0:def-1", "term-1:def-0", ...]
+                        quizSummary += `**Incorrect Matches:**
+                        `;
                         userAnswer.forEach((match, pairIndex) => {
                             const correctDefId = `def-${pairIndex}`;
                             const [termId, userDefId] = match.split(':');
                             
-                            // Only report incorrect matches (where the matched definition ID doesn't match the term index)
                             if (userDefId !== correctDefId) {
                                 const correctTerm = matchingQuestion.pairs[pairIndex].term;
                                 const correctDefinition = matchingQuestion.pairs[pairIndex].definition;
-                                
-                                // Get the definition text the user incorrectly matched using the ID.
-                                // The definition text at index N corresponds to ID 'def-N'.
                                 const matchedDefIndex = parseInt(userDefId.replace('def-', ''), 10);
                                 const userMatchedDefinition = matchingQuestion.pairs[matchedDefIndex].definition;
                                 
-                                matchDetails += `(Term: "${correctTerm}", Matched: "${userMatchedDefinition}" vs. Correct: "${correctDefinition}"). `;
+                                quizSummary += `- **Term:** \`${correctTerm}\`
+                                  - **Matched:** *${userMatchedDefinition}*
+                                  - **Should Be:** *${correctDefinition}*
+
+                                `;
                             }
                         });
-
-                        if (matchDetails) {
-                            quizSummary += `[Q${index + 1} (Matching): I struggled with the following pair(s): ${matchDetails}] `;
-                        }
                     }
-                    else if (question.type === 'listening' && typeof userAnswer === 'string') {
-                         quizSummary += `[Q${index + 1} (Listening): I transcribed "${userAnswer}" but the correct sentence was: "${question.correctAnswer}"]. `;
+                    else if (question.type === 'listening') {
+                        const listeningQuestion = question as Extract<QuizQuestion, { type: 'listening' }>;
+                        const correctAnswer = listeningQuestion.correctAnswer || '*(Missing from question data)*';
+
+                         quizSummary += `- **My Transcription:** \`${userAnswer}\`
+- **Correct Sentence:** \`${correctAnswer}\`
+
+`;
+                    }
+                    else if ((question.type === 'speaking') && typeof userAnswer === 'string') {
+                         quizSummary += `- *Speaking exercise completed.* (AI feedback expected separately)
+                          `;
                     }
                 });
-                quizSummary = quizSummary.trim();
+
+                // Add a concluding line.
+                quizSummary += `\nThank you for the help!`;
+
             } else {
-                quizSummary += "I did well, but I'd love some encouragement!";
+                quizSummary += "I did well! I'd love some encouragement!";
             }
 
             const quizMessage: Message = {

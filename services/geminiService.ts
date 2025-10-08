@@ -327,6 +327,8 @@ export const getChatResponse = async (messages: Message[], partner: Partner, cor
 
     **IMPORTANT:** Your entire response must be a single, valid JSON object. Do not include any text outside of the JSON object.
 
+    **MARKDOWN INSTRUCTION:** For any response that requires structure (e.g., explaining complex topics, responding to a detailed quiz summary, or providing detailed feedback), **use Markdown formatting (bold, lists, headings) in the "text" field for clarity.**
+
     The JSON object must have three string properties:
     1. "text": Your conversational reply. This can be in either your native language OR the user's native language, depending on the rule above.
     2. "correction": The corrected version of the user's last message if it was in your native language and had errors. If there are no errors, or if the user spoke in their own language, this must be an empty string "".
@@ -435,8 +437,9 @@ export const comparePronunciation = async (originalText: string, userTranscripti
     **Instructions:**
     1.  Analyze the transcription against the original text. Be aware that speech-to-text can sometimes make phonetic mistakes (e.g., transcribing the letter "Q" as the word "you").
     2.  If the transcription is identical or a very close phonetic match, congratulate the user on their excellent pronunciation.
-    3.  If there are differences, gently point them out. For example, if the original was "read" and the user said "red", explain the vowel sound difference.
-    4.  Keep the feedback encouraging, brief (2-4 sentences), and in English.
+    3.  If there are differences, gently point them out. Use **bold** for key words and \`inline code\` for phonetic transcriptions or difficult words.
+    4.  Keep the feedback encouraging, clear, and in English.
+    5.  **Use Markdown formatting (bold, lists, code) to organize your response.**
 
     Now, provide your feedback.
   `;
@@ -620,6 +623,8 @@ export const getInitialWelcomeMessage = async (partner: Partner): Promise<Messag
     Your native language is ${partner.nativeLanguage}.
     You are learning ${partner.learningLanguage}.
     Your interests include: ${partner.interests.join(', ')}.
+
+    **CRITICAL INSTRUCTION:** Your primary goal is to encourage the user to practice the language you speak, which is the user's target language (${partner.nativeLanguage}). Do NOT offer to teach or start a lesson in the user's native language (${partner.learningLanguage}).
 
     **Your Task:**
     Generate a warm, friendly, and open-ended welcome message in your native language (${partner.nativeLanguage}). Introduce yourself (your name and the languages you speak/learn). End with a simple question to start the conversation naturally.
