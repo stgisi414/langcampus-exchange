@@ -1059,14 +1059,13 @@ const TeachMeModal: React.FC<{
   isGroupChat: boolean;
   userIsGroupCreator: boolean;
   groupTopic: string | null;
-  onSetGroupTopic?: (topic: string) => void;
   user: UserData;
   onAddNote: (noteText: string, topic: string) => void;
   onDeleteNote: (noteId: string) => void;
   onReorderNotes: (newNotes: Note[]) => void;
   onSpeakNote: (text: string, topic: string) => void;
   groupChat: GroupChat | null;
-  onSetGroupTopic?: (topic: string) => Promise<void>;
+  onSetGroupTopic?: (topic: string, type: TeachMeType, level: number, language: string) => Promise<void>;
 }> = ({
   language,
   onClose,
@@ -1084,12 +1083,14 @@ const TeachMeModal: React.FC<{
   onDeleteNote,
   onReorderNotes,
   onSpeakNote,
-  groupChat, // <--- AND DESTRUCTURE IT HERE
+  groupChat, 
 }) => {
+  // Local state variables (now initialized to defaults, synced via useEffect)
   const [activeTab, setActiveTab] = useState<TeachMeType>("Grammar");
   const [level, setLevel] = useState(1);
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [content, setContent] = useState<string>("");
+  
   const [isLoading, setIsLoading] = useState(false);
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[] | null>(null);
   const [showQuiz, setShowQuiz] = useState(false);
@@ -1111,6 +1112,31 @@ const TeachMeModal: React.FC<{
   const isHost = isGroupChat && userIsGroupCreator;
   const isMember = isGroupChat && !userIsGroupCreator;
   
+  // --- NEW EFFECT: Synchronize Local State from GroupChat Prop ---
+  useEffect(() => {
+    if (isGroupChat && groupChat && groupChat.groupTeachMeSettings) {
+      // Set modal's display settings from persisted data
+      setActiveTab(groupChat.groupTeachMeSettings.type);
+      setLevel(groupChat.groupTeachMeSettings.level);
+      
+      // Set selected topic and lesson content
+      setSelectedTopic(groupChat.topic || null); 
+      setContent(groupChat.teachMeContent || ""); 
+
+      // If a topic is set but content is missing, set loading state for members
+      const isWaitingForContent = groupChat.topic && !groupChat.teachMeContent && isMember;
+      setIsLoading(isWaitingForContent);
+    } else if (!isGroupChat && cache) {
+      // Sync from solo cache
+      setActiveTab(cache.type);
+      setLevel(1); // Solo cache does not store level, defaults to 1
+      setSelectedTopic(cache.topic);
+      setContent(cache.content);
+    }
+  }, [groupChat, isGroupChat, isMember, cache]); // Dependency on groupChat is key for re-opening
+  // ---------------------------------------------------------------
+
+
   const availableTopics = useMemo(() => {
     let grammarSource: any = grammarData;
     let vocabSource: any[] = vocabData;
@@ -1182,7 +1208,7 @@ const TeachMeModal: React.FC<{
     }
   };
 
-  // EFFECT 1: Handles content logic ONLY for Group Chats
+  // EFFECT 1: Handles content logic ONLY for Group Chats (Simplified for listener reliance)
   useEffect(() => {
     if (!groupChat) return;
 
@@ -1192,7 +1218,6 @@ const TeachMeModal: React.FC<{
     console.log("isHost:", isHost);
     console.log("groupChat.topic:", groupChat.topic);
     console.log("groupChat.teachMeContent (exists?):", groupChat.hasOwnProperty('teachMeContent'));
-    console.log("groupChat.teachMeContent (value):", groupChat.teachMeContent);
     // --- End Diagnostic Logging ---
 
     let isCurrent = true;
@@ -1200,54 +1225,26 @@ const TeachMeModal: React.FC<{
 
     if (isHost) {
       if (topicToDisplay && !groupChat.teachMeContent) {
-        console.log("✅ HOST: Condition MET. Starting fetch...");
-        const fetchGroupContent = async () => {
-          setIsLoading(true);
-          try {
-            const nativeLanguageName = LANGUAGES.find(l => l.code === nativeLanguage)?.name || nativeLanguage;
-            const newContent = await geminiService.getContent(topicToDisplay, activeTab, language, nativeLanguageName);
-            if (isCurrent) {
-              await groupService.updateGroupLessonContent(groupChat.id, newContent);
-            }
-          } catch (error) {
-            console.error("Group content fetch error:", error);
-            if (isCurrent) {
-              setContent("Failed to load lesson for the group.");
-              setIsLoading(false);
-            }
-          }
-        };
-        fetchGroupContent();
+        // This path indicates the host has selected a topic but needs to fetch content
+        console.log("✅ HOST: Topic set but waiting for handleTopicSelect to fetch.");
+        setIsLoading(true);
       } else if (groupChat.teachMeContent) {
-        console.log("❌ HOST: Condition NOT met. Content already exists.");
-        setContent(groupChat.teachMeContent);
+        // Content arrived. Stop loading.
         setIsLoading(false);
       } else {
-        console.log("❌ HOST: Condition NOT met. No topic selected.");
-        setContent("");
+        // No topic. Not loading.
         setIsLoading(false);
       }
     } else { // Member Logic
-      if (topicToDisplay && !groupChat.teachMeContent) {
-        console.log("MEMBER: Waiting for host to provide content.");
-        setContent("");
-        setIsLoading(true);
-      } else if (groupChat.teachMeContent) {
-        console.log("MEMBER: Content is available. Displaying.");
-        setContent(groupChat.teachMeContent);
-        setIsLoading(false);
-      } else {
-        console.log("MEMBER: No topic selected by host.");
-        setContent("");
-        setIsLoading(false);
-      }
+      const isWaitingForContent = topicToDisplay && !groupChat.teachMeContent;
+      setIsLoading(isWaitingForContent);
     }
     console.groupEnd();
 
     return () => { isCurrent = false; };
-  }, [groupChat, isHost, language, nativeLanguage, activeTab]); // Dependency is primarily `groupChat`
+  }, [groupChat, isHost, language, nativeLanguage, activeTab]); 
 
-  // EFFECT 2: Handles content logic ONLY for Solo Chats
+  // EFFECT 2: Handles content logic ONLY for Solo Chats (Remains unchanged)
   useEffect(() => {
     // Only run this effect if we are NOT in a group chat
     if (groupChat) return;
@@ -1300,7 +1297,8 @@ const TeachMeModal: React.FC<{
         console.log(`[HOST ACTION] 1. Updating topic to "${topic}" in Firestore.`);
         try {
           // Await the topic update (this also deletes the old content)
-          await onSetGroupTopic(topic);
+          // FIX 3: Pass activeTab, level, and language to the update function
+          await onSetGroupTopic(topic, activeTab, level, language);
           
           console.log(`[HOST ACTION] 2. Topic updated. Now fetching content directly...`);
           
@@ -1308,15 +1306,19 @@ const TeachMeModal: React.FC<{
           const nativeLanguageName = LANGUAGES.find(l => l.code === nativeLanguage)?.name || nativeLanguage;
           const newContent = await geminiService.getContent(topic, activeTab, language, nativeLanguageName);
           
+          // FIX 4: Set content locally on the host immediately after successful fetch
+          setContent(newContent); 
+
           console.log(`[HOST ACTION] 3. Fetch successful. Updating group document with content.`);
           
-          // Update the group document with the new content
+          // Update the group document with the new content (for members)
           if (groupChat) {
             await groupService.updateGroupLessonContent(groupChat.id, newContent);
           }
-          // The component will naturally re-render with the new content via the listener.
-          // We set isLoading to false in the useEffect when content is detected.
           
+          // FIX 2: Stop the loading spinner immediately after the fetch and local update
+          setIsLoading(false); 
+
         } catch (error) {
           console.error("Error during host topic selection & fetch process:", error);
           setContent("An error occurred while fetching the lesson. Please try again.");
@@ -3309,10 +3311,11 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   };
 
   // MODIFICATION 1: Make this function async to allow awaiting
-  const handleSetGroupTopic = async (topic: string) => {
+  const handleSetGroupTopic = async (topic: string, type: TeachMeType, level: number, language: string) => { // <--- UPDATED FUNCTION SIGNATURE
     if (activeGroup && user?.uid === activeGroup.creatorId) {
       // Use await here to ensure the Firestore update completes
-      await groupService.updateGroupTopic(activeGroup.id, topic);
+      // FIX 5: Pass type, level, and language to the group service
+      await groupService.updateGroupTopic(activeGroup.id, topic, type, level, language); 
     }
   };
 

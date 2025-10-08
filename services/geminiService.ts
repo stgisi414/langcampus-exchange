@@ -424,7 +424,7 @@ export const getContent = async (topic: string, type: 'Grammar' | 'Vocabulary', 
     console.log(`[GEMINI SERVICE] Attempting network call for: ${topic} (${type} - ${targetLanguage})`);
     
     // CRITICAL FIX: Pass the model name explicitly to the helper function
-    const data = await callGeminiProxy(prompt, "gemini-2.5-pro"); // Use Pro for complex lesson generation
+    const data = await callGeminiProxy(prompt, "gemini-2.5-flash"); // Use Pro for complex lesson generation
     // The response is expected to be Markdown text directly
     return data.candidates[0].content.parts[0].text;
   } catch (error) {

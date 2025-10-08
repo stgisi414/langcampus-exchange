@@ -60,13 +60,15 @@ export const addMessageToGroup = async (groupId: string, message: Message): Prom
 };
 
 // 4. Updates the group's learning topic
-export const updateGroupTopic = async (groupId: string, topic: string): Promise<void> => {
+export const updateGroupTopic = async (groupId: string, topic: string, type: TeachMeType, level: number, language: string): Promise<void> => {
     const groupRef = doc(db, GROUPS_COLLECTION, groupId);
     // FIX: Use deleteField() instead of null to remove the content field entirely.
     // This provides an unambiguous signal to the host's client that a refetch is needed.
     await updateDoc(groupRef, { 
       topic, 
-      teachMeContent: deleteField() 
+      teachMeContent: deleteField(),
+      // ADDED: Save the settings so they persist when the modal is closed and reopened
+      groupTeachMeSettings: { topic, type, level, language },
     });
 };
 

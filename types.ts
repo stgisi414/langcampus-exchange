@@ -77,6 +77,13 @@ export interface SavedChat {
   messages: Message[];
 }
 
+export interface GroupTeachMeSettings {
+  language: string;
+  type: TeachMeType;
+  level: number;
+  topic: string;
+}
+
 export interface GroupChat {
   id: string; // Unique ID for the group/websocket room
   creatorId: string; // The UID of the person who started the group (the topic controller)
@@ -85,7 +92,8 @@ export interface GroupChat {
   shareLink: string; // The URL to share (mock link for now)
   members: { [key: string]: boolean }; // Stored as a map for efficient lookups
   messages: Message[]; // Stored messages for the chat history
-  teachMeContent?: string | null; // <--- ADDED: Field to store the actual lesson content
+  teachMeContent?: string | null; // <--- Field to store the actual lesson content
+  groupTeachMeSettings?: GroupTeachMeSettings | null; // <--- ADDED: Field to store the topic, type, and level
 }
 
 export interface Language {
