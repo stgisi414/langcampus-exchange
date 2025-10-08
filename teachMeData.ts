@@ -3296,3 +3296,39 @@ export const conversationData = {
         { "title": "Discussing Hypothetical Situations (Diskuti Hipotezajn Situaciojn)", "level": 5, "tags": ["hypothetical", "conditionals", "advanced"] }
     ]
 };
+
+export const pg13ConversationData = {
+    "English": [
+        { "title": "Discussing a War Movie (Historical Context)", "level": 3, "tags": ["entertainment", "history", "violence", "discussion"] },
+        { "title": "Debating the Ethics of Superheroes", "level": 4, "tags": ["debate", "ethics", "violence", "abstract"] },
+        { "title": "Analyzing Conflict in a Historical Event", "level": 4, "tags": ["history", "war", "conflict", "analysis"] },
+        { "title": "Joogs, licks and beyond", "level": 4.5, "tags": ["hood tricks"]}
+    ],
+    "Spanish": [
+        { "title": "Hablar de una Película de Guerra (Contexto Histórico)", "level": 3, "tags": ["entretenimiento", "historia", "violencia", "discusión"] },
+        { "title": "Debatir la Ética de los Superhéroes", "level": 4, "tags": ["debate", "ética", "violencia", "abstracto"] },
+    ],
+    // Add other languages as needed
+};
+
+export const pg13GrammarData = {};
+export const pg13VocabData = [];
+
+export const r21PlusConversationData = {
+    "English": [
+        { "title": "Ordering Drinks at a Bar", "level": 2, "tags": ["social", "nightlife", "alcohol", "ordering"] },
+        { "title": "Discussing Nightlife in Your City", "level": 3, "tags": ["social", "city", "nightlife", "lifestyle"] },
+        { "title": "Debating Drug Legalization Policies", "level": 5, "tags": ["debate", "politics", "drugs", "society", "advanced"] },
+        { "title": "Blasting off with DMT", "level": 7, "tags": ["psychedelic"]},   
+        { "title": "Talking About Dating and Relationships", "level": 4, "tags": ["relationships", "dating", "social", "sex"] },
+    ],
+    "Spanish": [
+        { "title": "Pedir Bebidas en un Bar", "level": 2, "tags": ["social", "vida nocturna", "alcohol", "pedir"] },
+        { "title": "Hablar de la Vida Nocturna en tu Ciudad", "level": 3, "tags": ["social", "ciudad", "vida nocturna", "estilo de vida"] },
+        { "title": "Debatir Políticas de Legalización de Drogas", "level": 5, "tags": ["debate", "política", "drogas", "sociedad", "avanzado"] },
+    ],
+    // Add other languages as needed
+};
+
+export const r21PlusGrammarData = {};
+export const r21PlusVocabData = [];

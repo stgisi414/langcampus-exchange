@@ -1,7 +1,7 @@
 import { doc, getDoc, updateDoc, increment, setDoc, arrayUnion, arrayRemove } from "firebase/firestore";
 import { User } from "firebase/auth";
 import { db } from '../firebaseConfig.ts';
-import { UserData, UsageKey, SavedChat, SubscriptionStatus, TeachMeCache, Note } from '../types.ts';
+import { UserData, UsageKey, SavedChat, SubscriptionStatus, TeachMeCache, Note, UserProfileData } from '../types.ts';
 import { deleteAudioMessage } from './storageService.ts';
 
 const DAILY_LIMITS = {
@@ -23,7 +23,7 @@ const getTodayDateString = () => {
 
 /**
  * Initializes or creates our app-specific fields on a user's document in the 'customers' collection.
- * This function will now only add the 'usage' field if it doesn't already exist.
+ * This function will now only add fields if they don't already exist.
  */
 export const initializeUserProfile = async (uid: string, user: User) => {
   const userRef = doc(db, "customers", uid);
@@ -32,14 +32,14 @@ export const initializeUserProfile = async (uid: string, user: User) => {
   const data = docSnap.data();
 
   // Check if the document doesn't exist OR if critical fields are missing
-  if (!docSnap.exists() || !data?.usage || data.notes === undefined) {
+  if (!docSnap.exists() || !data?.usage || data.notes === undefined || data.isAgeVerified === undefined) {
     const dataToSet = {
       name: data?.name || user.displayName || '',
       hobbies: data?.hobbies || '',
       bio: data?.bio || '',
       savedChat: data?.savedChat || null,
       teachMeCache: data?.teachMeCache || null,
-      notes: data?.notes || [], // This ensures 'notes' is always an array
+      notes: data?.notes || [],
       xp: data?.xp || 0,
       usage: data?.usage || {
         searches: 0,
@@ -49,10 +49,27 @@ export const initializeUserProfile = async (uid: string, user: User) => {
         quizzes: 0,
         lastUsageDate: getTodayDateString(),
       },
+      // --- ADD INITIALIZATION FOR NEW FIELDS ---
+      isAgeVerified: data?.isAgeVerified || false,
+      birthDate: data?.birthDate || null,
+      contentPreference: data?.contentPreference || 'standard',
     };
     // Use setDoc with merge to create or update without overwriting existing fields like stripeId
     await setDoc(userRef, dataToSet, { merge: true });
   }
+};
+
+/**
+ * Saves the user's birthdate and sets their age verification status to true.
+ * @param userId The UID of the user.
+ * @param birthDate The user's birthdate in 'YYYY-MM-DD' format.
+ */
+export const saveAgeVerification = async (userId: string, birthDate: string) => {
+  const userRef = doc(db, "customers", userId);
+  await updateDoc(userRef, {
+    birthDate: birthDate,
+    isAgeVerified: true,
+  });
 };
 
 /**
@@ -74,6 +91,7 @@ export const updateUserProfile = async (userId: string, profileData: { name: str
     name: profileData.name,
     hobbies: profileData.hobbies,
     bio: profileData.bio,
+    contentPreference: profileData.contentPreference,
   });
 };
 

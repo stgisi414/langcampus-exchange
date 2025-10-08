@@ -13,6 +13,7 @@ export interface UserProfileData {
   name: string;
   hobbies: string;
   bio: string;
+  contentPreference: 'standard' | 'pg13' | 'r21plus';
 }
 
 export interface Partner {
@@ -130,10 +131,7 @@ export interface UserData {
   nativeLanguage: string;
   targetLanguage: string;
   
-  // This field is added by the Stripe extension
   stripeId?: string; 
-  
-  // This will be populated by our useAuth hook from the 'subscriptions' subcollection
   activeSubscription: boolean; 
 
   usage: UsageData;
@@ -144,4 +142,9 @@ export interface UserData {
   teachMeCache: TeachMeCache | null;
   activeGroupId: string | null;
   notes?: Note[];
+
+  // --- ADD THESE NEW FIELDS ---
+  birthDate?: string; // Stored as 'YYYY-MM-DD'
+  isAgeVerified?: boolean;
+  contentPreference?: 'standard' | 'pg13' | 'r21plus';
 }

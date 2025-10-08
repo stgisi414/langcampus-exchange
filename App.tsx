@@ -50,7 +50,17 @@ import {
   YouTubeIcon,
 } from "./components/Icons";
 import LoadingSpinner from "./components/LoadingSpinner";
-import { grammarData, vocabData, conversationData } from "./teachMeData";
+import {
+  grammarData, 
+  vocabData, 
+  conversationData,
+  pg13ConversationData,
+  r21PlusConversationData,
+  pg13GrammarData,
+  pg13VocabData,
+  r21PlusGrammarData,
+  r21PlusVocabData
+} from "./teachMeData";
 import { useAuth } from "./hooks/useAuth.ts";
 import LoginScreen from "./components/LoginScreen.tsx";
 import { auth, app, payments, functions } from "./firebaseConfig.ts";
@@ -71,6 +81,7 @@ import GroupJoinPage from "./components/GroupJoinPage.tsx";
 import GroupNotFound from "./components/GroupNotFound.tsx";
 import NotesModal from "./components/NotesModal.tsx";
 import RecordRTC from 'recordrtc';
+import AgeVerificationModal from "./components/AgeVerificationModal.tsx";
 
 // Helper for localStorage (Removed as we are using Firestore for persistence)
 
@@ -186,52 +197,53 @@ const VideoGalleryModal: React.FC<{
 
 // User Profile Component
 const UserProfile: React.FC<{
-  profile: { name: string; hobbies: string; bio: string };
-  subscriptionStatus: SubscriptionStatus;
-  xp: number;
-  onProfileChange: (profile: {
-    name: string;
-    hobbies: string;
-    bio: string;
-  }) => void;
+  user: UserData; // Pass the full user object
+  onProfileChange: (profile: UserProfileData) => void;
   onUpgradeClick: () => void;
   onCancelSubscription: () => void;
-  usageData?: UsageData;
   isUpgrading: boolean;
   isCancelling: boolean;
 }> = ({
-  profile,
+  user,
   onProfileChange,
   onUpgradeClick,
   onCancelSubscription,
-  subscriptionStatus,
-  usageData,
   isUpgrading,
   isCancelling,
-  xp,
 }) => {
-  // <-- ADD isCancelling HERE
   const [isOpen, setIsOpen] = useState(false);
-  const [localProfile, setLocalProfile] = useState(profile);
+  const [localProfile, setLocalProfile] = useState<UserProfileData>({
+    name: user.name || '',
+    hobbies: user.hobbies || '',
+    bio: user.bio || '',
+    contentPreference: user.contentPreference || 'standard',
+  });
 
-   const getRank = (xp: number) => {
-    if (xp <= 50) return { name: "Novice", Icon: NoviceIcon, color: "text-gray-400", nextLevelXp: 51, nextLevelName: "Apprentice" };
-    if (xp <= 500) return { name: "Apprentice", Icon: ApprenticeIcon, color: "text-green-500", nextLevelXp: 501, nextLevelName: "Journeyman" };
-    if (xp <= 5000) return { name: "Journeyman", Icon: JourneymanIcon, color: "text-blue-500", nextLevelXp: 5001, nextLevelName: "Expert" };
-    if (xp <= 50000) return { name: "Expert", Icon: ExpertIcon, color: "text-purple-500", nextLevelXp: 50001, nextLevelName: "Master" };
-    return { name: "Master", Icon: MasterIcon, color: "text-yellow-500", nextLevelXp: null, nextLevelName: null };
-  };
-
-  const rank = getRank(xp);
+  const calculatedAge = useMemo(() => {
+    if (!user.birthDate) return 0;
+    const today = new Date();
+    const dob = new Date(user.birthDate);
+    let age = today.getFullYear() - dob.getFullYear();
+    const m = today.getMonth() - dob.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
+        age--;
+    }
+    return age;
+  }, [user.birthDate]);
 
   useEffect(() => {
-    setLocalProfile(profile);
-  }, [profile]);
+    setLocalProfile({
+      name: user.name || '',
+      hobbies: user.hobbies || '',
+      bio: user.bio || '',
+      contentPreference: user.contentPreference || 'standard',
+    });
+  }, [user, isOpen]);
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
   ) => {
-    setLocalProfile({ ...localProfile, [e.target.name]: e.target.value });
+    setLocalProfile({ ...localProfile, [e.target.name]: e.target.value as any });
   };
 
   const handleSaveAndClose = () => {
@@ -244,6 +256,16 @@ const UserProfile: React.FC<{
       signOut(auth);
     }
   };
+
+  const getRank = (xp: number) => {
+    if (xp <= 50) return { name: "Novice", Icon: NoviceIcon, color: "text-gray-400", nextLevelXp: 51, nextLevelName: "Apprentice" };
+    if (xp <= 500) return { name: "Apprentice", Icon: ApprenticeIcon, color: "text-green-500", nextLevelXp: 501, nextLevelName: "Journeyman" };
+    if (xp <= 5000) return { name: "Journeyman", Icon: JourneymanIcon, color: "text-blue-500", nextLevelXp: 5001, nextLevelName: "Expert" };
+    if (xp <= 50000) return { name: "Expert", Icon: ExpertIcon, color: "text-purple-500", nextLevelXp: 50001, nextLevelName: "Master" };
+    return { name: "Master", Icon: MasterIcon, color: "text-yellow-500", nextLevelXp: null, nextLevelName: null };
+  };
+
+  const rank = getRank(user.xp || 0);
 
   return (
     <>
@@ -263,9 +285,7 @@ const UserProfile: React.FC<{
         >
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-md animate-fade-in-down flex flex-col max-h-[90vh]">
             <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                My Info
-              </h2>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">My Info</h2>
               <button
                 onClick={() => setIsOpen(false)}
                 className="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200"
@@ -277,146 +297,91 @@ const UserProfile: React.FC<{
             <div className="overflow-y-auto">
               <div className="p-6 space-y-4">
                 <div>
-                  <label
-                    htmlFor="name-input"
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                  >
-                    Name
-                  </label>
-                  <input
-                    id="name-input"
-                    type="text"
-                    name="name"
-                    value={localProfile.name}
-                    onChange={handleChange}
-                    className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 dark:text-gray-100"
-                  />
+                  <label htmlFor="name-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Name</label>
+                  <input id="name-input" type="text" name="name" value={localProfile.name} onChange={handleChange} className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 dark:text-gray-100" />
                 </div>
                 <div>
-                  <label
-                    htmlFor="hobbies-input"
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                  >
-                    Hobbies
-                  </label>
-                  <input
-                    id="hobbies-input"
-                    type="text"
-                    name="hobbies"
-                    value={localProfile.hobbies}
-                    onChange={handleChange}
-                    placeholder="e.g., hiking, coding, music"
-                    className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 dark:text-gray-100"
-                  />
+                  <label htmlFor="hobbies-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Hobbies</label>
+                  <input id="hobbies-input" type="text" name="hobbies" value={localProfile.hobbies} onChange={handleChange} placeholder="e.g., hiking, coding, music" className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 dark:text-gray-100" />
                 </div>
                 <div>
-                  <label
-                    htmlFor="bio-input"
-                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                  >
-                    Bio
-                  </label>
-                  <textarea
-                    id="bio-input"
-                    name="bio"
-                    rows={3}
-                    value={localProfile.bio}
-                    onChange={handleChange}
-                    className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 dark:text-gray-100"
-                  ></textarea>
+                  <label htmlFor="bio-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Bio</label>
+                  <textarea id="bio-input" name="bio" rows={3} value={localProfile.bio} onChange={handleChange} className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm text-gray-900 dark:text-gray-100"></textarea>
                 </div>
+                
+                {/* --- ADD CONTENT PREFERENCE --- */}
+                {user.isAgeVerified && (
+                  <div className="border-t dark:border-gray-700 mt-4 pt-4">
+                    <label htmlFor="content-preference" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Content Preference</label>
+                    <select
+                      id="content-preference"
+                      name="contentPreference"
+                      value={localProfile.contentPreference}
+                      onChange={handleChange}
+                      className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    >
+                      <option value="standard">Standard (All Ages)</option>
+                      <option value="pg13">PG-13 (Simulated Violence)</option>
+                      <option value="r21plus" disabled={calculatedAge < 21}>21+ (Mature Themes)</option>
+                    </select>
+                    {calculatedAge < 21 && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">You must be 21 or older to select the 21+ content preference.</p>
+                    )}
+                  </div>
+                )}
+                
                 <div className="border-t dark:border-gray-700 mt-4 pt-4">
-                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                    Rank & XP
-                  </h3>
+                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Rank & XP</h3>
                   <div className="flex items-center justify-between gap-3 mt-1">
                     <div className="flex items-center gap-3">
                       <rank.Icon className={`w-8 h-8 ${rank.color}`} />
                       <div>
-                        <p className={`text-lg font-semibold ${rank.color}`}>
-                          {rank.name}
-                        </p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          {xp.toLocaleString()} XP
-                        </p>
+                        <p className={`text-lg font-semibold ${rank.color}`}>{rank.name}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">{(user.xp || 0).toLocaleString()} XP</p>
                       </div>
                     </div>
                     {rank.nextLevelXp && rank.nextLevelName && (
                       <div className="text-right flex-shrink-0">
-                        <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                          {(rank.nextLevelXp - xp).toLocaleString()} XP
-                        </p>
-                         <p className="text-xs text-gray-500 dark:text-gray-400">
-                          to {rank.nextLevelName}
-                        </p>
+                        <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">{(rank.nextLevelXp - (user.xp || 0)).toLocaleString()} XP</p>
+                         <p className="text-xs text-gray-500 dark:text-gray-400">to {rank.nextLevelName}</p>
                       </div>
                     )}
                   </div>
                 </div>
                 <div className="border-t dark:border-gray-700 mt-4 pt-4">
-                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                    Account Type
-                  </h3>
-                  <p
-                    className={`text-lg font-semibold ${subscriptionStatus === "subscriber" ? "text-green-500" : "text-blue-500"}`}
-                  >
-                    {subscriptionStatus === "subscriber"
-                      ? "Langcampus Pro"
-                      : "Free Tier"}
+                  <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Account Type</h3>
+                  <p className={`text-lg font-semibold ${user.subscription === "subscriber" ? "text-green-500" : "text-blue-500"}`}>
+                    {user.subscription === "subscriber" ? "Langcampus Pro" : "Free Tier"}
                   </p>
                 </div>
               </div>
-              {subscriptionStatus === "free" && usageData && (
+              {user.subscription === "free" && user.usage && (
                 <div className="px-6 pb-4">
                   <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg">
-                    <h3 className="text-lg font-semibold text-center mb-2 text-gray-800 dark:text-gray-200">
-                      Today's Usage
-                    </h3>
+                    <h3 className="text-lg font-semibold text-center mb-2 text-gray-800 dark:text-gray-200">Today's Usage</h3>
                     <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-gray-600 dark:text-gray-300">
-                      <p>Searches: {usageData.searches}/5</p>
-                      <p>Messages: {usageData.messages}/20</p>
-                      <p>Audio Plays: {usageData.audioPlays}/5</p>
-                      <p>Lessons: {usageData.lessons}/10</p>
-                      <p className="col-span-2 text-center">
-                        Quizzes: {usageData.quizzes}/10
-                      </p>
+                      <p>Searches: {user.usage.searches}/5</p>
+                      <p>Messages: {user.usage.messages}/20</p>
+                      <p>Audio Plays: {user.usage.audioPlays}/5</p>
+                      <p>Lessons: {user.usage.lessons}/10</p>
+                      <p className="col-span-2 text-center">Quizzes: {user.usage.quizzes}/10</p>
                     </div>
                   </div>
                 </div>
               )}
             </div>
             <div className="flex justify-between items-center p-4 border-t dark:border-gray-700">
-              <button
-                onClick={handleSignOut}
-                className="px-4 py-2 bg-gray-500 text-white font-bold rounded-lg hover:bg-gray-600 transition-colors text-sm"
-              >
-                Sign Out
-              </button>
-
-              {subscriptionStatus === "subscriber" ? (
-                <button
-                  onClick={onCancelSubscription}
-                  className="px-4 py-2 bg-red-500 text-white font-bold rounded-lg hover:bg-red-600 text-sm disabled:opacity-75"
-                  disabled={isCancelling} // <-- USE THE NEW STATE HERE
-                >
+              <button onClick={handleSignOut} className="px-4 py-2 bg-gray-500 text-white font-bold rounded-lg hover:bg-gray-600 transition-colors text-sm">Sign Out</button>
+              {user.subscription === "subscriber" ? (
+                <button onClick={onCancelSubscription} className="px-4 py-2 bg-red-500 text-white font-bold rounded-lg hover:bg-red-600 text-sm disabled:opacity-75" disabled={isCancelling}>
                   {isCancelling ? "Loading..." : "Manage Plan"}
                 </button>
               ) : (
-                <button
-                  onClick={onUpgradeClick}
-                  className="px-4 py-2 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 disabled:opacity-75 text-sm"
-                  disabled={isUpgrading}
-                >
+                <button onClick={onUpgradeClick} className="px-4 py-2 bg-green-500 text-white font-bold rounded-lg hover:bg-green-600 disabled:opacity-75 text-sm" disabled={isUpgrading}>
                   {isUpgrading ? "Redirecting..." : "Upgrade"}
                 </button>
               )}
-
-              <button
-                onClick={handleSaveAndClose}
-                className="px-4 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition-colors text-sm"
-              >
-                Save and Close
-              </button>
+              <button onClick={handleSaveAndClose} className="px-4 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition-colors text-sm">Save and Close</button>
             </div>
           </div>
         </div>
@@ -1063,7 +1028,8 @@ const QuizModal: React.FC<{
   );
 };
 
-// Teach Me Modal Component
+// Replace the entire TeachMeModal component with this updated version
+//
 const TeachMeModal: React.FC<{
   language: string;
   onClose: () => void;
@@ -1105,16 +1071,12 @@ const TeachMeModal: React.FC<{
   onReorderNotes,
   onSpeakNote,
 }) => {
-  const [activeTab, setActiveTab] = useState<"Grammar" | "Vocabulary" | "Conversation">(
-    "Grammar",
-  );
+  const [activeTab, setActiveTab] = useState<TeachMeType>("Grammar");
   const [level, setLevel] = useState(1);
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
   const [content, setContent] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
-  const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[] | null>(
-    null,
-  );
+  const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[] | null>(null);
   const [showQuiz, setShowQuiz] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -1134,83 +1096,39 @@ const TeachMeModal: React.FC<{
   const isHost = isGroupChat && userIsGroupCreator;
   const isMember = isGroupChat && !userIsGroupCreator;
   
-  // FIX #1: This useEffect now ONLY runs when a specific topic is selected or changed.
-  // This prevents the tab from reverting when you click it.
-  useEffect(() => {
-    const fetchContentForTopic = async (topic: string, type: "Grammar" | "Vocabulary" | "Conversation") => {
-      setIsLoading(true);
-      setContent("");
-      try {
-        const nativeLanguageName =
-          LANGUAGES.find((lang) => lang.code === nativeLanguage)?.name ||
-          nativeLanguage;
-        const fetchedContent = await geminiService.getContent(
-          topic,
-          type,
-          language,
-          nativeLanguageName,
-        );
-        setContent(fetchedContent);
-      } catch (error) {
-        setContent("Sorry, there was an error loading the topic content.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    const topicToLoad = isGroupChat ? groupTopic : selectedTopic;
-
-    if (topicToLoad) {
-      fetchContentForTopic(topicToLoad, activeTab);
-    } else {
-        // Clear content if no topic is selected
-        setContent('');
-    }
-  }, [selectedTopic, groupTopic, isGroupChat, activeTab, language, nativeLanguage]);
-
-  // FIX #2: This new useEffect runs only once on mount or when language changes,
-  // to load the initial state from cache without interfering later.
-  useEffect(() => {
-    if (!isGroupChat && cache && cache.language === language) {
-      setActiveTab(cache.type as "Grammar" | "Vocabulary" | "Conversation");
-      
-      const dataSet = cache.type === 'Grammar' ? grammarData : cache.type === 'Vocabulary' ? vocabData : conversationData;
-      const topicData = (dataSet[language as keyof typeof dataSet] as any[])?.find(t => t.title === cache.topic);
-
-      if (topicData) {
-        setLevel(topicData.level);
-      }
-      setSelectedTopic(cache.topic);
-      // Content is now loaded by the other useEffect
-      setTimeout(() => {
-        topicRefs.current.get(cache.topic)?.scrollIntoView({ block: "center" });
-      }, 0);
-    } else {
-        // If there's no cache, reset to defaults.
-        setActiveTab("Grammar");
-        setSelectedTopic(null);
-        setContent("");
-        setQuizQuestions(null);
-    }
-  }, [language, cache, isGroupChat]); // Removed activeTab and selectedTopic dependencies
-
-
   const availableTopics = useMemo(() => {
+    let grammarSource: any = grammarData;
+    let vocabSource: any[] = vocabData;
+    let conversationSource: any = conversationData;
+    
+    // Select data source based on user preference
+    const preference = user.contentPreference || 'standard';
+    if (user.isAgeVerified) {
+        if (preference === 'pg13') {
+            grammarSource = pg13GrammarData;
+            vocabSource = pg13VocabData;
+            conversationSource = pg13ConversationData;
+        } else if (preference === 'r21plus') {
+            grammarSource = r21PlusGrammarData;
+            vocabSource = r21PlusVocabData;
+            conversationSource = r21PlusConversationData;
+        }
+    }
+
     let data;
     switch (activeTab) {
       case 'Grammar':
-        data = grammarData[language as keyof typeof grammarData] || [];
+        data = grammarSource[language as keyof typeof grammarSource] || [];
         break;
       case 'Vocabulary':
-        data = vocabData;
+        data = vocabSource;
         break;
       case 'Conversation':
-        data = conversationData[language as keyof typeof conversationData] || [];
+        data = conversationSource[language as keyof typeof conversationSource] || [];
         break;
       default:
         data = [];
     }
-
 
     if (searchQuery.trim()) {
       const lowercasedQuery = searchQuery.toLowerCase();
@@ -1222,7 +1140,7 @@ const TeachMeModal: React.FC<{
     } else {
       return (data as any[]).filter((topic) => topic.level === level);
     }
-  }, [activeTab, level, language, searchQuery]);
+  }, [activeTab, level, language, searchQuery, user.contentPreference, user.isAgeVerified]);
 
   const handleLevelChange = (lvl: number) => {
     setLevel(lvl);
@@ -2420,7 +2338,6 @@ const ChatModal: React.FC<ChatModalProps> = ({
           className="flex-grow p-4 space-y-4 overflow-y-auto bg-gray-50 dark:bg-gray-900"
         >
           {messages.map((msg, index) => {
-            // This logic correctly identifies the current user's messages in any context
             const isMyMessage = msg.senderId === user?.uid;
 
             return (
@@ -2428,7 +2345,6 @@ const ChatModal: React.FC<ChatModalProps> = ({
                 key={index}
                 className={`flex items-end gap-2 ${isMyMessage ? "justify-end" : "justify-start"}`}
               >
-                {/* Avatar for AI and other users */}
                 {!isMyMessage && (
                   <img
                     src={
@@ -2443,7 +2359,6 @@ const ChatModal: React.FC<ChatModalProps> = ({
                 <div
                   className={`max-w-md p-3 rounded-lg ${isMyMessage ? "bg-blue-500 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white"}`}
                 >
-                  {/* Display sender's name for other users in a group chat */}
                   {!isMyMessage && msg.sender !== "ai" && groupChat && (
                     <p className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">
                       {msg.senderName || "Another User"}
@@ -2596,11 +2511,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 // AppContent Component - now receives user as a prop
 const AppContent: React.FC<AppContentProps> = ({ user }) => {
   const [nativeLanguage, setNativeLanguage] = useState<string>(
-    // FIX: Read from user.nativeLanguage, fall back to user.uid's persistence, then LANGUAGES[0].code
     () => user?.nativeLanguage || localStorage.getItem("nativeLanguage") || LANGUAGES[0].code,
   );
   const [targetLanguage, setTargetLanguage] = useState<string>(
-    // FIX: Read from user.targetLanguage, fall back to user.uid's persistence, then LANGUAGES[1].code
     () => user?.targetLanguage || localStorage.getItem("targetLanguage") || LANGUAGES[1].code,
   );
   const [partners, setPartners] = useState<Partner[]>([]);
@@ -2618,104 +2531,112 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   const [isUpgrading, setIsUpgrading] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [activeGroup, setActiveGroup] = useState<GroupChat | null>(null);
-  const [groupMessages, setGroupMessages] = useState<Message[]>([]); // New state for group messages
-  const unsubscribeGroupRef = useRef<(() => void) | null>(null); // For unsubscribing from Firestore listener
+  const [groupMessages, setGroupMessages] = useState<Message[]>([]);
+  const unsubscribeGroupRef = useRef<(() => void) | null>(null);
   const lastQuizShareTimestamp = useRef(0);
-  const DEBOUNCE_TIME = 500; // 500ms debounce time
+  const DEBOUNCE_TIME = 500;
   const [newMessage, setNewMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [nudgeCount, setNudgeCount] = useState(0);
+  const [showAgeVerification, setShowAgeVerification] = useState(false);
 
   useEffect(() => {
-    // FIX: Remove localStorage.setItem("nativeLanguage", nativeLanguage);
+    if (user && !user.isAgeVerified) {
+      setShowAgeVerification(true);
+    } else {
+      setShowAgeVerification(false);
+    }
+  }, [user]);
+
+  const handleAgeVerified = (dob: string) => {
+    if (user) {
+      firestoreService.saveAgeVerification(user.uid, dob)
+        .then(() => {
+          setShowAgeVerification(false);
+        })
+        .catch(error => {
+          console.error("Error saving age verification:", error);
+          alert("Could not save verification status. Please try again.");
+        });
+    }
+  };
+
+  const handleUnderage = () => {
+    alert("You must be 18 or older to use this application.");
+    signOut(auth);
+  };
+
+  useEffect(() => {
     if (user && user.nativeLanguage !== nativeLanguage) {
       firestoreService.updateLanguagePreference(user.uid, 'nativeLanguage', nativeLanguage);
     }
-  }, [nativeLanguage, user]); // Added user dependency
+  }, [nativeLanguage, user]);
 
   const handleAddNudge = useCallback((response: Message, messagesSnapshot: Message[]) => {
-    // Check if the conversation length has NOT changed since the timer started.
-    // This is the CRITICAL check to prevent duplicates if the user types quickly.
     if (messagesSnapshot.length === currentChatMessages.length) { 
-      // 1. Atomically update the messages list
       setCurrentChatMessages((prev) => [...prev, { ...response, timestamp: Date.now() }]);
-      
-      // 2. Separately update the nudge count (React will batch these two updates)
       setNudgeCount((prev) => prev + 1);
     }
-  }, [currentChatMessages.length]); // Re-create if messages.length changes
+  }, [currentChatMessages.length]);
 
   useEffect(() => {
-    // FIX: Remove localStorage.setItem("targetLanguage", targetLanguage);
     if (user && user.targetLanguage !== targetLanguage) {
       firestoreService.updateLanguagePreference(user.uid, 'targetLanguage', targetLanguage);
     }
-    // Removed setPartners([]) as this is no longer done here, it will be done on refresh or manually.
     setNudgeCount(0); 
   }, [targetLanguage, user]);
 
   useEffect(() => {
-    // 1. Clean up any existing listener
     if (unsubscribeGroupRef.current) {
       unsubscribeGroupRef.current();
       unsubscribeGroupRef.current = null;
     }
 
     if (user?.activeGroupId) {
-      // 2. Start a listener on the active group
       const unsubscribe = groupService.subscribeToGroup(
         user.activeGroupId,
         (group) => {
           if (group) {
-            // When group data changes in Firestore, update local state
             setActiveGroup(group);
-            // Switch the current chat to the group's state
             setCurrentPartner(group.partner);
-
-            // *** FIX: SORT MESSAGES BY TIMESTAMP ***
             const sortedMessages = [...group.messages].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
             setCurrentChatMessages(sortedMessages);
-
           } else {
-            // Group was deleted or user was removed
             setActiveGroup(null);
             setCurrentPartner(null);
             setCurrentChatMessages([]);
-            // In a real app, you'd also need a service call to clear the user's activeGroupId in Firestore.
           }
         },
       );
       unsubscribeGroupRef.current = unsubscribe;
     } else {
-      // Clear local group state if user has no active group
       setActiveGroup(null);
     }
 
     return () => {
-      // Cleanup on component unmount
       if (unsubscribeGroupRef.current) {
         unsubscribeGroupRef.current();
       }
     };
-  }, [user?.activeGroupId]); // Re-run when the user's active group ID changes
+  }, [user?.activeGroupId]);
 
-  // FIX: Treat the user prop as the single source of truth for teachMeCache, 
-  // as it is already kept in sync with Firestore via the useAuth hook.
-  // This eliminates the race condition/stale data on page load.
   const teachMeCache = user?.teachMeCache || null;
 
-  // NEW: Define the setter function to ONLY call Firestore (the source of truth)
-  // The 'user' prop updates automatically via the useAuth listener, which 
-  // then updates the 'teachMeCache' variable declared above.
   const setTeachMeCache = (cache: TeachMeCache | null) => {
     if (user) {
       if (cache) {
-        // Persist the change to Firestore in the background.
         firestoreService.saveTeachMeCacheInFirestore(user.uid, cache);
       } else {
         firestoreService.deleteTeachMeCacheFromFirestore(user.uid);
       }
     }
+  };
+  
+  const userProfile: UserProfileData = {
+    name: user?.name || "",
+    hobbies: user?.hobbies || "",
+    bio: user?.bio || "",
+    contentPreference: user?.contentPreference || 'standard',
   };
 
   const handleTextSubmit = async (e: React.FormEvent, correctionsEnabled: boolean) => {
@@ -2723,7 +2644,7 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     if (!newMessage.trim() || isSending) return;
 
     const messageToSend = newMessage;
-    setNewMessage(''); // Clear input instantly
+    setNewMessage('');
 
     await handleUsageCheck('messages', async () => {
         const userMessage: Message = {
@@ -2735,7 +2656,6 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
         };
 
         if (activeGroup) {
-            // Group Chat Logic (Remains the same - not subject to this bug)
             firestoreService.addXp(user.uid, 1);
             await groupService.addMessageToGroup(activeGroup.id, userMessage);
             if (messageToSend.toLowerCase().startsWith('@bot')) {
@@ -2761,31 +2681,20 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
                 }
             }
         } else {
-            // SOLO CHAT LOGIC (Fixed for instantaneous display and atomic response)
-            setIsSending(true); // Start sending visual feedback
-
-            // 1. IMMEDIATELY add the user message for instantaneous display
+            setIsSending(true);
             setCurrentChatMessages((prev) => [...prev, userMessage]); 
-
-            // 2. Build the full context array for the API call using the current messages state 
-            //    from this closure + the new user message.
             const messagesContext = [...currentChatMessages, userMessage];
 
             try {
-                // 3. Add XP for sending a message
                 firestoreService.addXp(user.uid, 1);
-
-                // 4. Fetch AI response
                 const aiResponse = await geminiService.getChatResponse(
                     messagesContext,
-                    currentPartner!, // currentPartner is guaranteed here
+                    currentPartner!,
                     correctionsEnabled,
                     userProfile,
                     teachMeCache,
-                    false // Not a group chat
+                    false
                 );
-                
-                // 4. Append only the AI message to the state
                 setCurrentChatMessages((prev) => [...prev, { ...aiResponse, timestamp: Date.now() }]);
             } catch (error) {
                 console.error("Solo Chat Response Error:", error);
@@ -2794,7 +2703,6 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
                     text: "Sorry, I encountered an error. Please try again.",
                     timestamp: Date.now()
                 };
-                // 4. Append only the error message
                 setCurrentChatMessages((prev) => [...prev, errorMessage]);
             } finally {
                 setIsSending(false);
@@ -2810,32 +2718,25 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
       const userMessage: Message = { sender: "user", text: messageText };
 
       if (activeGroup) {
-        // Group Chat Logic
         await groupService.addMessageToGroup(activeGroup.id, userMessage);
-        // Simulate bot response immediately after user sends message
         const updatedGroup = await groupService.getGroupById(activeGroup.id);
         const currentMessages = updatedGroup ? updatedGroup.messages : [userMessage];
-        // FIX: Create a specific cache object for the group context
-        // This ensures the bot knows about the group's topic, not the user's individual cache.
         const groupTeachMeCache: TeachMeCache | null = activeGroup.topic
         ? {
             topic: activeGroup.topic,
             language: currentPartner?.nativeLanguage || targetLanguage,
-            type: 'Grammar', // Type can be generic as the topic provides context
-            content: '', // Content is not needed for the prompt
+            type: 'Grammar',
+            content: '',
           }
         : null;
-
         const botResponse = await groupService.getGroupBotResponse(currentMessages, activeGroup.partner, userProfile, true, groupTeachMeCache);
         await groupService.addMessageToGroup(activeGroup.id, botResponse);
       } else {
-        // Single Chat Logic
         setCurrentChatMessages((prev) => [...prev, userMessage]);
       }
     });
   };
 
-  // NEW FUNCTION: Handles the transcription and AI response for solo chat
   const handleTranscribeAndRespond = async (
     audioBlob: Blob, 
     languageCode: string, 
@@ -2847,9 +2748,6 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     let transcription = "";
     
     try {
-        // FIX: The problem in the user's snippet was a variable name typo (transcription2, error2, etc.), 
-        // but the core issue is the argument type. Assuming the user corrects the inner variable names
-        // to transcription and error, the logic below uses the correctly typed local variable 'audioBlob'.
         transcription = await geminiService.transcribeAudio(audioBlob, languageCode);
     } catch (error) {
         console.error("Transcription Failed:", error);
@@ -2865,7 +2763,6 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
             timestamp: Date.now()
         };
         
-        // 1. Build context: Placeholder message already sent. We include it and the transcription message for the AI.
         const messagesContext = [
             ...messagesSnapshot, 
             {
@@ -2873,7 +2770,7 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
                 text: '(Voice Message)', 
                 senderId: user.uid, 
                 senderName: user.displayName || 'User',
-                timestamp: Date.now() - 1, // Ensure placeholder order
+                timestamp: Date.now() - 1,
             } as Message,
             userTranscriptionMessage
         ];
@@ -2882,19 +2779,17 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
             const aiResponse = await geminiService.getChatResponse(
                 messagesContext,
                 currentPartner,
-                true, // Corrections on for transcription/voice
+                true,
                 userProfile,
                 teachMeCache,
-                false // Not a group chat
+                false
             );
             
-            // 2. Atomic update: Add both the transcription and the AI reply
             setCurrentChatMessages((prev) => {
                 const newMessages = [...prev, userTranscriptionMessage, { ...aiResponse, timestamp: Date.now() }];
                 
-                // IMPORTANT: Automatically save the chat after a voice message exchange
                 if (currentPartner) {
-                    handleSaveChat(newMessages, false); // <--- Implicit save for cleanup later
+                    handleSaveChat(newMessages, false);
                 }
                 
                 return newMessages;
@@ -2907,7 +2802,6 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
         }
 
     } else {
-        // If transcription fails, we only append the AI error message. The placeholder is already in the chat.
         const errorMessage: Message = { sender: "ai", text: "Transcription failed. Could you please type your message instead?", timestamp: Date.now() };
         setCurrentChatMessages((prev) => [...prev, errorMessage]);
     }
@@ -2919,7 +2813,6 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     if (activeGroup) {
       await groupService.addMessageToGroup(activeGroup.id, voiceMessage);
     } else {
-      // Single Chat Logic: Now only sends the placeholder message to state
       setCurrentChatMessages((prev) => [...prev, voiceMessage]);
     }
   };
@@ -2968,35 +2861,24 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
 
   const handleStartChat = async (partner: Partner) => {
     setCurrentPartner(partner);
-    setNudgeCount(0); // <--- FIX 2: Reset nudge count on starting a new chat
+    setNudgeCount(0);
 
-    // If a saved chat exists for this partner, resume it.
     if (savedChat && savedChat.partner.name === partner.name) {
       setCurrentChatMessages(savedChat.messages);
     } else {
-      // New chat - Start with an empty array.
       setCurrentChatMessages([]);
     }
   };
 
   const handleCloseChat = async () => {
-    // Make the function asynchronous
     if (activeGroup && user) {
-      // Await the asynchronous operation to complete.
-      // This ensures the database has updated BEFORE the UI state changes.
       await groupService.leaveGroup(activeGroup.id, user.uid);
     }
-    // Now, it's safe to dismiss the chat UI
     setCurrentPartner(null);
-    // Also explicitly clear the local activeGroup state
     setActiveGroup(null);
   };
 
-  const handleProfileChange = (profile: {
-    name: string;
-    hobbies: string;
-    bio: string;
-  }) => {
+  const handleProfileChange = (profile: UserProfileData) => {
     if (user) {
       firestoreService.updateUserProfile(user.uid, profile);
     }
@@ -3011,7 +2893,7 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
             text: msg.text,
             correction: msg.correction || null,
             translation: msg.translation || null,
-            audioUrl: msg.audioUrl || null, // <-- Saved for cleanup
+            audioUrl: msg.audioUrl || null,
             audioDuration: msg.audioDuration || null,
             timestamp: msg.timestamp || null, 
         }));
@@ -3022,7 +2904,6 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
         };
         firestoreService.saveChatInFirestore(user.uid, chatToSave);
         
-        // Only show alert if explicitly requested by the user action
         if (showAlert) { 
             alert("Chat saved!");
         }
@@ -3054,26 +2935,19 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     userAnswers: (string | string[])[],
   ): Promise<void> => {
     
-    // Mutex: Prevent multiple simultaneous executions of this function
     if (isSending) {
         return Promise.resolve();
     }
 
-    setIsSending(true); // Global Lock START
+    setIsSending(true);
 
     return new Promise<void>(async (resolve) => {
         try {
-            // 0. Add XP for correct answers
             if (score > 0) {
               firestoreService.addXp(user.uid, score);
             }
-            // 1. Prepare Message
-            let quizSummary = `**Quiz Results Summary**
-
-                              - **Topic:** ${topic}
-                              - **Score:** ${score}/${totalGraded}
-
-                              `;
+            
+            let quizSummary = `**Quiz Results Summary**\n\n- **Topic:** ${topic}\n- **Score:** ${score}/${totalGraded}\n\n`;
 
             const incorrectAnswers = questions
                 .map((q, index) => ({
@@ -3082,10 +2956,9 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
                 }))
                 .filter((item, index) => {
                     const question = item.question;
-                    const answer = userAnswers[index]; // 'answer' can be undefined/null if skipped
+                    const answer = userAnswers[index]; 
 
                     if (question.type === 'multiple-choice' || question.type === 'fill-in-the-blank') {
-                        // This is safe even if 'answer' is undefined, as the comparison coerces.
                         return answer !== question.correctAnswer;
                     }
                     if (question.type === 'matching' && Array.isArray(answer)) {
@@ -3094,77 +2967,56 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
                             return answer[i] === correctPairId;
                         });
                     }
-                    // CRITICAL FIX: Add explicit checks to ensure both values are strings before calling string methods.
                     if (question.type === 'listening') {
                         const listeningQuestion = question as Extract<QuizQuestion, { type: 'listening' }>;
                         
                         if (typeof answer === 'string' && typeof listeningQuestion.correctAnswer === 'string') {
                             return answer.toLowerCase().trim() !== listeningQuestion.correctAnswer.toLowerCase().trim();
                         }
-                        // If the user skipped, or the data is malformed, we don't treat it as incorrect here.
                         return false;
                     }
                     return false;
                 });
 
             if (incorrectAnswers.length > 0) {
-                quizSummary += `**I missed ${incorrectAnswers.length} question(s). I need help with the following:**
-
-                                  `;
+                quizSummary += `**I missed ${incorrectAnswers.length} question(s). I need help with the following:**\n\n`;
                 incorrectAnswers.forEach((item, index) => {
                     const question = item.question;
-                    const rawUserAnswer = item.userAnswer;
-                    const userAnswer = (typeof rawUserAnswer === 'string' || typeof rawUserAnswer === 'number') ? String(rawUserAnswer) : '*(Skipped/Missing)*';
+                    const rawUserAnswer = item.userAnswer; 
+                    
+                    quizSummary += `### Question ${index + 1}\n**Question:** ${question.question}\n\n`;
 
-                    quizSummary += `### Question ${index + 1}
-                                  **Question:** ${question.question}
-
-                                  `;
-
-                    if (question.type === 'multiple-choice' || question.type === 'fill-in-the-blank') {
-                        quizSummary += `- **My Answer:** \`${userAnswer}\`
-                        - **Correct Answer:** \`${question.correctAnswer}\`
-
-                        `;
+                    if ((question.type === 'multiple-choice' || question.type === 'fill-in-the-blank') && typeof rawUserAnswer === 'string') {
+                        quizSummary += `- **My Answer:** \`${rawUserAnswer || '*(Skipped)*'}\`\n- **Correct Answer:** \`${question.correctAnswer}\`\n\n`;
                     } 
-                    else if (question.type === 'matching' && Array.isArray(userAnswer)) {
+                    else if (question.type === 'matching' && Array.isArray(rawUserAnswer)) {
                         const matchingQuestion = question as Extract<QuizQuestion, { type: 'matching' }>;
-                        quizSummary += `**Incorrect Matches:**
-                        `;
-                        userAnswer.forEach((match, pairIndex) => {
-                            const correctDefId = `def-${pairIndex}`;
-                            const [termId, userDefId] = match.split(':');
-                            
-                            if (userDefId !== correctDefId) {
-                                const correctTerm = matchingQuestion.pairs[pairIndex].term;
+                        quizSummary += `**My Incorrect Matches:**\n`;
+                        rawUserAnswer.forEach((match: string, pairIndex: number) => {
+                            const correctPairing = `term-${pairIndex}:def-${pairIndex}`;
+                            if (match !== correctPairing) {
+                                const term = matchingQuestion.pairs[pairIndex].term;
                                 const correctDefinition = matchingQuestion.pairs[pairIndex].definition;
-                                const matchedDefIndex = parseInt(userDefId.replace('def-', ''), 10);
-                                const userMatchedDefinition = matchingQuestion.pairs[matchedDefIndex].definition;
                                 
-                                quizSummary += `- **Term:** \`${correctTerm}\`
-                                  - **Matched:** *${userMatchedDefinition}*
-                                  - **Should Be:** *${correctDefinition}*
+                                const userDefId = match.split(':')[1];
+                                const userDefIndex = parseInt(userDefId.replace('def-', ''), 10);
+                                const userMatchedDefinition = matchingQuestion.pairs[userDefIndex]?.definition || '*(Invalid Match)*';
 
-                                `;
+                                quizSummary += `- **Term:** \`${term}\`\n  - **I matched:** *${userMatchedDefinition}*\n  - **Correct match:** *${correctDefinition}*\n\n`;
                             }
                         });
                     }
-                    else if (question.type === 'listening') {
+                    else if (question.type === 'listening' && typeof rawUserAnswer === 'string') {
                         const listeningQuestion = question as Extract<QuizQuestion, { type: 'listening' }>;
                         const correctAnswer = listeningQuestion.correctAnswer || '*(Missing from question data)*';
 
-                         quizSummary += `- **My Transcription:** \`${userAnswer}\`
-- **Correct Sentence:** \`${correctAnswer}\`
-
-`;
+                         quizSummary += `- **My Transcription:** \`${rawUserAnswer || '*(Skipped)*'}\`\n- **Correct Sentence:** \`${correctAnswer}\`\n\n`;
                     }
-                    else if ((question.type === 'speaking') && typeof userAnswer === 'string') {
-                         quizSummary += `- *Speaking exercise completed.* (AI feedback expected separately)
-                          `;
+                    else if ((question.type === 'speaking') && typeof rawUserAnswer === 'string') {
+                         quizSummary += `- *Speaking exercise completed.* (AI feedback expected separately)\n\n`;
                     }
                 });
 
-                // Add a concluding line.
                 quizSummary += `\nThank you for the help!`;
 
             } else {
@@ -3179,7 +3031,6 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
                 timestamp: Date.now(),
             };
 
-            // 2. Check Usage
             const canProceed = await checkAndIncrementUsage(
                 user.uid,
                 "messages",
@@ -3189,87 +3040,38 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
             if (!canProceed) {
                 setSubscriptionModalReason("limit");
                 setShowSubscriptionModal(true);
-                
-                // FIX: Explicitly reset the sending state and resolve the promise 
-                // in case the asynchronous usage check fails or blocks the action, 
-                // preventing the button from freezing.
                 setIsSending(false);
                 resolve();
-                return; // Exit the async function inside the Promise
+                return;
             }
 
-            // 3. Execute Action
             if (activeGroup) {
-                // Group Chat Logic
                 const groupQuizMessage = { ...quizMessage, text: `@bot ${quizSummary}` };
-
-                // 3a. Add user message
                 await groupService.addMessageToGroup(activeGroup.id, groupQuizMessage);
-
                 try {
-                    // 3b. Fetch updated context, get bot response, and add it
                     const updatedGroup = await groupService.getGroupById(activeGroup.id);
                     const currentMessages = updatedGroup ? [...updatedGroup.messages, groupQuizMessage] : [groupQuizMessage];
-
                     const groupTeachMeCache: TeachMeCache | null = activeGroup.topic
-                        ? {
-                            topic: activeGroup.topic,
-                            language: currentPartner?.nativeLanguage || targetLanguage,
-                            type: "Grammar",
-                            content: "",
-                        }
+                        ? { topic: activeGroup.topic, language: currentPartner?.nativeLanguage || targetLanguage, type: "Grammar", content: "" }
                         : null;
-
-                    const botResponse = await groupService.getGroupBotResponse(
-                        currentMessages,
-                        activeGroup.partner,
-                        userProfile,
-                        true,
-                        groupTeachMeCache,
-                    );
-                    await groupService.addMessageToGroup(activeGroup.id, {
-                        ...botResponse,
-                        timestamp: Date.now(),
-                    });
+                    const botResponse = await groupService.getGroupBotResponse(currentMessages, activeGroup.partner, userProfile, true, groupTeachMeCache);
+                    await groupService.addMessageToGroup(activeGroup.id, { ...botResponse, timestamp: Date.now() });
                 } catch (error) {
                     console.error("Bot Reply Failed in Group Quiz Share:", error);
-                    const errorMessage: Message = {
-                        sender: "ai",
-                        text: "Sorry, I encountered an error responding to the quiz share.",
-                    };
-                    await groupService.addMessageToGroup(activeGroup.id, {
-                        ...errorMessage,
-                        timestamp: Date.now(),
-                    });
+                    const errorMessage: Message = { sender: "ai", text: "Sorry, I encountered an error responding to the quiz share." };
+                    await groupService.addMessageToGroup(activeGroup.id, { ...errorMessage, timestamp: Date.now() });
                 }
             } else {
-                // Solo Chat Logic - FIX: Get response immediately to prevent useEffect loop.
                 try {
-                    // 3a. Immediately get the AI response for the new message
-                    const aiResponse = await geminiService.getChatResponse(
-                        [...currentChatMessages, quizMessage], // Pass current messages + new quiz message
-                        currentPartner || partners[0], 
-                        true, // Corrections are implicitly on for quiz results
-                        userProfile,
-                        teachMeCache,
-                        false // Not a group chat
-                    );
-                    
-                    // 3b. Single atomic update: add both the user's quiz message and the AI's reply.
-                    // This prevents the ChatModal useEffect from being triggered by a lone user message.
+                    const aiResponse = await geminiService.getChatResponse([...currentChatMessages, quizMessage], currentPartner || partners[0], true, userProfile, teachMeCache, false);
                     setCurrentChatMessages((prev) => [...prev, quizMessage, aiResponse]);
                 } catch (error) {
                     console.error("Error getting quiz results response:", error);
-                    const errorMessage: Message = {
-                        sender: "ai",
-                        text: "Sorry, I had trouble analyzing the quiz results. Please try again.",
-                        timestamp: Date.now()
-                    };
+                    const errorMessage: Message = { sender: "ai", text: "Sorry, I had trouble analyzing the quiz results. Please try again.", timestamp: Date.now() };
                     setCurrentChatMessages((prev) => [...prev, quizMessage, errorMessage]);
                 }
             }
 
-            // 4. Update UI context for chat
             if (!currentPartner) {
                 const partnerToChatWith = savedChat?.partner || partners[0];
                 if (partnerToChatWith) setCurrentPartner(partnerToChatWith);
@@ -3278,7 +3080,7 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
         } catch (error) {
             console.error("Critical error in handleShareQuizResults:", error);
         } finally {
-            setIsSending(false); // Global Lock END - Crucial for preventing re-execution
+            setIsSending(false);
             resolve();
         }
     });
@@ -3297,8 +3099,7 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
 
     const uniqueId = Math.random().toString(36).substring(2, 9);
     const shareLink = `${window.location.origin}/group/${uniqueId}`;
-
-    // Update the initial message to use "@bot"
+    
     const initialMessageText = `Welcome to the group chat! To talk to the bot, start your message with "@bot".\n\nShare this link with up to two friends to join: ${shareLink}`;
     const initialMessage: Message = { sender: "ai", text: initialMessageText };
 
@@ -3429,97 +3230,65 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
       window.history.replaceState(null, "", window.location.pathname);
     }
   }, []);
-
-  const userProfile = {
-    name: user?.name || "",
-    hobbies: user?.hobbies || "",
-    bio: user?.bio || "",
-  };
-
+  
   const handleReorderNotes = (newNotes: Note[]) => {
     if (user) {
-        // Optimistic UI update is not possible here as the state lives in the user object
         firestoreService.reorderNotesInFirestore(user.uid, newNotes);
-        // The user state will be updated via the useAuth hook listener
     }
   };
 
   const handleSpeakNote = useCallback(async (text: string, topic: string): Promise<void> => {
-
-    // The base language for the TTS request is the Target Language (the lesson language)
     const baseLangCode = targetLanguage;
     const gender = currentPartner?.gender || 'male';
-    
-    // The voice to switch TO is the *user's native language* for translation/explanation text.
     const foreignLangCode = user.nativeLanguage || 'en-US'; 
-    
-    // Get the explicit voice name for the secondary language (user's native language voice)
     const voiceMapForForeignLang = VOICE_MAP[foreignLangCode];
     let foreignVoiceName: string | undefined;
     if (voiceMapForForeignLang) {
         foreignVoiceName = voiceMapForForeignLang[gender] || voiceMapForForeignLang['male'];
     }
-    // Guaranteed fallback voice name
     const finalForeignVoice = foreignVoiceName || VOICE_MAP['en-US']['male']; 
 
     return new Promise<void>(async (resolve) => {
       await handleUsageCheck("audioPlays", async () => {
           try {
-              // 1. Tag text for SSML, passing the base language and the explicit foreign voice name
-              const ssmlText = await geminiService.tagTextForTTS(
-                  text, 
-                  baseLangCode, // Primary language of the text is the target language
-                  finalForeignVoice // Voice to switch TO (user's native language voice)
-              );
-
-              // 2. Synthesize speech: The request uses the *target language* as the base code for the primary voice
-              const audioContent = await geminiService.synthesizeSpeech(
-                  ssmlText,
-                  baseLangCode, // The primary language code for the voice model
-                  gender,
-              );
+              const ssmlText = await geminiService.tagTextForTTS(text, baseLangCode, finalForeignVoice);
+              const audioContent = await geminiService.synthesizeSpeech(ssmlText, baseLangCode, gender);
               const audioBlob = new Blob([base64ToArrayBuffer(audioContent)], { type: 'audio/mpeg' });
               const audioUrl = URL.createObjectURL(audioBlob);
               const audio = new Audio(audioUrl);
               
               audio.play();
-
-              // Wait for the audio to finish playing before resolving the Promise
               audio.onended = () => {
                   resolve();
               };
-              
-              // Add an error handler to resolve the promise if playback fails immediately
               audio.onerror = () => {
                   console.error("Audio playback failed or stopped unexpectedly.");
                   resolve(); 
               };
-
           } catch (error) {
               console.error("Error synthesizing speech for note, falling back to browser TTS:", error);
               try {
                   if ('speechSynthesis' in window) {
                       const utterance = new SpeechSynthesisUtterance(text);
                       utterance.lang = baseLangCode;
-                      utterance.onend = () => resolve(); // Resolve when browser speech is done
+                      utterance.onend = () => resolve();
                       window.speechSynthesis.speak(utterance);
                   } else {
-                      resolve(); // Resolve immediately if no fallback is available
+                      resolve();
                   }
               } catch (speechError) {
                   console.error("Browser speech synthesis failed to start:", speechError);
-                  resolve(); // Resolve on error
+                  resolve();
               }
           }
       });
       
-      // Add a safety timeout in case of promise hang (e.g. if handleUsageCheck fails to call its inner function)
       setTimeout(() => {
           if (process.env.NODE_ENV !== 'production') {
               console.warn("handleSpeakNote timed out and forced resolution.");
           }
           resolve();
-      }, 15000); // 15 second safety timeout
+      }, 15000);
     });
   }, [currentPartner, targetLanguage, handleUsageCheck, user.nativeLanguage, user.uid]);
 
@@ -3527,6 +3296,12 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans flex flex-col">
+      {showAgeVerification && (
+        <AgeVerificationModal
+          onVerified={handleAgeVerified}
+          onUnderage={handleUnderage}
+        />
+      )}
       <header className="bg-white dark:bg-gray-800 shadow-md p-4 flex flex-col md:flex-row justify-between items-center gap-4">
         <h1 className="text-3xl font-bold text-blue-600 dark:text-blue-400 flex items-center">
           <div 
@@ -3562,16 +3337,13 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
             {isLoadingPartners ? "Searching..." : "Find New Pals"}
           </button>
           <UserProfile
-            profile={userProfile}
-            xp={user.xp || 0}
+            user={user}
             onProfileChange={handleProfileChange}
             onUpgradeClick={() => {
               setSubscriptionModalReason("manual");
               setShowSubscriptionModal(true);
             }}
             onCancelSubscription={handleCancelSubscription}
-            subscriptionStatus={user?.subscription || "free"}
-            usageData={user?.usage}
             isUpgrading={isUpgrading}
             isCancelling={isCancelling}
           />
@@ -3649,7 +3421,6 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
         {!isLoadingPartners &&
           !error &&
           partners.length === 0 && (
-            // Replace the simple welcome message with the new Feature Grid
             <div className="text-center mt-12">
                 <p className="text-xl text-gray-500 dark:text-gray-400">
                     Select your languages and click "Find New Pals" to start your
@@ -3688,8 +3459,6 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
           onShareQuizResults={handleShareQuizResults}
           userProfile={userProfile}
           handleUsageCheck={handleUsageCheck}
-          isGroupChat={!!activeGroup}
-          groupTopic={activeGroup?.topic || null}
           groupChat={activeGroup}
           onStartGroup={handleStartGroup}
           userIsGroupCreator={user?.uid === activeGroup?.creatorId}
