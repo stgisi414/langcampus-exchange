@@ -4,21 +4,22 @@ import { Message, Partner, QuizQuestion, UserProfileData, TeachMeCache, YouTubeV
 //const PROXY_URL = "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiProxy"; // Replace if yours is different
 //const TTS_PROXY_URL = "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiTTS";
 // Functions emulator addresses
+// Use relative paths for development to leverage the Vite proxy.
 const PROXY_URL =
   process.env.NODE_ENV === 'development'
-    ? "http://127.0.0.1:5001/langcampus-exchange/us-central1/geminiProxy"
+    ? "/geminiProxy"
     : "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiProxy";
 const TTS_PROXY_URL =
    process.env.NODE_ENV === 'development'
-    ? "http://127.0.0.1:5001/langcampus-exchange/us-central1/googleCloudTTS"
+    ? "/googleCloudTTS"
     : "https://us-central1-langcampus-exchange.cloudfunctions.net/googleCloudTTS";
 const TRANSCRIBE_PROXY_URL =
   process.env.NODE_ENV === 'development'
-    ? "http://127.0.0.1:5001/langcampus-exchange/us-central1/transcribeAudio"
+    ? "/transcribeAudio"
     : "https://us-central1-langcampus-exchange.cloudfunctions.net/transcribeAudio";
 const YOUTUBE_PROXY_URL =
   process.env.NODE_ENV === 'development'
-    ? "http://127.0.0.1:5001/langcampus-exchange/us-central1/youtubeProxy"
+    ? "/youtubeProxy"
     : "https://us-central1-langcampus-exchange.cloudfunctions.net/youtubeProxy";
 
 /**

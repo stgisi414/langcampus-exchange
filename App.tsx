@@ -1065,7 +1065,8 @@ const TeachMeModal: React.FC<{
   onDeleteNote: (noteId: string) => void;
   onReorderNotes: (newNotes: Note[]) => void;
   onSpeakNote: (text: string, topic: string) => void;
-  groupChat: GroupChat | null; // <--- ADD THIS PROP HERE
+  groupChat: GroupChat | null;
+  onSetGroupTopic?: (topic: string) => Promise<void>;
 }> = ({
   language,
   onClose,
@@ -1288,26 +1289,47 @@ const TeachMeModal: React.FC<{
     return () => { isCurrent = false; };
   }, [selectedTopic, language, nativeLanguage, activeTab, setCache, cache, groupChat]); // Dependency is primarily `selectedTopic`
 
-  // 1. --- MODIFIED handleTopicSelect FUNCTION ---
-  const handleTopicSelect = (topic: string) => {
-    // For a host, changing the group topic is a core function.
-    // We remove all local state setters (like setIsLoading) from this handler
-    // to prevent race conditions. Its only job is to trigger the database update.
-    // The useEffect hook will handle all UI changes based on the new props from Firestore.
+  // MODIFICATION 2: Replace the entire handleTopicSelect function with this async version
+  const handleTopicSelect = async (topic: string) => {
+    // For a host, we will now perform the entire fetch-and-update sequence here
+    // to bypass the useEffect listener, which seems to be causing the issue.
     if (isHost && onSetGroupTopic) {
-      console.log(`DEBUG: [handleTopicSelect] Host is setting topic to "${topic}".`);
-      handleUsageCheck("lessons", () => {
-        onSetGroupTopic(topic);
-        // We no longer set isLoading or setSelectedTopic here for the host.
+      await handleUsageCheck("lessons", async () => {
+        setIsLoading(true);
+        setContent(""); // Clear content immediately
+        console.log(`[HOST ACTION] 1. Updating topic to "${topic}" in Firestore.`);
+        try {
+          // Await the topic update (this also deletes the old content)
+          await onSetGroupTopic(topic);
+          
+          console.log(`[HOST ACTION] 2. Topic updated. Now fetching content directly...`);
+          
+          // Directly fetch the content
+          const nativeLanguageName = LANGUAGES.find(l => l.code === nativeLanguage)?.name || nativeLanguage;
+          const newContent = await geminiService.getContent(topic, activeTab, language, nativeLanguageName);
+          
+          console.log(`[HOST ACTION] 3. Fetch successful. Updating group document with content.`);
+          
+          // Update the group document with the new content
+          if (groupChat) {
+            await groupService.updateGroupLessonContent(groupChat.id, newContent);
+          }
+          // The component will naturally re-render with the new content via the listener.
+          // We set isLoading to false in the useEffect when content is detected.
+          
+        } catch (error) {
+          console.error("Error during host topic selection & fetch process:", error);
+          setContent("An error occurred while fetching the lesson. Please try again.");
+          setIsLoading(false);
+        }
       });
     } else if (!isGroupChat) {
-      // Solo mode logic remains the same with its own state management.
+      // Solo mode logic remains the same
       handleUsageCheck("lessons", () => {
         setCache(null);
         setSelectedTopic(topic);
       });
     }
-    // Members do nothing when they click.
   };
 
   const handleShareAndClose = (
@@ -3286,9 +3308,11 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
       .catch((err) => console.error("Could not copy text: ", err));
   };
 
-  const handleSetGroupTopic = (topic: string) => {
+  // MODIFICATION 1: Make this function async to allow awaiting
+  const handleSetGroupTopic = async (topic: string) => {
     if (activeGroup && user?.uid === activeGroup.creatorId) {
-      groupService.updateGroupTopic(activeGroup.id, topic);
+      // Use await here to ensure the Firestore update completes
+      await groupService.updateGroupTopic(activeGroup.id, topic);
     }
   };
 

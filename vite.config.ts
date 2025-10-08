@@ -15,6 +15,31 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
-      }
+      },
+      // --- ADD THIS SERVER PROXY CONFIGURATION ---
+      server: {
+        proxy: {
+          '/geminiProxy': {
+            target: 'http://127.0.0.1:5001/langcampus-exchange/us-central1',
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/geminiProxy/, '/geminiProxy'),
+          },
+          '/googleCloudTTS': {
+            target: 'http://127.0.0.1:5001/langcampus-exchange/us-central1',
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/googleCloudTTS/, '/googleCloudTTS'),
+          },
+          '/transcribeAudio': {
+            target: 'http://127.0.0.1:5001/langcampus-exchange/us-central1',
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/transcribeAudio/, '/transcribeAudio'),
+          },
+          '/youtubeProxy': {
+            target: 'http://127.0.0.1:5001/langcampus-exchange/us-central1',
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/youtubeProxy/, '/youtubeProxy'),
+          },
+        },
+      },
     };
 });
