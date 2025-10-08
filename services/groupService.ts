@@ -62,10 +62,17 @@ export const addMessageToGroup = async (groupId: string, message: Message): Prom
 // 4. Updates the group's learning topic
 export const updateGroupTopic = async (groupId: string, topic: string): Promise<void> => {
     const groupRef = doc(db, GROUPS_COLLECTION, groupId);
-    await updateDoc(groupRef, { topic });
+    // FIX: Clear the content (and set new topic) when the topic changes to force a fresh fetch by the host.
+    await updateDoc(groupRef, { topic, teachMeContent: null });
 };
 
-// 5. Handles user joining (adds them to the members map)
+// 5. Adds the fetched lesson content to the group chat
+export const updateGroupLessonContent = async (groupId: string, content: string): Promise<void> => {
+    const groupRef = doc(db, GROUPS_COLLECTION, groupId);
+    await updateDoc(groupRef, { teachMeContent: content });
+};
+
+// 6. Handles user joining (adds them to the members map)
 export const joinGroup = async (groupId: string, userId: string): Promise<void> => {
     const groupRef = doc(db, GROUPS_COLLECTION, groupId);
     const userRef = doc(db, "customers", userId);
@@ -77,7 +84,7 @@ export const joinGroup = async (groupId: string, userId: string): Promise<void> 
     await updateDoc(userRef, { activeGroupId: groupId });
 };
 
-// 6. Handles user leaving. If the creator leaves, the group is deleted.
+// 7. Handles user leaving. If the creator leaves, the group is deleted.
 export const leaveGroup = async (groupId: string, userId: string): Promise<void> => {
     const groupRef = doc(db, GROUPS_COLLECTION, groupId);
     const userRef = doc(db, "customers", userId);
@@ -111,7 +118,7 @@ export const leaveGroup = async (groupId: string, userId: string): Promise<void>
     }
 };
 
-// 7. Gets a real AI response for the group chat
+// 8. Gets a real AI response for the group chat
 export const getGroupBotResponse = async (
     messages: Message[],
     partner: Partner,

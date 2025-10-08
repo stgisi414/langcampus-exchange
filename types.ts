@@ -85,6 +85,7 @@ export interface GroupChat {
   shareLink: string; // The URL to share (mock link for now)
   members: { [key: string]: boolean }; // Stored as a map for efficient lookups
   messages: Message[]; // Stored messages for the chat history
+  teachMeContent?: string | null; // <--- ADDED: Field to store the actual lesson content
 }
 
 export interface Language {

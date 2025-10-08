@@ -419,6 +419,9 @@ export const getContent = async (topic: string, type: 'Grammar' | 'Vocabulary', 
     Return ONLY the lesson content in Markdown format. Do not include any conversational pleasantries or introductions.
     `;
   try {
+    // FIX: Add a client-side log to confirm the code reaches the network call point
+    console.log(`[GEMINI SERVICE] Attempting network call for: ${topic} (${type} - ${targetLanguage})`);
+    
     // CRITICAL FIX: Pass the model name explicitly to the helper function
     const data = await callGeminiProxy(prompt, "gemini-2.5-pro"); // Use Pro for complex lesson generation
     // The response is expected to be Markdown text directly

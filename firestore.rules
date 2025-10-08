@@ -57,11 +57,16 @@ service cloud.firestore {
           !request.resource.data.members.keys().hasAny([request.auth.uid]) &&
           resource.data.members.keys().hasAny([request.auth.uid])
         ) ||
-        // Updating topic (FIX: Removed unnecessary value comparison)
+        // Host updates topic and clears content (teaches new lesson)
         (
           request.auth.uid == resource.data.creatorId &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['topic'])
-          // Removed: && request.resource.data.topic != resource.data.topic
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['topic', 'teachMeContent'])
+        ) ||
+        // Host saves the fetched lesson content (only updates teachMeContent)
+        (
+          request.auth.uid == resource.data.creatorId &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['teachMeContent']) &&
+          request.resource.data.teachMeContent is string
         ) ||
         // Adding a message
         (
