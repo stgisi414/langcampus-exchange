@@ -3297,7 +3297,7 @@ export const conversationData = {
     ]
 };
 
-export const pg13ConversationData = {
+export const pg13ConversationData: Record<string, any[]> = {
     "English": [
         { "title": "Discussing a War Movie (Historical Context)", "level": 3, "tags": ["entertainment", "history", "violence", "discussion"] },
         { "title": "Debating the Ethics of Superheroes", "level": 4, "tags": ["debate", "ethics", "violence", "abstract"] },
@@ -3308,13 +3308,33 @@ export const pg13ConversationData = {
         { "title": "Hablar de una Película de Guerra (Contexto Histórico)", "level": 3, "tags": ["entretenimiento", "historia", "violencia", "discusión"] },
         { "title": "Debatir la Ética de los Superhéroes", "level": 4, "tags": ["debate", "ética", "violencia", "abstracto"] },
     ],
-    // Add other languages as needed
+    // ADD EMPTY ARRAYS FOR OTHER LANGUAGES TO AVOID CRASHES/FALLBACKS
+    "French": [], 
+    "German": [],
+    "Italian": [],
+    "Portuguese": [],
+    "Japanese": [],
+    "Korean": [],
+    "Chinese": [],
+    "Russian": [],
+    "Arabic": [],
+    "Hindi": [],
+    "Vietnamese": [],
+    "Mongolian": [],
+    "Polish": [],
+    "Esperanto": [],
 };
 
-export const pg13GrammarData = {};
-export const pg13VocabData = [];
+export const pg13GrammarData: Record<string, any[]> = {
+    // Add empty arrays for all supported languages
+    "English": [], "Spanish": [], "French": [], "German": [], "Italian": [], "Portuguese": [], 
+    "Japanese": [], "Korean": [], "Chinese": [], "Russian": [], "Arabic": [], "Hindi": [], 
+    "Vietnamese": [], "Mongolian": [], "Polish": [], "Esperanto": [],
+};
 
-export const r21PlusConversationData = {
+export const pg13VocabData: any[] = [];
+
+export const r21PlusConversationData: Record<string, any[]> = {
     "English": [
         { "title": "Ordering Drinks at a Bar", "level": 2, "tags": ["social", "nightlife", "alcohol", "ordering"] },
         { "title": "Discussing Nightlife in Your City", "level": 3, "tags": ["social", "city", "nightlife", "lifestyle"] },
@@ -3327,8 +3347,28 @@ export const r21PlusConversationData = {
         { "title": "Hablar de la Vida Nocturna en tu Ciudad", "level": 3, "tags": ["social", "ciudad", "vida nocturna", "estilo de vida"] },
         { "title": "Debatir Políticas de Legalización de Drogas", "level": 5, "tags": ["debate", "política", "drogas", "sociedad", "avanzado"] },
     ],
-    // Add other languages as needed
+    // ADD EMPTY ARRAYS FOR OTHER LANGUAGES TO AVOID CRASHES/FALLBACKS
+    "French": [], 
+    "German": [],
+    "Italian": [],
+    "Portuguese": [],
+    "Japanese": [],
+    "Korean": [],
+    "Chinese": [],
+    "Russian": [],
+    "Arabic": [],
+    "Hindi": [],
+    "Vietnamese": [],
+    "Mongolian": [],
+    "Polish": [],
+    "Esperanto": [],
 };
 
-export const r21PlusGrammarData = {};
-export const r21PlusVocabData = [];
+export const r21PlusGrammarData: Record<string, any[]> = {
+    // Add empty arrays for all supported languages
+    "English": [], "Spanish": [], "French": [], "German": [], "Italian": [], "Portuguese": [], 
+    "Japanese": [], "Korean": [], "Chinese": [], "Russian": [], "Arabic": [], "Hindi": [], 
+    "Vietnamese": [], "Mongolian": [], "Polish": [], "Esperanto": [],
+};
+
+export const r21PlusVocabData: any[] = [];

@@ -228,6 +228,8 @@ const UserProfile: React.FC<{
     if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
         age--;
     }
+    // DEBUG LOG: Calculated age
+    console.log("DEBUG: calculatedAge: DOB:", user.birthDate, "Age:", age);
     return age;
   }, [user.birthDate]);
 
@@ -247,6 +249,12 @@ const UserProfile: React.FC<{
   };
 
   const handleSaveAndClose = () => {
+    // DEBUG LOG: Profile data being sent to firestoreService
+    console.log("DEBUG: Saving profile and preference:", {
+      ...localProfile,
+      // Check if the 21+ option was disabled but selected, and if so, log the preference change attempt
+      attemptedPreference: localProfile.contentPreference 
+    });
     onProfileChange(localProfile);
     setIsOpen(false);
   };
@@ -324,6 +332,10 @@ const UserProfile: React.FC<{
                       <option value="pg13">PG-13 (Simulated Violence)</option>
                       <option value="r21plus" disabled={calculatedAge < 21}>21+ (Mature Themes)</option>
                     </select>
+                    {/* DEBUG LOG: Display calculated age for quick check */}
+                    {process.env.NODE_ENV === 'development' && (
+                        <p className="text-xs text-red-500 mt-1">DEBUG: Calculated Age: {calculatedAge}</p>
+                    )}
                     {calculatedAge < 21 && (
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">You must be 21 or older to select the 21+ content preference.</p>
                     )}
@@ -1103,31 +1115,46 @@ const TeachMeModal: React.FC<{
     
     // Select data source based on user preference
     const preference = user.contentPreference || 'standard';
+    // DEBUG LOG: Log the preference before selecting the data source
+    console.log(`DEBUG: TeachMeModal: User Preference is '${preference}' (Age Verified: ${user.isAgeVerified})`);
+
     if (user.isAgeVerified) {
-        if (preference === 'pg13') {
+        if (preference === 'pg13' && pg13ConversationData[language as keyof typeof pg13ConversationData]) {
             grammarSource = pg13GrammarData;
             vocabSource = pg13VocabData;
             conversationSource = pg13ConversationData;
-        } else if (preference === 'r21plus') {
+            console.log("DEBUG: TeachMeModal: Using PG-13 content sources.");
+        } else if (preference === 'r21plus' && r21PlusConversationData[language as keyof typeof r21PlusConversationData]) {
             grammarSource = r21PlusGrammarData;
             vocabSource = r21PlusVocabData;
             conversationSource = r21PlusConversationData;
+            console.log("DEBUG: TeachMeModal: Using R21+ content sources.");
+        } else {
+             // Default to standard if the selected preference doesn't exist for the language/type
+             console.log("DEBUG: TeachMeModal: Falling back to Standard content.");
         }
+    } else {
+        // Force standard if age is not verified
+        console.log("DEBUG: TeachMeModal: Age not verified. Forcing Standard content.");
     }
 
     let data;
     switch (activeTab) {
       case 'Grammar':
         data = grammarSource[language as keyof typeof grammarSource] || [];
+        console.log(`DEBUG: TeachMeModal: Active Tab: Grammar. Source length: ${data.length}`);
         break;
       case 'Vocabulary':
         data = vocabSource;
+        console.log(`DEBUG: TeachMeModal: Active Tab: Vocabulary. Source length: ${data.length}`);
         break;
       case 'Conversation':
         data = conversationSource[language as keyof typeof conversationSource] || [];
+        console.log(`DEBUG: TeachMeModal: Active Tab: Conversation. Source length: ${data.length}`);
         break;
       default:
         data = [];
+        console.log("DEBUG: TeachMeModal: Active Tab: Unknown. Source length: 0");
     }
 
     if (searchQuery.trim()) {
@@ -1138,7 +1165,10 @@ const TeachMeModal: React.FC<{
           (topic.tags && topic.tags.some((tag: string) => tag.toLowerCase().includes(lowercasedQuery))),
       );
     } else {
-      return (data as any[]).filter((topic) => topic.level === level);
+      const filtered = (data as any[]).filter((topic) => topic.level === level);
+      // DEBUG LOG: Final check on filtered topics for the current tab and level
+      console.log(`DEBUG: TeachMeModal: Filtered topics for Level ${level} (${activeTab}): ${filtered.length}`);
+      return filtered;
     }
   }, [activeTab, level, language, searchQuery, user.contentPreference, user.isAgeVerified]);
 
@@ -2541,6 +2571,14 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   const [showAgeVerification, setShowAgeVerification] = useState(false);
 
   useEffect(() => {
+    // DEBUG LOG: Initial check for age verification status
+    console.log("DEBUG: User object loaded in AppContent.", {
+      uid: user?.uid,
+      isAgeVerified: user?.isAgeVerified,
+      birthDate: user?.birthDate,
+      contentPreference: user?.contentPreference,
+    });
+
     if (user && !user.isAgeVerified) {
       setShowAgeVerification(true);
     } else {
