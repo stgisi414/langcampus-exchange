@@ -983,7 +983,7 @@ const QuizModal: React.FC<{
         return <MatchingQuestion question={currentQuestion} onAnswer={handleAnswer} key={currentQuestionIndex} />;
       case 'fill-in-the-blank':
         return (
-            <form onSubmit={(e) => { e.preventDefault(); handleAnswer((e.target as any).elements.blank.value); }} className="mt-4 flex gap-4">
+            <form key={currentQuestionIndex} onSubmit={(e) => { e.preventDefault(); handleAnswer((e.target as any).elements.blank.value); }} className="mt-4 flex gap-4">
                 <input name="blank" className="flex-grow px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-gray-900 dark:text-gray-100" />
                 <button type="submit" className="px-6 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600">Submit</button>
             </form>
