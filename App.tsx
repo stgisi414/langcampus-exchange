@@ -3092,9 +3092,43 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
 
             if (incorrectAnswers.length > 0) {
                 quizSummary += `I missed ${incorrectAnswers.length} question(s). I would like help understanding the following: `;
+                // Reworked loop to include all relevant incorrect answers in the summary
                 incorrectAnswers.forEach((item, index) => {
-                    if (item.question.type === 'multiple-choice' || item.question.type === 'fill-in-the-blank') {
-                        quizSummary += `[Q${index + 1}: "${item.question.question}". My Answer: "${item.userAnswer}". Correct: "${item.question.correctAnswer}"]. `;
+                    const question = item.question;
+                    const userAnswer = item.userAnswer;
+                    
+                    if (question.type === 'multiple-choice' || question.type === 'fill-in-the-blank') {
+                        quizSummary += `[Q${index + 1} (MC/Fill): "${question.question}". My Answer: "${userAnswer}". Correct: "${question.correctAnswer}"]. `;
+                    } 
+                    else if (question.type === 'matching' && Array.isArray(userAnswer)) {
+                        const matchingQuestion = question as Extract<QuizQuestion, { type: 'matching' }>;
+                        let matchDetails = "";
+                        
+                        // userAnswer is an array of strings like ["term-0:def-1", "term-1:def-0", ...]
+                        userAnswer.forEach((match, pairIndex) => {
+                            const correctDefId = `def-${pairIndex}`;
+                            const [termId, userDefId] = match.split(':');
+                            
+                            // Only report incorrect matches (where the matched definition ID doesn't match the term index)
+                            if (userDefId !== correctDefId) {
+                                const correctTerm = matchingQuestion.pairs[pairIndex].term;
+                                const correctDefinition = matchingQuestion.pairs[pairIndex].definition;
+                                
+                                // Get the definition text the user incorrectly matched using the ID.
+                                // The definition text at index N corresponds to ID 'def-N'.
+                                const matchedDefIndex = parseInt(userDefId.replace('def-', ''), 10);
+                                const userMatchedDefinition = matchingQuestion.pairs[matchedDefIndex].definition;
+                                
+                                matchDetails += `(Term: "${correctTerm}", Matched: "${userMatchedDefinition}" vs. Correct: "${correctDefinition}"). `;
+                            }
+                        });
+
+                        if (matchDetails) {
+                            quizSummary += `[Q${index + 1} (Matching): I struggled with the following pair(s): ${matchDetails}] `;
+                        }
+                    }
+                    else if (question.type === 'listening' && typeof userAnswer === 'string') {
+                         quizSummary += `[Q${index + 1} (Listening): I transcribed "${userAnswer}" but the correct sentence was: "${question.correctAnswer}"]. `;
                     }
                 });
                 quizSummary = quizSummary.trim();
@@ -3120,7 +3154,13 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
             if (!canProceed) {
                 setSubscriptionModalReason("limit");
                 setShowSubscriptionModal(true);
-                return; // Exit try block and go to finally
+                
+                // FIX: Explicitly reset the sending state and resolve the promise 
+                // in case the asynchronous usage check fails or blocks the action, 
+                // preventing the button from freezing.
+                setIsSending(false);
+                resolve();
+                return; // Exit the async function inside the Promise
             }
 
             // 3. Execute Action
