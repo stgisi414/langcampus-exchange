@@ -1181,175 +1181,133 @@ const TeachMeModal: React.FC<{
     }
   };
 
-  // useEffect to fetch and set content based on selectedTopic or groupTopic
+  // EFFECT 1: Handles content logic ONLY for Group Chats
   useEffect(() => {
-    // CRITICAL: Determine the actual topic to display.
-    const topicToFetch = groupChat?.topic || selectedTopic;
-    
-    // FIX: Group chats read content from groupChat.teachMeContent. Solo chats use local cache.
-    const contentToDisplay = groupChat?.teachMeContent || cache?.content || ""; 
-    
-    // Determine the fetch trigger:
-    // 1. Host must fetch if a topic is set AND content is null/empty.
-    const isHostFetching = isHost && topicToFetch && !groupChat?.teachMeContent; 
-    // 2. Solo fetches if topic is set AND cache misses (cache?.topic !== topicToFetch).
-    const isSoloFetching = !groupChat && topicToFetch && cache?.topic !== topicToFetch; 
-    
-    // ... (rest of variables)
+    if (!groupChat) return;
 
-    // 1. If content is already present (Group Member, or Solo cache hit), display it and stop.
-    if (contentToDisplay) {
-        setContent(contentToDisplay);
-        setIsLoading(false); 
-        console.log(`DEBUG: E-02: Loaded content for '${topicToFetch}' from ${(groupChat ? 'GroupChat' : 'Cache')}. Stopping fetch.`);
-        console.groupEnd();
-        return;
-    }
-    
-    // 2. Initial state: no topic selected
-    if (!topicToFetch) {
-        setIsLoading(false);
-        setContent("");
-        console.log("DEBUG: E-01: Initial State. No topic to fetch.");
-        console.groupEnd();
-        return;
-    }
+    // --- Diagnostic Logging ---
+    console.group(`--- GROUP CHAT useEffect RUN ---`);
+    console.log("Timestamp:", new Date().toLocaleTimeString());
+    console.log("isHost:", isHost);
+    console.log("groupChat.topic:", groupChat.topic);
+    console.log("groupChat.teachMeContent (exists?):", groupChat.hasOwnProperty('teachMeContent'));
+    console.log("groupChat.teachMeContent (value):", groupChat.teachMeContent);
+    // --- End Diagnostic Logging ---
 
-    // 3. Member is waiting for content (Host isFetching is false, Solo isFetching is false, but contentToDisplay is null)
-    if (groupChat && !isHost && topicToFetch) { // FIX: Check if a topic is set
-        setIsLoading(true); // FIX: Keep loading spinner while waiting for host's update
-        setContent(""); 
-        console.log("DEBUG: E-03: Member is waiting for Host to fetch content.");
-        console.groupEnd();
-        return;
-    }
+    let isCurrent = true;
+    const topicToDisplay = groupChat.topic;
 
-    // 4. Proceed to fetch (Host for Group OR Solo on Cache Miss)
-    if (isHostFetching || isSoloFetching) {
-        const fetchContent = async () => {
-          setIsLoading(true); 
-          console.log(`DEBUG: E-04: Starting network fetch for topic: ${topicToFetch} (Role: ${isHost ? 'Host' : 'Solo'})`);
-
-          let newContent: string | Error = "Failed to load content."; 
-          
-          const timeout = new Promise<string>((_, reject) => {
-              setTimeout(() => reject(new Error('Content fetch timed out after 60 seconds.')), 60000);
-          });
-
+    if (isHost) {
+      if (topicToDisplay && !groupChat.teachMeContent) {
+        console.log("✅ HOST: Condition MET. Starting fetch...");
+        const fetchGroupContent = async () => {
+          setIsLoading(true);
           try {
-            const nativeLanguageName =
-              LANGUAGES.find((lang) => lang.code === nativeLanguage)?.name ||
-              nativeLanguage;
-            
-            // This is the log confirming the network attempt
-            console.log(`[GEMINI SERVICE] Attempting network call for: ${topicToFetch!} (${activeTab} - ${language})`);
-            
-            const fetchPromise = geminiService.getContent(
-              topicToFetch!,
-              activeTab,
-              language,
-              nativeLanguageName
-            );
-            
-            newContent = await Promise.race([fetchPromise, timeout]);
-            
-            if (!isCurrentFetch) return; 
-
-            setContent(newContent as string);
-            console.log("DEBUG: E-05: Content successfully fetched and displayed. Starting cache/group update.");
-
-            // --- Caching Attempt (CRITICAL CHANGE) ---
-            if (groupChat && isHost && groupChat.id) {
-                // FIX: Host saves content to GroupChat document
-                await groupService.updateGroupLessonContent(groupChat.id, newContent as string);
-                console.log("DEBUG: E-06: Host saved content to GroupChat document.");
-            } else {
-                // Solo Chat saves content to user's profile cache
-                await setCache({ language, type: activeTab, topic: topicToFetch!, content: newContent as string }); 
-                console.log("DEBUG: E-06: Solo saved content to user profile cache.");
+            const nativeLanguageName = LANGUAGES.find(l => l.code === nativeLanguage)?.name || nativeLanguage;
+            const newContent = await geminiService.getContent(topicToDisplay, activeTab, language, nativeLanguageName);
+            if (isCurrent) {
+              await groupService.updateGroupLessonContent(groupChat.id, newContent);
             }
-            // --- End Caching Attempt ---
-            
-          } catch (error: any) {
-            if (!isCurrentFetch) return; 
-
-            if (error.message && error.message.includes('timed out')) {
-                newContent = "Failed to load content: The request timed out after 60 seconds.";
-            } else {
-                newContent = "Failed to load content. Please try again. (Check console for API error)";
+          } catch (error) {
+            console.error("Group content fetch error:", error);
+            if (isCurrent) {
+              setContent("Failed to load lesson for the group.");
+              setIsLoading(false);
             }
-            console.error("DEBUG: E-07: Final Fetch/Process Error:", error);
-            setContent(newContent as string);
-
-          } finally {
-            if (isCurrentFetch) {
-                setIsLoading(false); // CRITICAL: This guarantees the spinner stops.
-                console.log(`DEBUG: E-08: Final State: setIsLoading(false). Process finished.`);
-            }
-            console.groupEnd(); 
           }
         };
-
-        fetchContent();
+        fetchGroupContent();
+      } else if (groupChat.teachMeContent) {
+        console.log("❌ HOST: Condition NOT met. Content already exists.");
+        setContent(groupChat.teachMeContent);
+        setIsLoading(false);
+      } else {
+        console.log("❌ HOST: Condition NOT met. No topic selected.");
+        setContent("");
+        setIsLoading(false);
+      }
+    } else { // Member Logic
+      if (topicToDisplay && !groupChat.teachMeContent) {
+        console.log("MEMBER: Waiting for host to provide content.");
+        setContent("");
+        setIsLoading(true);
+      } else if (groupChat.teachMeContent) {
+        console.log("MEMBER: Content is available. Displaying.");
+        setContent(groupChat.teachMeContent);
+        setIsLoading(false);
+      } else {
+        console.log("MEMBER: No topic selected by host.");
+        setContent("");
+        setIsLoading(false);
+      }
     }
-    
-    // Cleanup function:
-    return () => {
-        isCurrentFetch = false;
-        console.log(`DEBUG: E-09: Cleanup function ran for '${topicToFetch}'. Cancelling current updates.`);
-        console.groupEnd();
-    };
+    console.groupEnd();
 
-  }, [
-    selectedTopic, 
-    groupChat?.topic, 
-    groupChat?.teachMeContent, // Now we depend on the group content
-    groupChat,
-    isHost,
-    language, 
-    nativeLanguage, 
-    activeTab, 
-    setCache, 
-    cache 
-  ]);
+    return () => { isCurrent = false; };
+  }, [groupChat, isHost, language, nativeLanguage, activeTab]); // Dependency is primarily `groupChat`
 
-  // This is the function that runs when a topic button is clicked.
-  const handleTopicSelect = async (topic: string) => {
-    // DEBUG LOG: Topic selected
-    console.log(`DEBUG: [handleTopicSelect] called. Topic: ${topic}, isHost: ${isHost}, isGroupChat: ${isGroupChat}`);
-    
-    // CRITICAL: Immediately set loading to TRUE and clear content to show the spinner 
-    setContent(""); 
-    setQuizQuestions(null);
-    setIsLoading(true); // Must be set here to show spinner immediately
+  // EFFECT 2: Handles content logic ONLY for Solo Chats
+  useEffect(() => {
+    // Only run this effect if we are NOT in a group chat
+    if (groupChat) return;
 
-    // FIX: All topic selection must pass through the usage check
-    await handleUsageCheck("lessons", async () => {
-        
-        // 1. Clear the old content from the user's cache in Firestore/local state.
-        setCache(null); 
-        
-        // 2. Host Logic: Update Firestore topic. This is the source of truth for the group.
-        if (isHost && onSetGroupTopic) {
-            console.log("DEBUG: T-01: User is HOSt. Updating group topic in Firestore.");
-            // This update now clears groupChat.topic AND groupChat.teachMeContent to null (via updateGroupTopic).
-            onSetGroupTopic(topic); 
-            setSelectedTopic(null); // Clear local solo topic state
-            return; // Exit. The central useEffect logic will run when groupChat.topic updates via the Firestore listener.
-        }
+    let isCurrent = true;
 
-        // 3. Member Logic (ignore) or Solo Chat Logic:
-        if (groupChat && isMember) {
-            console.log("DEBUG: T-02: User is MEMBER. Topic selection ignored.");
-            setIsLoading(false); 
-            return;
-        }
-        
-        // Solo Chat Logic:
-        console.log("DEBUG: T-03: Solo chat. Usage passed. Running local state updates.");
-        // This setter triggers the useEffect to fetch content based on selectedTopic
-        setSelectedTopic(topic); 
-    });
+    if (selectedTopic) {
+      // Check local user cache first
+      if (cache?.topic === selectedTopic && cache?.content) {
+        setContent(cache.content);
+        setIsLoading(false);
+      } else {
+        // Fetch new content for solo user
+        const fetchSoloContent = async () => {
+          setIsLoading(true);
+          console.log(`DEBUG (SOLO): Fetching content for topic: "${selectedTopic}"`);
+          try {
+            const nativeLanguageName = LANGUAGES.find(l => l.code === nativeLanguage)?.name || nativeLanguage;
+            const newContent = await geminiService.getContent(selectedTopic, activeTab, language, nativeLanguageName);
+            if (isCurrent) {
+              setContent(newContent);
+              setCache({ language, type: activeTab, topic: selectedTopic, content: newContent });
+            }
+          } catch (error) {
+            console.error("Solo content fetch error:", error);
+            if (isCurrent) setContent("Failed to load lesson.");
+          } finally {
+            if (isCurrent) setIsLoading(false);
+          }
+        };
+        fetchSoloContent();
+      }
+    } else {
+      // No topic selected in solo mode.
+      setContent("");
+      setIsLoading(false);
+    }
+
+    return () => { isCurrent = false; };
+  }, [selectedTopic, language, nativeLanguage, activeTab, setCache, cache, groupChat]); // Dependency is primarily `selectedTopic`
+
+  // 1. --- MODIFIED handleTopicSelect FUNCTION ---
+  const handleTopicSelect = (topic: string) => {
+    // For a host, changing the group topic is a core function.
+    // We remove all local state setters (like setIsLoading) from this handler
+    // to prevent race conditions. Its only job is to trigger the database update.
+    // The useEffect hook will handle all UI changes based on the new props from Firestore.
+    if (isHost && onSetGroupTopic) {
+      console.log(`DEBUG: [handleTopicSelect] Host is setting topic to "${topic}".`);
+      handleUsageCheck("lessons", () => {
+        onSetGroupTopic(topic);
+        // We no longer set isLoading or setSelectedTopic here for the host.
+      });
+    } else if (!isGroupChat) {
+      // Solo mode logic remains the same with its own state management.
+      handleUsageCheck("lessons", () => {
+        setCache(null);
+        setSelectedTopic(topic);
+      });
+    }
+    // Members do nothing when they click.
   };
 
   const handleShareAndClose = (

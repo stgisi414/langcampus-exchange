@@ -62,8 +62,12 @@ export const addMessageToGroup = async (groupId: string, message: Message): Prom
 // 4. Updates the group's learning topic
 export const updateGroupTopic = async (groupId: string, topic: string): Promise<void> => {
     const groupRef = doc(db, GROUPS_COLLECTION, groupId);
-    // FIX: Clear the content (and set new topic) when the topic changes to force a fresh fetch by the host.
-    await updateDoc(groupRef, { topic, teachMeContent: null });
+    // FIX: Use deleteField() instead of null to remove the content field entirely.
+    // This provides an unambiguous signal to the host's client that a refetch is needed.
+    await updateDoc(groupRef, { 
+      topic, 
+      teachMeContent: deleteField() 
+    });
 };
 
 // 5. Adds the fetched lesson content to the group chat
