@@ -4,6 +4,7 @@ import { auth, googleProvider } from '../firebaseConfig.ts';
 import LoadingSpinner from './LoadingSpinner.tsx';
 import ErrorModal from './ErrorModal.tsx';
 import { InfoIcon } from './Icons.tsx';
+import { FEATURES, FeatureCard } from '../App.tsx';
 
 // --- UPDATED SCRIPT FOR IOS & ANDROID ---
 // This script now handles redirects for both operating systems.
@@ -131,6 +132,22 @@ const LoginScreen: React.FC = () => {
                 )}
               </button>
               {error && <p className="mt-4 text-red-500">{error}</p>}
+          </div>
+
+          <div className="w-full max-w-4xl mt-16">
+              <h2 className="text-3xl font-bold text-center mb-8 text-gray-200 dark:text-gray-200">
+                  Unlock Your Fluency with Our Powerful Features
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {FEATURES.map((feature, index) => (
+                      <FeatureCard 
+                          key={index} 
+                          title={feature.title} 
+                          description={feature.description} 
+                          icon={feature.icon} 
+                      />
+                  ))}
+              </div>
           </div>
       </div>
 

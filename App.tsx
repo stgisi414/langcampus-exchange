@@ -100,21 +100,21 @@ interface AppContentProps {
   user: UserData;
 }
 
-const FeatureCard: React.FC<{
+export const FeatureCard: React.FC<{
   title: string;
   description: string;
   icon: React.FC<any>;
 }> = ({ title, description, icon: Icon }) => (
   <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg flex flex-col items-center text-center transition-transform duration-300 hover:scale-[1.02]">
     <Icon className="w-10 h-10 text-blue-500 mb-3" />
-    <h3 className="text-xl font-semibold mb-2">{title}</h3>
+    <h3 className="text-xl text-obsidian-900 dark:text-gray-100 font-semibold mb-2">{title}</h3>
     <p className="text-gray-600 dark:text-gray-400 text-sm">
       {description}
     </p>
   </div>
 );
 
-const FEATURES = [
+export const FEATURES = [
     {
         title: "Smart Partner Search",
         description: "Find an AI partner whose interests and native language instantly match your learning goals.",
@@ -2052,7 +2052,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
   const recorderRef = useRef<RecordRTC | null>(null);
 
   useEffect(() => {
-    // 1. Clear any existing timer when dependencies change (new message, sending status, etc.)
+    // 1. Clear any existing timer when dependencies change
     if (inactivityTimerRef.current) {
       clearTimeout(inactivityTimerRef.current);
     }
@@ -2060,20 +2060,19 @@ const ChatModal: React.FC<ChatModalProps> = ({
     // 2. Only run this logic for solo chats
     if (!groupChat) {
       const lastMessage = messages[messages.length - 1];
-      const isInitialChat = messages.length === 0;
+      // FIX: The issue was that `isInitialChat` was being calculated before a crucial check.
+      // We should only consider it an "initial chat" for the nudge if the user hasn't sent anything yet AND the AI hasn't already spoken.
+      const isTrulyInitialChat = messages.length === 0;
 
       // Determine if a timer should be set:
-      // - Not currently waiting for an AI response (!isSending)
-      // - AND (The chat is empty OR the last message was from the AI - ensuring it's the user's turn to speak)
-      const shouldSetTimer = !isSending && (isInitialChat || (lastMessage && lastMessage.sender === 'ai'));
+      const shouldSetTimer = !isSending && (isTrulyInitialChat || (lastMessage && lastMessage.sender === 'ai'));
 
       if (shouldSetTimer) {
-        // 8 seconds for the first AI-initiated message (the welcome), 60 seconds for subsequent nudges
-        const TIMEOUT_DURATION = isInitialChat ? 8000 : 60000;
-        const MAX_AI_INITIATED_MESSAGES = 3; // Welcome (1) + 2 Nudges (2)
+        // Use a shorter timeout for the very first message, and a longer one for subsequent nudges.
+        const TIMEOUT_DURATION = isTrulyInitialChat ? 8000 : 60000;
+        const MAX_AI_INITIATED_MESSAGES = 3; // Welcome (1) + 2 Nudges
 
-        // Only set the timer if we are within the maximum number of AI-initiated messages
-        if (isInitialChat || nudgeCount < MAX_AI_INITIATED_MESSAGES) {
+        if (nudgeCount < MAX_AI_INITIATED_MESSAGES) {
           inactivityTimerRef.current = setTimeout(async () => {
             
             if (isSending) return; // Final safety check
@@ -2082,11 +2081,11 @@ const ChatModal: React.FC<ChatModalProps> = ({
             try {
               let response: Message;
 
-              if (isInitialChat) {
-                // Initial Welcome Message (Nudge #1)
+              if (messages.length === 0) { // Re-check the length here to be absolutely sure
+                // Initial Welcome Message
                 response = await geminiService.getInitialWelcomeMessage(partner);
               } else {
-                // Subsequent Nudge (Nudge #2 or #3)
+                // Subsequent Nudge
                 response = await geminiService.getNudgeResponse(
                   messages,
                   partner,
@@ -2096,6 +2095,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
               }
               
               onAddNudge(response, messages);
+
             } catch (error) {
               console.error("Failed to get AI response:", error);
             } finally {
@@ -2106,13 +2106,14 @@ const ChatModal: React.FC<ChatModalProps> = ({
       }
     }
 
-    // Cleanup function to clear the timer when the component unmounts or dependencies change
+    // Cleanup function to clear the timer when the component unmounts
     return () => {
       if (inactivityTimerRef.current) {
         clearTimeout(inactivityTimerRef.current);
       }
     };
-  }, [messages, groupChat, partner, userProfile, onMessagesChange, isSending, nudgeCount]);
+    // Ensure all dependencies are correctly listed
+  }, [messages, groupChat, partner, userProfile, isSending, nudgeCount, onAddNudge, nativeLanguage, setIsSending]);
 
   const startTimer = useCallback(() => {
     setAudioDuration(0);
