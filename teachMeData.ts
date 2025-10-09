@@ -3641,7 +3641,8 @@ export const r21PlusConversationData: Record<string, any[]> = {
         { "title": "A Conversation About a Hangover", "level": 2, "tags": ["social", "humor", "hangover", "nightlife"] },
         { "title": "Gossip Session with a Friend", "level": 3, "tags": ["social", "gossip", "friends", "casual"] },
         { "title": "Discussing a Difficult Moral Dilemma", "level": 5, "tags": ["ethics", "philosophy", "dilemma", "debate", "abstract"] },
-        { "title": "First Date Jitters and Expectations", "level": 3, "tags": ["dating", "relationships", "first date", "emotions"] }
+        { "title": "First Date Jitters and Expectations", "level": 3, "tags": ["dating", "relationships", "first date", "emotions"] },
+        { "title": "Discussing the Hypocrisy of Weed being Illegal while Alcohol isn't", "level": 4, "tags": ["racist laws", "marijuana", "debate"]}
     ],
     "Spanish": [
         { "title": "Pedir Bebidas en un Bar", "level": 2, "tags": ["social", "vida nocturna", "alcohol", "pedir"] },

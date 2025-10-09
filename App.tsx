@@ -1223,49 +1223,85 @@ const TeachMeModal: React.FC<{
   // No changes are needed for the rest of the component logic or the JSX.
   // The following code is identical to the previous version but is included for completeness.
   const availableTopics = useMemo(() => {
-    let grammarSource: any = grammarData;
-    let vocabSource: any[] = vocabData;
-    let conversationSource: any = conversationData;
-
+    
+    // --- START FIX: Lesson Content Filtering and Merging Logic ---
+    const languageKey = language as keyof typeof grammarData;
+    const isAgeVerified = user.isAgeVerified;
     const preference = user.contentPreference || 'standard';
+    
+    let baseData: any[] = [];
+    
+    // Helper to merge arrays and de-duplicate based on title
+    const mergeContent = (current: any[], newContent: any[]) => {
+        const mergedMap = new Map();
+        [...current, ...newContent].forEach(item => {
+            // Use item.title as the key for de-duplication
+            mergedMap.set(item.title, item);
+        });
+        return Array.from(mergedMap.values());
+    }
 
-    if (user.isAgeVerified) {
-        if (preference === 'pg13' && pg13ConversationData[language as keyof typeof pg13ConversationData]) {
-            grammarSource = pg13GrammarData;
-            vocabSource = pg13VocabData;
-            conversationSource = pg13ConversationData;
-        } else if (preference === 'r21plus' && r21PlusConversationData[language as keyof typeof r21PlusConversationData]) {
-            grammarSource = r21PlusGrammarData;
-            vocabSource = r21PlusVocabData;
-            conversationSource = r21PlusConversationData;
+    // 1. Start with the Standard (base) set
+    if (activeTab === 'Grammar') {
+        baseData = grammarData[languageKey] || [];
+        
+        if (isAgeVerified) {
+            // 2. Conditionally add PG-13 content (for PG-13 or 21+)
+            if (preference === 'pg13' || preference === 'r21plus') {
+                 const pg13Data = pg13GrammarData[languageKey] || [];
+                 baseData = mergeContent(baseData, pg13Data);
+            }
+            // 3. Conditionally add R21+ content (only for 21+)
+            if (preference === 'r21plus') {
+                 const matureData = r21PlusGrammarData[languageKey] || [];
+                 baseData = mergeContent(baseData, matureData);
+            }
+        }
+    } else if (activeTab === 'Vocabulary') {
+        // Vocabulary data is flat arrays
+        baseData = vocabData; 
+
+        if (isAgeVerified) {
+            if (preference === 'pg13' || preference === 'r21plus') {
+                 const pg13Data = pg13VocabData || [];
+                 baseData = mergeContent(baseData, pg13Data);
+            }
+            if (preference === 'r21plus') {
+                 const matureData = r21PlusVocabData || [];
+                 baseData = mergeContent(baseData, matureData);
+            }
+        }
+    } else if (activeTab === 'Conversation') {
+        baseData = conversationData[languageKey] || [];
+
+        if (isAgeVerified) {
+            if (preference === 'pg13' || preference === 'r21plus') {
+                const pg13Data = pg13ConversationData[languageKey] || [];
+                baseData = mergeContent(baseData, pg13Data);
+            }
+            if (preference === 'r21plus') {
+                const matureData = r21PlusConversationData[languageKey] || [];
+                baseData = mergeContent(baseData, matureData);
+            }
         }
     }
-
-    let data;
-    switch (activeTab) {
-      case 'Grammar':
-        data = grammarSource[language as keyof typeof grammarSource] || [];
-        break;
-      case 'Vocabulary':
-        data = vocabSource;
-        break;
-      case 'Conversation':
-        data = conversationSource[language as keyof typeof conversationSource] || [];
-        break;
-      default:
-        data = [];
-    }
+    // --- END FIX ---
+    
+    let filteredTopics = baseData; // Use the merged content as the source
 
     if (searchQuery.trim()) {
       const lowercasedQuery = searchQuery.toLowerCase();
-      return (data as any[]).filter(
+      filteredTopics = (baseData as any[]).filter(
         (topic) =>
           topic.title.toLowerCase().includes(lowercasedQuery) ||
           (topic.tags && topic.tags.some((tag: string) => tag.toLowerCase().includes(lowercasedQuery))),
       );
     } else {
-      return (data as any[]).filter((topic) => topic.level === level);
+      // Filter by level for non-search mode
+      filteredTopics = (baseData as any[]).filter((topic) => topic.level === level);
     }
+    
+    return filteredTopics;
   }, [activeTab, level, language, searchQuery, user.contentPreference, user.isAgeVerified]);
 
   const handleLevelChange = (lvl: number) => {
