@@ -2796,12 +2796,36 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
       }
     }
   };
+
+  const calculatedAge = useMemo(() => {
+    if (!user.birthDate) return 0;
+    const today = new Date();
+    const dob = new Date(user.birthDate);
+    let age = today.getFullYear() - dob.getFullYear();
+    const m = today.getMonth() - dob.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
+        age--;
+    }
+    // DEBUG LOG: Calculated age
+    console.log("DEBUG: calculatedAge: DOB:", user.birthDate, "Age:", age);
+    return age;
+  }, [user.birthDate]);
+
+  const getRank = (xp: number) => {
+    if (xp <= 50) return { name: "Novice", Icon: NoviceIcon, color: "text-gray-400", nextLevelXp: 51, nextLevelName: "Apprentice" };
+    if (xp <= 500) return { name: "Apprentice", Icon: ApprenticeIcon, color: "text-green-500", nextLevelXp: 501, nextLevelName: "Journeyman" };
+    if (xp <= 5000) return { name: "Journeyman", Icon: JourneymanIcon, color: "text-blue-500", nextLevelXp: 5001, nextLevelName: "Expert" };
+    if (xp <= 50000) return { name: "Expert", Icon: ExpertIcon, color: "text-purple-500", nextLevelXp: 50001, nextLevelName: "Master" };
+    return { name: "Master", Icon: MasterIcon, color: "text-yellow-500", nextLevelXp: null, nextLevelName: null };
+  };
   
   const userProfile: UserProfileData = {
     name: user?.name || "",
     hobbies: user?.hobbies || "",
     bio: user?.bio || "",
     contentPreference: user?.contentPreference || 'standard',
+    age: calculatedAge,
+    rank: getRank(user.xp || 0),
   };
 
   const handleTextSubmit = async (e: React.FormEvent, correctionsEnabled: boolean) => {

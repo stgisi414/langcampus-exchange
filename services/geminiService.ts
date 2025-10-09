@@ -88,14 +88,13 @@ const colorMap: Record<string, { skin: string[], hair: string[] }> = {
  * @param prompt The text prompt to send to the Gemini API.
  * @returns The JSON response from the API.
  */
-const callGeminiProxy = async (prompt: string, model: string = "gemini-2.5-flash") => {
+const callGeminiProxy = async (prompt: string, model: string = "gemini-2.5-flash-lite") => {
   try {
     const response = await fetch(PROXY_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      // CRITICAL FIX: Explicitly send model to the proxy, defaulting to fast.
       body: JSON.stringify({ prompt, model }),
     });
 
@@ -284,14 +283,21 @@ export const getChatResponse = async (messages: Message[], partner: Partner, cor
     interactionContext = `
     **Current Interaction:**
     You are talking to a group of users. The person you are specifically responding to now is named **${userToAddress}**.
-    The overall user profile (for context on hobbies, etc.) belongs to: ${userProfile?.name || 'a user'}. Their interests are: ${userProfile?.hobbies || 'not specified'}.
+    The overall user profile (for context on hobbies, etc.) belongs to: ${userProfile?.name || 'a user'}.
+
+    - User's Age: ${userProfile.age}
+    - User's Rank: ${userProfile.rank}
+    - User's Interests: ${userProfile?.hobbies || 'not specified'}.
     `;
   } else {
     interactionContext = `
     **Current Interaction:**
-    You are talking to ${userProfile?.name || 'a user'}.
-    The user's interests include: ${userProfile?.hobbies || 'not specified'}.
-    The user's bio says: "${userProfile?.bio || 'not specified'}".
+    ou are talking to ${userProfile?.name || 'a user'}.
+
+    - User's Age: ${userProfile.age}
+    - User's Rank: ${userProfile.rank}
+    - User's Interests: ${userProfile?.hobbies || 'not specified'}.
+    - User's Bio: "${userProfile?.bio || 'not specified'}".
     `;
   }
 
@@ -302,9 +308,14 @@ export const getChatResponse = async (messages: Message[], partner: Partner, cor
     console.log("teach me topic info: " + teachMeTopicInfo);
 
   const prompt = `
-    **Background Context:** You are an AI language exchange partner within a web application called "Langcampus Exchange". Your purpose is to help users practice their target language in a friendly and supportive way. Always be encouraging.
+    **Background Context:** You are an AI language exchange partner within a web application called "Langcampus Exchange". Your purpose is to help users practice their target language in a friendly and supportive way. Always be encouraging and adapt your conversation to the user's details.
 
-    **CRITICAL ROLE NOTE:** The user interacts with the 'Teach Me' module, which includes quizzes. When a user shares their quiz results (which will appear as a message in this chat, prefixed with [USER'S QUIZ RESULTS]), those results are **not** saved in a database; they are sent to you for immediate, personalized feedback and discussion. Your response to quiz results must be **encouraging, focused on the topics/questions the user missed or mentioned, and friendly**, acknowledging this as part of the real-time learning process.
+    **App Feature Knowledge:**
+
+    - **Teach Me Module:** This is a core feature accessed via a "Book" icon in the chat. It allows users to get lessons on grammar and vocabulary, and then take quizzes. Users can share quiz results with you to get help and feedback. You should encourage them to use it if they are struggling with a concept. For example, if they make a grammar mistake, you can say, "Good try! A small correction is... By the way, there's a great lesson on this in the 'Teach Me' module if you want to review it."
+    - **XP and Ranks:** Users gain XP for sending messages and completing quizzes. Their rank (like Novice, Apprentice, Journeyman, Expert, Master) reflects their progress. You can occasionally congratulate them on their rank or encourage them to keep practicing to rank up.
+
+    **CRITICAL ROLE NOTE:** When a user shares quiz results, your response must be **encouraging, focused on the topics/questions the user missed, and friendly**, acknowledging this as part of the real-time learning process.
 
     You are an AI language exchange partner. Your name is ${partner.name}.
     Your native language is ${partner.nativeLanguage}.

@@ -14,6 +14,8 @@ export interface UserProfileData {
   hobbies: string;
   bio: string;
   contentPreference: 'standard' | 'pg13' | 'r21plus';
+  age: number;
+  rank: string;
 }
 
 export interface Partner {
