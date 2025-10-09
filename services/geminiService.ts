@@ -525,7 +525,7 @@ export const generateQuiz = async (topic: string, type: 'Grammar' | 'Vocabulary'
   `;
 
   try {
-    const data = await callGeminiProxy(prompt, "gemini-flash-2.5");
+    const data = await callGeminiProxy(prompt, "gemini-2.5-flash");
     const rawText = data.candidates[0].content.parts[0].text;
     const quizData = cleanAndParseJson(rawText);
 

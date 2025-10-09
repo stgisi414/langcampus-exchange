@@ -64,8 +64,8 @@ export const updateGroupTopic = async (groupId: string, topic: string, type: Tea
     const groupRef = doc(db, GROUPS_COLLECTION, groupId);
     // FIX: Use deleteField() instead of null to remove the content field entirely.
     // This provides an unambiguous signal to the host's client that a refetch is needed.
-    await updateDoc(groupRef, { 
-      topic, 
+    await updateDoc(groupRef, {
+      topic,
       teachMeContent: deleteField(),
       // ADDED: Save the settings so they persist when the modal is closed and reopened
       groupTeachMeSettings: { topic, type, level, language },

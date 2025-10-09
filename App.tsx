@@ -1126,11 +1126,11 @@ const TeachMeModal: React.FC<{
   const selectionRef = useRef<{ text: string; range: Range } | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const floatingButtonRef = useRef<HTMLButtonElement>(null);
-  const selectionTimeoutRef = useRef<number | null>(null);
+  const selectionTimeoutRef = useRef<number | null>(null); // <-- ADD THIS LINE
   const isHost = isGroupChat && userIsGroupCreator;
   const isMember = isGroupChat && !userIsGroupCreator;
-
-  // --- 2. EFFECTS (with restored debug logs and correct loading logic) ---
+  
+  // --- 2. EFFECTS (with corrected content handling) ---
   useEffect(() => {
     if (!isGroupChat) return;
     
@@ -1145,11 +1145,13 @@ const TeachMeModal: React.FC<{
       setActiveTab(groupTeachMeSettings?.type || "Grammar");
       setLevel(groupTeachMeSettings?.level || 1);
       setSelectedTopic(topic || null);
-      setContent(teachMeContent || "");
-
+      
       // *** THE FIX ***
-      // This is now the single source of truth for the loading state.
-      // It's loading if a topic is set, but the content for it is strictly undefined.
+      // Directly set the content from the prop. It can be a string, null, or undefined.
+      // This ensures that even if `teachMeContent` is null, the `content` state becomes null,
+      // allowing the correct JSX to render for the participant.
+      setContent(teachMeContent ?? null);
+
       const isWaitingForContent = !!topic && teachMeContent === undefined;
 
       if (isLoading !== isWaitingForContent) {
@@ -1157,7 +1159,6 @@ const TeachMeModal: React.FC<{
         setIsLoading(isWaitingForContent);
       }
     } else {
-        // If groupChat becomes null, ensure we are not loading.
         if (isLoading) {
             console.log("[DEBUG 3: LOAD] groupChat is null, forcing isLoading to false.");
             setIsLoading(false);
@@ -1206,30 +1207,10 @@ const TeachMeModal: React.FC<{
   // --- 3. HANDLERS (with restored debug logs and NO finally block) ---
   const handleTopicSelect = async (topic: string) => {
     if (isHost && onSetGroupTopic) {
-      handleUsageCheck("lessons", async () => {
-        console.group(`%c[DEBUG 6: HOST SELECT] START - Topic: ${topic}`, 'color: #ffaa00; font-weight: bold;');
-        setIsLoading(true); // Start loading spinner immediately.
-        
-        try {
-          console.log(`[DEBUG 6: HOST SELECT] Step 1: Updating Firestore topic (deletes old content)...`);
-          await onSetGroupTopic(topic, activeTab, level, language);
-          
-          console.log(`[DEBUG 6: HOST SELECT] Step 2: Fetching new content from Gemini...`);
-          const nativeLanguageName = LANGUAGES.find(l => l.code === nativeLanguage)?.name || nativeLanguage;
-          const newContent = await geminiService.getContent(topic, activeTab, language, nativeLanguageName);
-          
-          if (groupChat) {
-            console.log(`[DEBUG 6: HOST SELECT] Step 3: Gemini fetch complete. Updating Firestore with new content (length: ${newContent.length}).`);
-            await groupService.updateGroupLessonContent(groupChat.id, newContent);
-            // NOTE: We DO NOT set isLoading(false) here. The useEffect hook will handle it when the update propagates.
-          }
-        } catch (error) {
-          console.error("[DEBUG 6: HOST SELECT] ERROR during host topic selection & fetch process:", error);
-          setContent("An error occurred while fetching the lesson. Please try again.");
-          setIsLoading(false); // Set loading to false only on catastrophic error.
-        } finally {
-            console.groupEnd();
-        }
+      handleUsageCheck("lessons", () => {
+        // We no longer await here. We just fire and forget. 
+        // The parent component handles all async logic and UI updates via Firestore listener.
+        onSetGroupTopic(topic, activeTab, level, language);
       });
     } else if (!isGroupChat) {
       handleUsageCheck("lessons", () => {
@@ -2631,6 +2612,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
           onDeleteNote={onDeleteNote}
           onReorderNotes={onReorderNotes}
           onSpeakNote={onSpeakNote}
+          groupChat={groupChat}
         />
       )}
     </div>
@@ -3281,11 +3263,30 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   };
 
   // MODIFICATION 1: Make this function async to allow awaiting
-  const handleSetGroupTopic = async (topic: string, type: TeachMeType, level: number, language: string) => { // <--- UPDATED FUNCTION SIGNATURE
+  const handleSetGroupTopic = async (topic: string, type: TeachMeType, level: number, language: string) => {
     if (activeGroup && user?.uid === activeGroup.creatorId) {
-      // Use await here to ensure the Firestore update completes
-      // FIX 5: Pass type, level, and language to the group service
-      await groupService.updateGroupTopic(activeGroup.id, topic, type, level, language); 
+      console.group(`%c[DEBUG 6: HOST SELECT] START - Topic: ${topic}`, 'color: #ffaa00; font-weight: bold;');
+      
+      try {
+        console.log(`[DEBUG 6: HOST SELECT] Step 1: Updating Firestore topic (deletes old content)...`);
+        // This call now also saves the settings for persistence
+        await groupService.updateGroupTopic(activeGroup.id, topic, type, level, language);
+        
+        console.log(`[DEBUG 6: HOST SELECT] Step 2: Fetching new content from Gemini...`);
+        const nativeLanguageName = LANGUAGES.find(l => l.code === nativeLanguage)?.name || nativeLanguage;
+        const newContent = await geminiService.getContent(topic, type, language, nativeLanguageName);
+        
+        console.log(`[DEBUG 6: HOST SELECT] Step 3: Gemini fetch complete. Updating Firestore with new content (length: ${newContent.length}).`);
+        // This final update will now succeed because this function is in AppContent,
+        // which always has the latest `activeGroup` state from the Firestore listener.
+        await groupService.updateGroupLessonContent(activeGroup.id, newContent);
+
+      } catch (error) {
+        console.error("[DEBUG 6: HOST SELECT] ERROR during host topic selection & fetch process:", error);
+        // Optionally, you can add state to show an error message to the user
+      } finally {
+          console.groupEnd();
+      }
     }
   };
 
