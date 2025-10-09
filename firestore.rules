@@ -11,6 +11,12 @@ service cloud.firestore {
           'name', 'hobbies', 'bio', 'nativeLanguage', 'targetLanguage', 
           'savedChat', 'teachMeCache', 'notes', 'activeGroupId', 'usage', 'xp'
         ]) ||
+        // Allow adding new fields for backwards compatibility with old user accounts
+        (
+          !('isAgeVerified' in resource.data) &&
+            request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isAgeVerified', 'birthDate', 'contentPreference'])
+        )
+        ||
         // Allow initial age verification (write only once)
         (
           !resource.data.isAgeVerified &&

@@ -25,23 +25,21 @@ const getTodayDateString = () => {
  * Initializes or creates our app-specific fields on a user's document in the 'customers' collection.
  * This function will now only add fields if they don't already exist.
  */
-export const initializeUserProfile = async (uid: string, user: User) => {
+export const initializeUserProfile = async (uid: string, user: AuthUser) => {
   const userRef = doc(db, "customers", uid);
   const docSnap = await getDoc(userRef);
 
-  const data = docSnap.data();
-
-  // Check if the document doesn't exist OR if critical fields are missing
-  if (!docSnap.exists() || !data?.usage || data.notes === undefined || data.isAgeVerified === undefined) {
-    const dataToSet = {
-      name: data?.name || user.displayName || '',
-      hobbies: data?.hobbies || '',
-      bio: data?.bio || '',
-      savedChat: data?.savedChat || null,
-      teachMeCache: data?.teachMeCache || null,
-      notes: data?.notes || [],
-      xp: data?.xp || 0,
-      usage: data?.usage || {
+  if (!docSnap.exists()) {
+    // This is a brand new user. Create the full document.
+    const newUserProfile = {
+      name: user.displayName || '',
+      hobbies: '',
+      bio: '',
+      savedChat: null,
+      teachMeCache: null,
+      notes: [],
+      xp: 0,
+      usage: {
         searches: 0,
         messages: 0,
         audioPlays: 0,
@@ -49,13 +47,22 @@ export const initializeUserProfile = async (uid: string, user: User) => {
         quizzes: 0,
         lastUsageDate: getTodayDateString(),
       },
-      // --- ADD INITIALIZATION FOR NEW FIELDS ---
-      isAgeVerified: data?.isAgeVerified || false,
-      birthDate: data?.birthDate || null,
-      contentPreference: data?.contentPreference || 'standard',
+      isAgeVerified: false,
+      birthDate: null,
+      contentPreference: 'standard',
     };
-    // Use setDoc with merge to create or update without overwriting existing fields like stripeId
-    await setDoc(userRef, dataToSet, { merge: true });
+    await setDoc(userRef, newUserProfile, { merge: true }); // Use merge to be safe with stripe extension
+  } else {
+    // This is a returning user. Check if they need to be migrated.
+    const data = docSnap.data();
+    if (data.isAgeVerified === undefined || data.birthDate === undefined || data.contentPreference === undefined) {
+      // User exists but is missing the new fields. Update them.
+      await updateDoc(userRef, {
+        isAgeVerified: data.isAgeVerified || false,
+        birthDate: data.birthDate || null,
+        contentPreference: data.contentPreference || 'standard',
+      });
+    }
   }
 };
 
