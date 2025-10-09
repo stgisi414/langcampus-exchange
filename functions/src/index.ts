@@ -41,19 +41,53 @@ export const geminiProxy = onRequest(
         return response.status(500).send("Internal Server Error: API key not configured.");
       }
       try {
-        const modelToUse = model || "gemini-2.5-flash-lite";
+        const modelToUse = model || "gemini-2.5-flash"; // Using a more recent model
         const modelUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${GEMINI_API_KEY}`;
+
+        // --- FIX: ADD SAFETY SETTINGS TO THE REQUEST BODY ---
+        const requestBody = {
+          contents: [{ parts: [{ text: prompt }] }],
+          safetySettings: [
+            {
+              category: "HARM_CATEGORY_HATE_SPEECH",
+              threshold: "BLOCK_NONE",
+            },
+            {
+              category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+              threshold: "BLOCK_NONE",
+            },
+            {
+              category: "HARM_CATEGORY_HARASSMENT",
+              threshold: "BLOCK_NONE",
+            },
+            {
+              category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+              threshold: "BLOCK_NONE",
+            },
+          ],
+        };
+        // --- END OF FIX ---
+
         const geminiResponse = await fetch(modelUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+          body: JSON.stringify(requestBody), // Use the new request body
         });
+
         if (!geminiResponse.ok) {
           const errorText = await geminiResponse.text();
           logger.error("Error from Gemini API:", errorText);
           return response.status(geminiResponse.status).send(errorText);
         }
+
         const data = await geminiResponse.json();
+        
+        // Log if the response was blocked despite the settings
+        if (!data.candidates || data.candidates.length === 0) {
+            logger.warn("Gemini response was blocked or empty. Finish Reason:", data.promptFeedback?.blockReason);
+            logger.warn("Safety Ratings:", data.promptFeedback?.safetyRatings);
+        }
+
         return response.json(data);
       } catch (error) {
         logger.error("Catastrophic error calling Gemini API:", error);
