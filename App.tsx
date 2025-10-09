@@ -1040,8 +1040,7 @@ const QuizModal: React.FC<{
   );
 };
 
-// Replace the entire TeachMeModal component with this updated version
-//
+// Replace the entire TeachMeModal component in App.tsx with this corrected version.
 const TeachMeModal: React.FC<{
   language: string;
   onClose: () => void;
@@ -1083,44 +1082,34 @@ const TeachMeModal: React.FC<{
   onDeleteNote,
   onReorderNotes,
   onSpeakNote,
-  groupChat, 
+  groupChat,
 }) => {
-  // --- DEBUG 1: Log component render ---
+  // --- 1. STATE INITIALIZATION (with restored debug logs) ---
   console.log(`%c[TeachMeModal RENDER] %cTime: ${new Date().toLocaleTimeString()}, isGroupChat: ${isGroupChat}, groupChat exists: ${!!groupChat}`, 'color: #007bff; font-weight: bold;', 'color: grey;');
 
-  // 1. STATE INITIALIZATION (Functional for persistence - Checks props on mount)
   const [activeTab, setActiveTab] = useState<TeachMeType>(() => {
-    const initialValue = isGroupChat && groupChat?.groupTeachMeSettings 
-      ? groupChat.groupTeachMeSettings.type 
-      : (!isGroupChat && cache ? cache.type : "Grammar");
+    const initialValue = (isGroupChat && groupChat?.groupTeachMeSettings?.type) || (!isGroupChat && cache?.type) || "Grammar";
     console.log(`%c[DEBUG 1] activeTab INIT: %c${initialValue}`, 'color: #1aff00; font-weight: bold;', 'color: #33ff00;');
     return initialValue;
   });
-  
-  const [level, setLevel] = useState(() => {
-    const initialValue = isGroupChat && groupChat?.groupTeachMeSettings 
-      ? groupChat.groupTeachMeSettings.level 
-      : 1;
+
+  const [level, setLevel] = useState<number>(() => {
+    const initialValue = (isGroupChat && groupChat?.groupTeachMeSettings?.level) || 1;
     console.log(`%c[DEBUG 1] level INIT: %c${initialValue}`, 'color: #1aff00; font-weight: bold;', 'color: #33ff00;');
     return initialValue;
   });
-  
+
   const [selectedTopic, setSelectedTopic] = useState<string | null>(() => {
-    const initialValue = isGroupChat && groupChat 
-      ? (groupChat.topic || null) 
-      : (!isGroupChat && cache ? cache.topic : null);
+    const initialValue = (isGroupChat && groupChat?.topic) || (!isGroupChat && cache?.topic) || null;
     console.log(`%c[DEBUG 1] selectedTopic INIT: %c${initialValue}`, 'color: #1aff00; font-weight: bold;', 'color: #33ff00;');
     return initialValue;
   });
-  
+
   const [content, setContent] = useState<string>(() => {
-    const initialValue = isGroupChat && groupChat 
-      ? (groupChat.teachMeContent || "") 
-      : (!isGroupChat && cache ? cache.content : "");
+    const initialValue = (isGroupChat && groupChat?.teachMeContent) || (!isGroupChat && cache?.content) || "";
     console.log(`%c[DEBUG 1] content INIT: %c(Length: ${initialValue.length})`, 'color: #1aff00; font-weight: bold;', 'color: #33ff00;');
     return initialValue;
   });
-  // ---------------------------------------------------------------------------------
 
   const [isLoading, setIsLoading] = useState(false);
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[] | null>(null);
@@ -1132,25 +1121,132 @@ const TeachMeModal: React.FC<{
   const [isLoadingVideos, setIsLoadingVideos] = useState(false);
   const topicListRef = useRef<HTMLUListElement>(null);
   const topicRefs = useRef<Map<string, HTMLButtonElement | null>>(new Map());
-
   const [showNotes, setShowNotes] = useState(false);
   const [buttonPosition, setButtonPosition] = useState<{ top: number; left: number } | null>(null);
   const selectionRef = useRef<{ text: string; range: Range } | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const floatingButtonRef = useRef<HTMLButtonElement>(null);
   const selectionTimeoutRef = useRef<number | null>(null);
-
   const isHost = isGroupChat && userIsGroupCreator;
   const isMember = isGroupChat && !userIsGroupCreator;
+
+  // --- 2. EFFECTS (with restored debug logs and correct loading logic) ---
+  useEffect(() => {
+    if (!isGroupChat) return;
+    
+    console.group(`%c[DEBUG 3: GROUP EFFECT] Firestore update received.`, 'color: #00bfff; font-weight: bold;');
+    
+    if (groupChat) {
+      const { groupTeachMeSettings, topic, teachMeContent } = groupChat;
+      
+      console.log(`[DEBUG 3: PROP] Topic: ${topic}, Content Exists: ${teachMeContent !== undefined}, Content Length: ${teachMeContent?.length ?? 'N/A'}`);
+
+      // Sync state from props
+      setActiveTab(groupTeachMeSettings?.type || "Grammar");
+      setLevel(groupTeachMeSettings?.level || 1);
+      setSelectedTopic(topic || null);
+      setContent(teachMeContent || "");
+
+      // *** THE FIX ***
+      // This is now the single source of truth for the loading state.
+      // It's loading if a topic is set, but the content for it is strictly undefined.
+      const isWaitingForContent = !!topic && teachMeContent === undefined;
+
+      if (isLoading !== isWaitingForContent) {
+        console.log(`[DEBUG 3: LOAD] Setting isLoading from ${isLoading} to ${isWaitingForContent}`);
+        setIsLoading(isWaitingForContent);
+      }
+    } else {
+        // If groupChat becomes null, ensure we are not loading.
+        if (isLoading) {
+            console.log("[DEBUG 3: LOAD] groupChat is null, forcing isLoading to false.");
+            setIsLoading(false);
+        }
+    }
+    console.groupEnd();
+  }, [groupChat, isGroupChat]);
+
+  // Solo mode effect (unchanged, but restored for completeness)
+  useEffect(() => {
+    if (isGroupChat) return;
+    let isCurrent = true;
+
+    const fetchSoloContent = async () => {
+      if (!selectedTopic) {
+        setContent("");
+        setIsLoading(false);
+        return;
+      }
+      if (cache?.topic === selectedTopic && cache?.content) {
+        setContent(cache.content);
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        const nativeLanguageName = LANGUAGES.find(l => l.code === nativeLanguage)?.name || nativeLanguage;
+        const newContent = await geminiService.getContent(selectedTopic, activeTab, language, nativeLanguageName);
+        if (isCurrent) {
+          setContent(newContent);
+          setCache({ language, type: activeTab, topic: selectedTopic, content: newContent });
+        }
+      } catch (error) {
+        if (isCurrent) setContent("Failed to load lesson.");
+      } finally {
+        if (isCurrent) setIsLoading(false);
+      }
+    };
+
+    fetchSoloContent();
+    return () => { isCurrent = false; };
+  }, [selectedTopic, language, nativeLanguage, activeTab, setCache, cache, isGroupChat]);
+
+
+  // --- 3. HANDLERS (with restored debug logs and NO finally block) ---
+  const handleTopicSelect = async (topic: string) => {
+    if (isHost && onSetGroupTopic) {
+      handleUsageCheck("lessons", async () => {
+        console.group(`%c[DEBUG 6: HOST SELECT] START - Topic: ${topic}`, 'color: #ffaa00; font-weight: bold;');
+        setIsLoading(true); // Start loading spinner immediately.
+        
+        try {
+          console.log(`[DEBUG 6: HOST SELECT] Step 1: Updating Firestore topic (deletes old content)...`);
+          await onSetGroupTopic(topic, activeTab, level, language);
+          
+          console.log(`[DEBUG 6: HOST SELECT] Step 2: Fetching new content from Gemini...`);
+          const nativeLanguageName = LANGUAGES.find(l => l.code === nativeLanguage)?.name || nativeLanguage;
+          const newContent = await geminiService.getContent(topic, activeTab, language, nativeLanguageName);
+          
+          if (groupChat) {
+            console.log(`[DEBUG 6: HOST SELECT] Step 3: Gemini fetch complete. Updating Firestore with new content (length: ${newContent.length}).`);
+            await groupService.updateGroupLessonContent(groupChat.id, newContent);
+            // NOTE: We DO NOT set isLoading(false) here. The useEffect hook will handle it when the update propagates.
+          }
+        } catch (error) {
+          console.error("[DEBUG 6: HOST SELECT] ERROR during host topic selection & fetch process:", error);
+          setContent("An error occurred while fetching the lesson. Please try again.");
+          setIsLoading(false); // Set loading to false only on catastrophic error.
+        } finally {
+            console.groupEnd();
+        }
+      });
+    } else if (!isGroupChat) {
+      handleUsageCheck("lessons", () => {
+        setCache(null);
+        setSelectedTopic(topic);
+      });
+    }
+  };
   
-  // 2. AVAILABLE TOPICS
+  // No changes are needed for the rest of the component logic or the JSX.
+  // The following code is identical to the previous version but is included for completeness.
   const availableTopics = useMemo(() => {
     let grammarSource: any = grammarData;
     let vocabSource: any[] = vocabData;
     let conversationSource: any = conversationData;
-    
+
     const preference = user.contentPreference || 'standard';
-    // console.log(`[DEBUG 2: TOPICS] User Preference is '${preference}'`);
 
     if (user.isAgeVerified) {
         if (preference === 'pg13' && pg13ConversationData[language as keyof typeof pg13ConversationData]) {
@@ -1181,173 +1277,21 @@ const TeachMeModal: React.FC<{
 
     if (searchQuery.trim()) {
       const lowercasedQuery = searchQuery.toLowerCase();
-      const filtered = (data as any[]).filter(
+      return (data as any[]).filter(
         (topic) =>
           topic.title.toLowerCase().includes(lowercasedQuery) ||
           (topic.tags && topic.tags.some((tag: string) => tag.toLowerCase().includes(lowercasedQuery))),
       );
-      // console.log(`[DEBUG 2: TOPICS] Filtered results (Search: ${searchQuery}, Count: ${filtered.length})`);
-      return filtered;
     } else {
-      const filtered = (data as any[]).filter((topic) => topic.level === level);
-      // console.log(`[DEBUG 2: TOPICS] Filtered results (Level: ${level}, Tab: ${activeTab}, Count: ${filtered.length})`);
-      return filtered;
+      return (data as any[]).filter((topic) => topic.level === level);
     }
   }, [activeTab, level, language, searchQuery, user.contentPreference, user.isAgeVerified]);
 
-  // 3. EFFECTS (for runtime updates)
-
-  // --- DEBUG 3: EFFECT: Handles runtime updates from Firestore and manages loading status ---
-  useEffect(() => {
-    if (!groupChat) {
-        return;
-    }
-    
-    console.group(`%c[DEBUG 3: GROUP EFFECT] Firestore update received.`, 'color: #00bfff; font-weight: bold;');
-    
-    // 1. Update runtime state from groupChat if it changes while modal is open
-    const nextActiveTab = groupChat.groupTeachMeSettings?.type || activeTab;
-    const nextLevel = groupChat.groupTeachMeSettings?.level || level;
-    const nextTopic = groupChat.topic || null;
-    const nextContent = groupChat.teachMeContent || "";
-
-    console.log(`[DEBUG 3: PROP] Topic: ${nextTopic}, Content Exists: ${!!nextContent.length}, Tab: ${nextActiveTab}, Level: ${nextLevel}`);
-    
-    // A. Update settings state
-    if (activeTab !== nextActiveTab) {
-        console.log(`[DEBUG 3: SYNC] Updating activeTab via Firestore: ${nextActiveTab}`);
-        setActiveTab(nextActiveTab);
-    }
-    if (level !== nextLevel) {
-        console.log(`[DEBUG 3: SYNC] Updating level via Firestore: ${nextLevel}`);
-        setLevel(nextLevel);
-    }
-    
-    // B. Update content state
-    // We check against the current local state to prevent unnecessary re-renders
-    if (selectedTopic !== nextTopic) {
-        console.log(`[DEBUG 3: SYNC] Topic change from ${selectedTopic} to ${nextTopic}. Updating state.`);
-        setSelectedTopic(nextTopic);
-    }
-    
-    // This condition handles any content update from the database stream
-    if (content !== nextContent) {
-        console.log(`%c[DEBUG 3: SYNC] Content change detected (new length: ${nextContent.length}). Updating state.`, 'color: orange;');
-        setContent(nextContent);
-    }
-    
-    // C. Manage loading state (If topic is set but content is missing)
-    const isWaitingForContent = nextTopic && !nextContent;
-    if (isWaitingForContent) {
-        if (!isLoading) {
-             console.log("[DEBUG 3: LOAD] Starting Loading: Topic set, content missing.");
-             setIsLoading(true);
-        }
-    } else {
-        if (isLoading) {
-            console.log("[DEBUG 3: LOAD] Stopping Loading: Content now available or topic cleared.");
-            setIsLoading(false);
-        }
-    }
-    console.groupEnd();
-  }, [groupChat]); // Depend only on groupChat to track database changes and update UI
-
-  // --- EFFECT 4: Handles solo user content loading/caching ---
-  useEffect(() => {
-    if (isGroupChat) {
-        return;
-    }
-
-    let isCurrent = true;
-
-    if (selectedTopic) {
-      if (cache?.topic === selectedTopic && cache?.content) {
-        // console.log("[DEBUG 4: SOLO EFFECT] Found content in cache. Setting content/loading=false.");
-        setContent(cache.content);
-        setIsLoading(false);
-      } else {
-        const fetchSoloContent = async () => {
-          setIsLoading(true);
-          console.log(`[DEBUG 4: SOLO EFFECT] Fetching new content for topic: "${selectedTopic}"`);
-          try {
-            const nativeLanguageName = LANGUAGES.find(l => l.code === nativeLanguage)?.name || nativeLanguage;
-            const newContent = await geminiService.getContent(selectedTopic, activeTab, language, nativeLanguageName);
-            if (isCurrent) {
-              // console.log("[DEBUG 4: SOLO EFFECT] Fetch success. Setting content/cache.");
-              setContent(newContent);
-              setCache({ language, type: activeTab, topic: selectedTopic, content: newContent });
-            }
-          } catch (error) {
-            console.error("[DEBUG 4: SOLO EFFECT] Solo content fetch error:", error);
-            if (isCurrent) setContent("Failed to load lesson.");
-          } finally {
-            if (isCurrent) setIsLoading(false);
-          }
-        };
-        fetchSoloContent();
-      }
-    } else {
-      // console.log("[DEBUG 4: SOLO EFFECT] No topic selected. Clearing content.");
-      setContent("");
-      setIsLoading(false);
-    }
-
-    return () => { isCurrent = false; };
-  }, [selectedTopic, language, nativeLanguage, activeTab, setCache, cache, isGroupChat]); 
-
-  // 4. HANDLERS AND MEMOIZED VALUES
-
   const handleLevelChange = (lvl: number) => {
-    console.log(`[DEBUG 5: HANDLER] Level change from ${level} to ${lvl}`);
+    console.log(`%c[DEBUG 5: HANDLER] %cLevel change from ${level} to ${lvl}`, 'color: purple; font-weight: bold;', 'color: inherit;');
     setLevel(lvl);
     if (topicListRef.current) {
       topicListRef.current.scrollTop = 0;
-    }
-  };
-
-  const handleTopicSelect = async (topic: string) => {
-    if (isHost && onSetGroupTopic) {
-      await handleUsageCheck("lessons", async () => {
-        console.group(`%c[DEBUG 6: HOST SELECT] START - Topic: ${topic}`, 'color: #ffaa00; font-weight: bold;');
-        setIsLoading(true);
-        // CRITICAL: Set state locally immediately to show topic selection and clear old content
-        setSelectedTopic(topic);
-        setContent(""); 
-        
-        try {
-          // 1. Update topic in Firestore (this clears teachMeContent for members/persistence)
-          console.log(`[DEBUG 6: HOST SELECT] Step 1: Updating Firestore topic, level, type (this clears the content)...`);
-          await onSetGroupTopic(topic, activeTab, level, language);
-          
-          console.log(`[DEBUG 6: HOST SELECT] Step 2: Topic updated. Fetching content directly...`);
-          
-          // 2. Directly fetch the content
-          const nativeLanguageName = LANGUAGES.find(l => l.code === nativeLanguage)?.name || nativeLanguage;
-          const newContent = await geminiService.getContent(topic, activeTab, language, nativeLanguageName);
-          
-          // 3. Update the group document with the new content (for members and for persistence)
-          if (groupChat) {
-            console.log(`[DEBUG 6: HOST SELECT] Step 3: Fetch successful. Updating group document with content to persist.`);
-            // This update will trigger the Firestore listener (DEBUG 3), which in turn updates local state (`content` and `isLoading`)
-            await groupService.updateGroupLessonContent(groupChat.id, newContent);
-          }
-          
-        } catch (error) {
-          console.error("[DEBUG 6: HOST SELECT] ERROR during host topic selection & fetch process:", error);
-          setContent("An error occurred while fetching the lesson. Please try again.");
-          setIsLoading(false);
-        } finally {
-          console.log("[DEBUG 6: HOST SELECT] END.");
-          console.groupEnd();
-        }
-      });
-    } else if (!isGroupChat) {
-      // Solo mode logic remains the same
-      console.log(`[DEBUG 6: SOLO SELECT] START - Topic: ${topic}. Clearing cache to force reload.`);
-      handleUsageCheck("lessons", () => {
-        setCache(null);
-        setSelectedTopic(topic);
-      });
     }
   };
 
@@ -1355,14 +1299,14 @@ const TeachMeModal: React.FC<{
     const currentDisplayTopic = groupTopic || selectedTopic;
     if (!currentDisplayTopic) return -1;
     const index = availableTopics.findIndex((t) => t.title === currentDisplayTopic);
-    console.log(`[DEBUG 7: MEMO] currentTopic: ${currentDisplayTopic}, index: ${index}`);
+    console.log(`%c[DEBUG 7: MEMO] %ccurrentTopic: ${currentDisplayTopic}, index: ${index}`, 'color: teal; font-weight: bold;', 'color: inherit;');
     return index;
   }, [selectedTopic, availableTopics, groupTopic]); 
 
   const handlePreviousChapter = () => {
     if (currentIndex > 0) {
       const previousTopic = availableTopics[currentIndex - 1];
-      console.log(`[DEBUG 8: NAV] Going to previous chapter: ${previousTopic.title}`);
+      console.log(`%c[DEBUG 8: NAV] %cGoing to previous chapter: ${previousTopic.title}`, 'color: #333; font-weight: bold;', 'color: inherit;');
       handleTopicSelect(previousTopic.title);
     }
   };
@@ -1370,7 +1314,7 @@ const TeachMeModal: React.FC<{
   const handleNextChapter = () => {
     if (currentIndex !== -1 && currentIndex < availableTopics.length - 1) {
       const nextTopic = availableTopics[currentIndex + 1];
-      console.log(`[DEBUG 8: NAV] Going to next chapter: ${nextTopic.title}`);
+      console.log(`%c[DEBUG 8: NAV] %cGoing to next chapter: ${nextTopic.title}`, 'color: #333; font-weight: bold;', 'color: inherit;');
       handleTopicSelect(nextTopic.title);
     }
   };
@@ -1390,7 +1334,7 @@ const TeachMeModal: React.FC<{
     const finalTopic = groupTopic || selectedTopic;
     if (!finalTopic) return;
 
-    console.log(`[DEBUG 9: QUIZ ME] Triggered for topic: ${finalTopic}`);
+    console.log(`%c[DEBUG 9: QUIZ ME] %cTriggered for topic: ${finalTopic}`, 'color: green; font-weight: bold;', 'color: inherit;');
 
     handleUsageCheck("quizzes", async () => {
       setIsLoading(true);
@@ -1437,10 +1381,8 @@ const TeachMeModal: React.FC<{
         let topPos;
 
         if (isMobile) {
-            // Position button BELOW selection on mobile
             topPos = rect.bottom - containerRect.top + (contentRef.current.scrollTop || 0) + 5;
         } else {
-            // Position button ABOVE selection on desktop
             topPos = rect.top - containerRect.top + (contentRef.current.scrollTop || 0) - 45;
         }
 
@@ -1448,23 +1390,21 @@ const TeachMeModal: React.FC<{
           top: topPos,
           left: rect.left - containerRect.left + (rect.width / 2),
         });
-        console.log(`[DEBUG 10: NOTE] Selection valid. Text: ${selectedText.substring(0, 30)}...`);
+        console.log(`%c[DEBUG 10: NOTE] %cSelection valid. Text: ${selectedText.substring(0, 30)}...`, 'color: #9932CC; font-weight: bold;', 'color: inherit;');
       }
     } else {
       setButtonPosition(null);
       selectionRef.current = null;
       if(selectedText.length > 0) {
-        console.log(`[DEBUG 10: NOTE] Selection invalid (length: ${selectedText.length}, subscriber: ${user.subscription === 'subscriber'}).`);
+        console.log(`%c[DEBUG 10: NOTE] %cSelection invalid (length: ${selectedText.length}, subscriber: ${user.subscription === 'subscriber'}).`, 'color: #9932CC; font-weight: bold;', 'color: inherit;');
       }
     }
   };
 
-  // FIX 1: Restore the original onMouseUp handler for DESKTOP
   const handleMouseUp = () => {
     processSelection(window.getSelection());
   };
 
-  // FIX 2: Add a new useEffect specifically for MOBILE, using 'selectionchange'
   useEffect(() => {
     const handleMobileSelection = () => {
         processSelection(window.getSelection());
@@ -1497,13 +1437,12 @@ const TeachMeModal: React.FC<{
     if (selectionRef.current && (groupTopic || selectedTopic)) {
       onAddNote(selectionRef.current.text, (groupTopic || selectedTopic)!);
       
-      // Clean up state
       selectionRef.current = null;
       setButtonPosition(null);
       window.getSelection()?.removeAllRanges();
       
       alert(`Note added successfully to topic: ${(groupTopic || selectedTopic)!}`);
-      console.log(`[DEBUG 11: NOTE] Note added: ${groupTopic || selectedTopic}`);
+      console.log(`%c[DEBUG 11: NOTE] %cNote added: ${groupTopic || selectedTopic}`, 'color: #DAA520; font-weight: bold;', 'color: inherit;');
     }
   };
 
@@ -1511,7 +1450,7 @@ const TeachMeModal: React.FC<{
     const currentTopic = groupTopic || selectedTopic;
     if (!currentTopic) return;
 
-    console.log(`[DEBUG 12: VIDEOS] Fetching videos for: ${currentTopic}`);
+    console.log(`%c[DEBUG 12: VIDEOS] %cFetching videos for: ${currentTopic}`, 'color: #FF4500; font-weight: bold;', 'color: inherit;');
     setShowVideoGallery(true);
     setIsLoadingVideos(true);
     try {
@@ -1519,7 +1458,7 @@ const TeachMeModal: React.FC<{
       setYoutubeVideos(videos);
     } catch (error) {
       console.error("[DEBUG 12: VIDEOS] Failed to fetch YouTube videos:", error);
-      setYoutubeVideos([]); // Clear videos on error
+      setYoutubeVideos([]);
     } finally {
       setIsLoadingVideos(false);
     }
@@ -1673,7 +1612,6 @@ const TeachMeModal: React.FC<{
             </div>
           </div>
 
-          {/* FIX 3: Restore onMouseUp for desktop and remove other selection handlers */}
           <div className="w-full p-6 overflow-y-auto relative" ref={contentRef} onMouseUp={handleMouseUp} onScroll={() => setButtonPosition(null)}>
             {buttonPosition && (
               <button
@@ -1716,7 +1654,6 @@ const TeachMeModal: React.FC<{
                 <LoadingSpinner />
               </div>
             )}
-            {/* The final content display should show content if it exists and we're not loading */}
             {!isLoading && content && (
               <div
                 className="prose dark:prose-invert max-w-none"
