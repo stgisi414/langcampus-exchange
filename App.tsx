@@ -2963,7 +2963,9 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     }
   };
 
-  const handleUsageCheck = async (feature: UsageKey, action: () => void) => {
+  const savedChat = user?.savedChat || null;
+
+  const handleUsageCheck = async (feature: UsageKey, action: () => (void | Promise<void>)) => {
     if (!user) return;
     const canProceed = await checkAndIncrementUsage(
       user.uid,
@@ -2971,7 +2973,9 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
       user.subscription,
     );
     if (canProceed) {
-      action();
+      // CRITICAL FIX: Await the result of the action, 
+      // which is an async function (Promise) in handleTopicSelect
+      await action();
     } else {
       setSubscriptionModalReason("limit");
       setShowSubscriptionModal(true);
@@ -3440,8 +3444,6 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
       }, 15000);
     });
   }, [currentPartner, targetLanguage, handleUsageCheck, user.nativeLanguage, user.uid]);
-
-  const savedChat = user?.savedChat || null;
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans flex flex-col">
