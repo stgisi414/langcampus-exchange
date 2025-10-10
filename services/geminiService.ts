@@ -551,6 +551,65 @@ export const generateQuiz = async (topic: string, type: 'Grammar' | 'Vocabulary'
   }
 };
 
+export const validateQuizAnswers = async (
+  questions: QuizQuestion[],
+  userAnswers: (string | string[])[],
+  targetLanguage: string,
+  nativeLanguage: string
+): Promise<ValidatedQuizResult[]> => {
+  const prompt = `
+    You are an expert language quiz grader. Your task is to evaluate a user's answers to a quiz.
+    The user is a ${nativeLanguage} speaker learning ${targetLanguage}.
+    Sometimes, the user's answer might be technically correct even if it doesn't match the provided "correctAnswer" exactly.
+    You need to analyze each question and the user's answer to determine if it should be marked as correct.
+
+    **Instructions:**
+    1.  Review each question, the user's answer, and the original correct answer.
+    2.  For each question, decide if the user's answer is correct, incorrect, or "correct-with-nuance" (i.e., also an acceptable answer).
+    3.  Return a JSON array of objects, with one object for each question.
+    4.  Each object must have two properties:
+        - "userAnswer": The original answer provided by the user.
+        - "isCorrect": A boolean value (true if correct or acceptable, false otherwise).
+
+    **CRITICAL:** Your entire response must be ONLY the JSON array. Do not include any other text or explanations.
+
+    **Quiz Data:**
+    ${JSON.stringify({ questions, userAnswers }, null, 2)}
+  `;
+
+  try {
+    const data = await callGeminiProxy(prompt, "gemini-2.5-flash");
+    const rawText = data.candidates[0].content.parts[0].text;
+    const validatedResults = cleanAndParseJson(rawText);
+
+    if (!Array.isArray(validatedResults) || validatedResults.length !== questions.length) {
+      throw new Error("AI returned an invalid format for quiz validation.");
+    }
+
+    return validatedResults;
+  } catch (error) {
+    console.error("Error validating quiz answers:", error);
+    // As a fallback, mark answers correct only if they are a strict match
+    return questions.map((q, index) => {
+        const answer = userAnswers[index];
+        let isCorrect = false;
+        if (q.type === 'multiple-choice' || q.type === 'fill-in-the-blank' || q.type === 'listening') {
+            if (typeof answer === 'string' && typeof q.correctAnswer === 'string') {
+                isCorrect = answer.toLowerCase().trim() === q.correctAnswer.toLowerCase().trim();
+            }
+        } else if (q.type === 'speaking') {
+            isCorrect = !!answer;
+        } else if (q.type === 'matching' && Array.isArray(answer)) {
+            isCorrect = q.pairs.every((pair, i) => {
+                const correctPairId = `term-${i}:def-${i}`;
+                return answer[i] === correctPairId;
+            });
+        }
+        return { userAnswer: userAnswers[index], isCorrect };
+    });
+  }
+};
+
 export const transcribeAudio = async (audioBlob: Blob, languageCode: string): Promise<string> => {
   try {
     const reader = new FileReader();

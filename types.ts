@@ -74,6 +74,11 @@ export interface YouTubeCache {
   timestamp: number;
 }
 
+export interface ValidatedQuizResult {
+  userAnswer: string | string[];
+  isCorrect: boolean;
+}
+
 export interface SavedChat {
   partner: Partner;
   messages: Message[];

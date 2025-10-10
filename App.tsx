@@ -3140,36 +3140,26 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
               firestoreService.addXp(user.uid, score);
             }
             
-            let quizSummary = `**Quiz Results Summary**\n\n- **Topic:** ${topic}\n- **Score:** ${score}/${totalGraded}\n\n`;
+            const validatedResults = await geminiService.validateQuizAnswers(questions, userAnswers, targetLanguage, nativeLanguage);
 
+            let newScore = 0;
             const incorrectAnswers = questions
-                .map((q, index) => ({
-                    question: q,
-                    userAnswer: userAnswers[index],
-                }))
-                .filter((item, index) => {
-                    const question = item.question;
-                    const answer = userAnswers[index]; 
+                .map((q, index) => {
+                    const result = validatedResults[index];
+                    if (result.isCorrect) {
+                        newScore++;
+                    }
+                    return {
+                        question: q,
+                        userAnswer: result.userAnswer,
+                        isCorrect: result.isCorrect,
+                    };
+                })
+                .filter(item => !item.isCorrect);
 
-                    if (question.type === 'multiple-choice' || question.type === 'fill-in-the-blank') {
-                        return answer !== question.correctAnswer;
-                    }
-                    if (question.type === 'matching' && Array.isArray(answer)) {
-                        return !question.pairs.every((pair, i) => {
-                            const correctPairId = `term-${i}:def-${i}`;
-                            return answer[i] === correctPairId;
-                        });
-                    }
-                    if (question.type === 'listening') {
-                        const listeningQuestion = question as Extract<QuizQuestion, { type: 'listening' }>;
-                        
-                        if (typeof answer === 'string' && typeof listeningQuestion.correctAnswer === 'string') {
-                            return answer.toLowerCase().trim() !== listeningQuestion.correctAnswer.toLowerCase().trim();
-                        }
-                        return false;
-                    }
-                    return false;
-                });
+
+            let quizSummary = `**Quiz Results Summary**\n\n- **Topic:** ${topic}\n- **Score:** ${newScore}/${questions.length}\n\n`;
+
 
             if (incorrectAnswers.length > 0) {
                 quizSummary += `**I missed ${incorrectAnswers.length} question(s). I need help with the following:**\n\n`;
