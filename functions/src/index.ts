@@ -228,6 +228,7 @@ const VOICE_MAP: Record<string, any> = {
     "vi-VN": { male: "vi-VN-Wavenet-D", female: "vi-VN-Wavenet-A" },
     "pl-PL": { male: "pl-PL-Wavenet-B", female: "pl-PL-Wavenet-A" },
     "mn-MN": { male: "mn-MN-Standard-B", female: "mn-MN-Standard-A" }, 
+    "eo": { male: "eo-XA-Standard-A", female: "eo-XA-Standard-A" },
 };
 
 export const googleCloudTTS = onRequest(
