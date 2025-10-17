@@ -336,7 +336,23 @@ export const getChatResponse = async (messages: Message[], partner: Partner, cor
     
     **EXCEPTION:** If the user's last message is in their native language (${partner.learningLanguage}), it means they might be confused or asking for help. In this case, **you should respond in their native language (${partner.learningLanguage})** to be helpful and explain things clearly.
     
-    ${corrections ? `The user wants corrections. If their last message contains errors in your native language (${partner.nativeLanguage}), provide a simple correction.` : ''}
+    ${corrections ? `
+    **Correction Instructions:**
+    The user wants corrections. Your task is to analyze the user's last message for any errors in ${partner.nativeLanguage}.
+    - If there are errors (grammatical, spelling, unnatural phrasing), you MUST provide a correction.
+    - The "correction" field in your JSON response should contain the corrected sentence followed by a concise, clear explanation of the mistake.
+    - **Start the correction by stating the corrected sentence, then briefly explain WHY it was corrected.** This is crucial.
+    - If the user's message is perfect and natural, the "correction" field MUST be an empty string "".
+    - If the user's message is identical to the correction, the "correction" field MUST be an empty string "".
+    - Do not correct messages that are in the user's native language (${partner.learningLanguage}). In that case, the "correction" field must be an empty string "".
+    
+    **Good Correction Example:**
+    User's message: "Yo ser feliz."
+    "correction": "The correct sentence is 'Yo soy feliz.' We use 'soy' (from the verb 'ser') to talk about states of being or characteristics, not the infinitive 'ser'."
+
+    **Bad Correction Example (what to avoid):**
+    "correction": "Yo soy feliz."
+    ` : ''}
 
     **IMPORTANT:** Your entire response must be a single, valid JSON object. Do not include any text outside of the JSON object.
 
@@ -352,7 +368,7 @@ export const getChatResponse = async (messages: Message[], partner: Partner, cor
     Your JSON response:
     {
       "text": "¡Hola! Estoy muy bien, gracias. ¿Y tú?",
-      "correction": "¿Cómo estás?",
+      "correction": "The correct sentence is '¿Cómo estás?'. The word 'como' needs an accent mark when it's used in a question.",
       "translation": "Hi! I'm very well, thank you. And you?"
     }
 
