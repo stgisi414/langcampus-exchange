@@ -48,6 +48,7 @@ import {
   ExpertIcon,
   MasterIcon,
   YouTubeIcon,
+  MinimizeIcon
 } from "./components/Icons";
 import LoadingSpinner from "./components/LoadingSpinner";
 import {
@@ -1129,6 +1130,22 @@ const TeachMeModal: React.FC<{
   const selectionTimeoutRef = useRef<number | null>(null); // <-- ADD THIS LINE
   const isHost = isGroupChat && userIsGroupCreator;
   const isMember = isGroupChat && !userIsGroupCreator;
+
+  const displayTitle = useMemo(() => {
+    const currentTitle = groupTopic || selectedTopic;
+    if (!currentTitle) {
+        return isGroupChat ? `Group Topic: ${language}` : `Teach Me: ${language}`;
+    }
+    
+    // 1. Prioritize persistent settings from group or solo cache (which has type/level)
+    const persistentSettings = groupChat?.groupTeachMeSettings || cache;
+
+    // 2. If no persistent settings exist, fall back to current modal state (activeTab/level)
+    const displayType = persistentSettings?.type || activeTab;
+    const displayLevel = persistentSettings?.level || level;
+    
+    return `${displayType} ${displayLevel}: ${currentTitle}`;
+  }, [groupTopic, selectedTopic, language, isGroupChat, groupChat, cache, activeTab, level]);
   
   // --- 2. EFFECTS (with corrected content handling) ---
   useEffect(() => {
@@ -1498,7 +1515,7 @@ const TeachMeModal: React.FC<{
               <MenuIcon className="w-6 h-6" />
             </button>
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-              {isGroupChat ? `Group Topic: ${language}` : `Teach Me: ${language}`}
+              {displayTitle}
             </h2>
           </div>
           <div className="flex items-center gap-2">
@@ -1608,9 +1625,15 @@ const TeachMeModal: React.FC<{
                         <button
                         ref={(el) => topicRefs.current.set(topic.title, el)}
                         onClick={() => handleTopicSelect(topic.title)}
-                        className={`w-full text-left p-2 rounded text-sm ${(groupTopic || selectedTopic) === topic.title ? "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100" : "hover:bg-gray-100 dark:hover:bg-gray-700"}`}
+                        // ADD flex layout to align level to the right
+                        className={`w-full text-left p-2 rounded text-sm flex justify-between items-center ${(groupTopic || selectedTopic) === topic.title ? "bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100" : "hover:bg-gray-100 dark:hover:bg-gray-700"}`}
                         >
-                        {topic.title}
+                        {/* Display the topic title */}
+                        <span>{topic.title}</span>
+                        {/* Display the topic level */}
+                        <span className="px-2 py-0.5 text-xs font-semibold bg-gray-300 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-full">
+                            Lvl {topic.level}
+                        </span>
                         </button>
                     </li>
                     ))
@@ -2038,6 +2061,9 @@ interface ChatModalProps {
   onDeleteNote: (noteId: string) => void;
   onReorderNotes: (newNotes: Note[]) => void;
   onSpeakNote: (text: string, topic: string) => void;
+  onMinimize: () => void;
+  isMinimized: boolean;
+  onMaximize: () => void;
 }
 
 const ChatModal: React.FC<ChatModalProps> = ({
@@ -2072,6 +2098,9 @@ const ChatModal: React.FC<ChatModalProps> = ({
   onDeleteNote,
   onReorderNotes,
   onSpeakNote,
+  onMinimize,
+  isMinimized,
+  onMaximize,
 }) => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
@@ -2435,6 +2464,30 @@ const ChatModal: React.FC<ChatModalProps> = ({
     setIsRecording(false);
   };
 
+  if (isMinimized) {
+    return (
+      <div className="fixed bottom-4 right-4 z-40">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl overflow-hidden w-64">
+          <button
+            onClick={onMaximize}
+            className="flex items-center justify-between w-full p-3 font-bold text-blue-600 dark:text-blue-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+            aria-label="Maximize chat window"
+          >
+            <div className="flex items-center gap-2">
+                <img src={partner.avatar} alt={partner.name} className="w-8 h-8 rounded-full" />
+                <span>{partner.name}</span>
+            </div>
+            {/* Using a click handler that calls onClose, while maximizing button calls onMaximize */}
+            <CloseIcon onClick={(e) => { e.stopPropagation(); onClose(); }} className="w-5 h-5 text-gray-500 hover:text-red-500" aria-label="Close chat" />
+          </button>
+          <div className="p-3 text-xs text-gray-500 dark:text-gray-400 border-t dark:border-gray-700">
+            {groupChat ? 'Group Chat Active' : 'Lesson/Chat Active'}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-start pt-10 sm:items-center sm:pt-0 z-40 p-4"
@@ -2478,6 +2531,13 @@ const ChatModal: React.FC<ChatModalProps> = ({
               aria-label="Open learning module"
             >
               <BookOpenIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+            </button>
+            <button
+                onClick={onMinimize}
+                className="p-1 sm:p-2 rounded-full text-gray-500 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                aria-label="Minimize chat"
+              >
+                <MinimizeIcon className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
             <button
               onClick={onClose}
@@ -2681,6 +2741,7 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   const [showTutorial, setShowTutorial] = useState(
     () => !localStorage.getItem("tutorialShown"),
   );
+  const [isChatMinimized, setIsChatMinimized] = useState(false);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [subscriptionModalReason, setSubscriptionModalReason] = useState<
     "limit" | "manual"
@@ -3026,6 +3087,10 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   };
 
   const findPartners = async () => {
+    if (currentPartner) { // Check if any chat is active (minimized or maximized)
+        console.log("Cannot search for new partners while a chat is open or minimized.");
+        return;
+    }
     setIsLoadingPartners(true);
     setError(null);
     setPartners([]);
@@ -3053,7 +3118,12 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   };
 
   const handleStartChat = async (partner: Partner) => {
+    if (currentPartner) { // Check if any chat is active (minimized or not)
+        console.log("Cannot start a new chat while a chat is open or minimized.");
+        return;
+    }
     setCurrentPartner(partner);
+    setIsChatMinimized(false);
     setNudgeCount(0);
 
     if (savedChat && savedChat.partner.name === partner.name) {
@@ -3069,6 +3139,7 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     }
     setCurrentPartner(null);
     setActiveGroup(null);
+    setIsChatMinimized(false);
   };
 
   const handleProfileChange = (profile: UserProfileData) => {
@@ -3112,7 +3183,15 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     }
   };
 
+  const handleMinimizeChat = () => {
+    setIsChatMinimized(true);
+  };
+
   const handleResumeChat = () => {
+    if (currentPartner) { // Check if any chat is active (minimized or not)
+      console.log("Cannot open saved chat while a chat is open or minimized.");
+      return;
+    }
     if (savedChat) {
       setCurrentPartner(savedChat.partner);
       setActiveGroup(null);
@@ -3534,7 +3613,7 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
           />
           <button
             onClick={findPartners}
-            disabled={isLoadingPartners}
+            disabled={isLoadingPartners || !!currentPartner}
             className="px-6 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
             {isLoadingPartners ? "Searching..." : "Find New Pals"}
@@ -3575,7 +3654,7 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
           </div>
         )}
 
-        {savedChat && (
+        {savedChat && !currentPartner && (
           <div className="bg-green-100 dark:bg-green-900 border-l-4 border-green-500 text-green-700 dark:text-green-200 p-4 rounded-md mb-6 flex justify-between items-center shadow-lg">
             <div>
               <p className="font-bold">
@@ -3585,7 +3664,8 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
             <div className="flex items-center gap-2">
               <button
                 onClick={handleResumeChat}
-                className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600"
+                disabled={!!currentPartner}
+                className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50"
               >
                 Resume Chat
               </button>
@@ -3611,7 +3691,7 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
           </div>
         )}
         {!isLoadingPartners && partners.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 ${!!currentPartner ? 'pointer-events-none opacity-50' : ''}`}>
             {partners.map((p) => (
               <PartnerCard
                 key={p.name}
@@ -3655,6 +3735,9 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
           messages={currentChatMessages}
           onMessagesChange={setCurrentChatMessages}
           onClose={handleCloseChat}
+          onMinimize={handleMinimizeChat}
+          onMaximize={() => setIsChatMinimized(false)}
+          isMinimized={isChatMinimized}
           onSaveChat={handleSaveChat}
           nativeLanguage={nativeLanguage}
           teachMeCache={teachMeCache}

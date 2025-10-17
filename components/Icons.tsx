@@ -88,6 +88,12 @@ export const StopIcon: React.FC<IconProps> = ({ className }) => (
     </svg>
 );
 
+export const MinimizeIcon: React.FC<IconProps> = ({ className }) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 12h-15" />
+    </svg>
+);
+
 export const PlayIcon: React.FC<IconProps> = ({ className }) => (
     <svg className={className} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
         <path fillRule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.38 2.802-1.636l10.864 6.136c1.267.71 1.267 2.548 0 3.257L7.302 20.983c-1.273.744-2.802-.209-2.802-1.636V5.653z" clipRule="evenodd" />

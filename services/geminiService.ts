@@ -558,22 +558,36 @@ export const validateQuizAnswers = async (
   nativeLanguage: string
 ): Promise<ValidatedQuizResult[]> => {
   const prompt = `
-    You are an expert language quiz grader. Your task is to evaluate a user's answers to a quiz.
-    The user is a ${nativeLanguage} speaker learning ${targetLanguage}.
-    Sometimes, the user's answer might be technically correct even if it doesn't match the provided "correctAnswer" exactly.
-    You need to analyze each question and the user's answer to determine if it should be marked as correct.
+    You are the **Master Grader AI**, an absolute expert in ${targetLanguage} semantics, grammar, and pragmatics. Your job is to evaluate student answers with a **focus on conceptual understanding and real-world communication**, not just strict matching to the answer key. The user is a ${nativeLanguage} speaker learning ${targetLanguage}.
 
-    **Instructions:**
-    1.  Review each question, the user's answer, and the original correct answer.
-    2.  For each question, decide if the user's answer is correct, incorrect, or "correct-with-nuance" (i.e., also an acceptable answer).
-    3.  Return a JSON array of objects, with one object for each question.
-    4.  Each object must have two properties:
-        - "userAnswer": The original answer provided by the user.
-        - "isCorrect": A boolean value (true if correct or acceptable, false otherwise).
+    **Primary Goal:** Only mark an answer as FALSE if the student's answer demonstrates a clear misunderstanding of the concept or rule being tested. **Be generous, flexible, and assume the most positive intent.**
+
+    **Detailed Grading Instructions (for the Master Grader AI):**
+    
+    1.  **Multiple Choice & Fill-in-the-Blank:**
+        - **Allow** for minor spelling or punctuation errors, capitalization differences, or slight variations in phrasing if the **meaning is unambiguously correct and grammatically plausible**.
+        - **Allow** synonyms or grammatically equivalent phrases in place of the 'correctAnswer' if they are perfectly natural in ${targetLanguage}.
+        - For numbers, accept both digit form (e.g., "3") and word form (e.g., "three").
+
+    2.  **Matching Questions (Crucial for Nuance):**
+        - For matching scenarios (e.g., matching a situation to a phrase or a term to a definition), check if the user's selected match is **conceptually valid** or **commonly used** in that context, even if it differs from the key's designated pairing.
+        - If the user's chosen pairing is reasonable and semantically acceptable for both the question's term and the selected definition, mark the pairing as **correct**. The goal is to check knowledge, not arbitrary pairings.
+
+    3.  **Listening & Speaking Questions:**
+        - For listening questions, mark as **correct** if the user's transcription is semantically equivalent, even if words are misspelled or minor function words (e.g., articles, prepositions) are missed or swapped.
+        - For speaking questions (which only report "completed"), analyze the provided correct sentence and check for any conceptual misunderstanding based on the topic. The overall mark should default to **TRUE** unless the sentence is highly unusual.
+
+    4.  **Output Format:** Return a JSON array of objects, one for each question.
 
     **CRITICAL:** Your entire response must be ONLY the JSON array. Do not include any other text or explanations.
 
-    **Quiz Data:**
+    **JSON Output Structure:**
+    {
+      "userAnswer": "The original answer from the user.",
+      "isCorrect": true/false // Set to TRUE if the answer passes the flexible grading criteria. Only FALSE for clear, unambiguous conceptual mistakes.
+    }
+
+    **Quiz Data to Grade:**
     ${JSON.stringify({ questions, userAnswers }, null, 2)}
   `;
 
