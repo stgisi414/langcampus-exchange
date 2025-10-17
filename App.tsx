@@ -839,6 +839,7 @@ const ListeningQuestion: React.FC<{ question: Extract<QuizQuestion, { type: 'lis
 
 // Quiz Modal Component
 const QuizModal: React.FC<{
+  topic: string;
   questions: QuizQuestion[];
   topic: string;
   onClose: () => void;
@@ -856,6 +857,7 @@ const QuizModal: React.FC<{
   const [userAnswers, setUserAnswers] = useState<(string | string[])[]>([]);
   const [showResults, setShowResults] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
+  const [quizTopic] = useState(topic);
 
   if (!questions || questions.length === 0) {
     return (
@@ -929,7 +931,7 @@ const QuizModal: React.FC<{
     if (isSharing) return;
     setIsSharing(true);
     
-    await onShareQuizResults(topic, score, totalGraded, questions, userAnswers);
+    await onShareQuizResults(quizTopic, score, totalGraded, questions, userAnswers);
 
     setIsSharing(false);
   };
@@ -984,7 +986,7 @@ const QuizModal: React.FC<{
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-xl max-h-[90vh] flex flex-col animate-fade-in-down">
         <div className="flex justify-between items-center p-4 border-b dark:border-gray-700 flex-shrink-0">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-            {showResults ? "Quiz Results" : `Quiz: ${topic}`}
+            {showResults ? "Quiz Results" : `Quiz: ${quizTopic}`}
           </h2>
           <button
             onClick={onClose}
