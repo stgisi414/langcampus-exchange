@@ -48,7 +48,8 @@ import {
   ExpertIcon,
   MasterIcon,
   YouTubeIcon,
-  MinimizeIcon
+  MinimizeIcon,
+  DocumentTextIcon
 } from "./components/Icons";
 import LoadingSpinner from "./components/LoadingSpinner";
 import {
@@ -2059,6 +2060,9 @@ interface ChatModalProps {
   nudgeCount: number;
   onAddNudge: (response: Message, messagesSnapshot: Message[]) => void;
   onTranscribeAndRespond: (audioBlob: Blob, languageCode: string, messagesSnapshot: Message[]) => Promise<void>;
+  transcriptions: Record<string, string>;
+  transcribingId: string | null;
+  handleRequestTranscription: (audioUrl: string, messageIndex: number) => Promise<void>;
   onAddNote: (noteText: string, topic: string) => void;
   onDeleteNote: (noteId: string) => void;
   onReorderNotes: (newNotes: Note[]) => void;
@@ -2097,6 +2101,9 @@ const ChatModal: React.FC<ChatModalProps> = ({
   onAddNudge,
   onTranscribeAndRespond,
   onAddNote,
+  transcriptions,
+  transcribingId,
+  handleRequestTranscription,
   onDeleteNote,
   onReorderNotes,
   onSpeakNote,
@@ -2344,9 +2351,20 @@ const ChatModal: React.FC<ChatModalProps> = ({
     });
   };
 
-  const AudioPlayer: React.FC<{ audioUrl: string; duration: number }> = ({
+  const AudioPlayer: React.FC<{
+    audioUrl: string;
+    duration: number;
+    messageIndex: number;
+    onTranscribe: (url: string, index: number) => void;
+    transcription: string | undefined;
+    isTranscribing: boolean;
+  }> = ({
     audioUrl,
     duration,
+    messageIndex,
+    onTranscribe,
+    transcription,
+    isTranscribing,
   }) => {
     const [isPlaying, setIsPlaying] = useState(false);
     const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -2359,7 +2377,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
         audio.src = audioUrl;
         const handleEnded = () => setIsPlaying(false);
         audio.addEventListener("ended", handleEnded);
-  
+
         // Cleanup function to run when the component unmounts
         return () => {
           audio.removeEventListener("ended", handleEnded);
@@ -2369,10 +2387,10 @@ const ChatModal: React.FC<ChatModalProps> = ({
         };
       }
     }, [audioUrl]);
-  
+
     const togglePlay = () => {
       if (!audioRef.current) return;
-  
+
       if (isPlaying) {
         audioRef.current.pause();
         setIsPlaying(false);
@@ -2383,32 +2401,60 @@ const ChatModal: React.FC<ChatModalProps> = ({
         });
       }
     };
-  
+
     const formatTime = (seconds: number) => {
       const min = Math.floor(seconds / 60);
       const sec = Math.floor(seconds % 60); // Use Math.floor to avoid decimals
       return `${min.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
     };
-  
+
+    // Determine if transcription should be shown
+    const showTranscription = transcription && !transcription.startsWith('HIDDEN:');
+    const transcriptionText = showTranscription ? transcription : undefined;
+    const isHidden = transcription?.startsWith('HIDDEN:');
+
     return (
-      <div className="flex items-center gap-2 p-1 bg-white dark:bg-gray-700 rounded-full w-full">
-        {/* The single <audio> element, hidden from view but controllable via the ref */}
-        <audio ref={audioRef} src={audioUrl} preload="metadata"></audio>
-        
-        <button
-          onClick={togglePlay}
-          className="p-1 bg-blue-500 text-white rounded-full hover:bg-blue-600"
-          aria-label={isPlaying ? "Pause audio" : "Play audio"}
-        >
-          {isPlaying ? (
-            <StopIcon className="w-5 h-5" />
-          ) : (
-            <PlayIcon className="w-5 h-5" />
-          )}
-        </button>
-        <span className="text-gray-800 dark:text-gray-200 text-sm font-semibold">
-          {formatTime(duration)}
-        </span>
+      // Wrap in a div to hold the player and transcription
+      <div className="w-full space-y-1">
+        <div className="flex items-center gap-2 p-1 bg-white dark:bg-gray-700 rounded-full w-full">
+          {/* The single <audio> element, hidden from view but controllable via the ref */}
+          <audio ref={audioRef} src={audioUrl} preload="metadata"></audio>
+
+          <button
+            onClick={togglePlay}
+            className="p-1 bg-blue-500 text-white rounded-full hover:bg-blue-600 flex-shrink-0" // Added flex-shrink-0
+            aria-label={isPlaying ? "Pause audio" : "Play audio"}
+          >
+            {isPlaying ? (
+              <StopIcon className="w-5 h-5" />
+            ) : (
+              <PlayIcon className="w-5 h-5" />
+            )}
+          </button>
+          {/* ADD Dictation Button */}
+          <button
+            onClick={() => onTranscribe(audioUrl, messageIndex)}
+            disabled={isTranscribing}
+            className={`p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 flex-shrink-0 ${isHidden ? 'bg-gray-300 dark:bg-gray-500' : 'bg-gray-100 dark:bg-gray-800'}`} // Added flex-shrink-0 and conditional background
+            aria-label={transcription ? (isHidden ? "Show transcription" : "Hide transcription") : "Get transcription"}
+          >
+            {isTranscribing ? (
+                <LoadingSpinner size="sm" />
+            ) : (
+                <DocumentTextIcon className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+            )}
+          </button>
+          {/* Make duration span shrink if needed */}
+          <span className="text-gray-800 dark:text-gray-200 text-sm font-semibold ml-auto flex-shrink-0"> {/* Added ml-auto and flex-shrink-0 */}
+            {formatTime(duration)}
+          </span>
+        </div>
+        {/* Conditionally render transcription */}
+        {showTranscription && (
+          <p className="text-xs text-gray-500 dark:text-gray-900 pl-2 pt-1 italic border-l-2 border-gray-300 dark:border-gray-600 ml-1">
+            {transcriptionText}
+          </p>
+        )}
       </div>
     );
   };
@@ -2587,6 +2633,10 @@ const ChatModal: React.FC<ChatModalProps> = ({
                     <AudioPlayer
                       audioUrl={msg.audioUrl}
                       duration={msg.audioDuration || 0}
+                      messageIndex={index}
+                      onTranscribe={handleRequestTranscription} 
+                      transcription={transcriptions[msg.audioUrl]}
+                      isTranscribing={transcribingId === msg.audioUrl}
                     />
                   ) : (
                     <div
@@ -2759,6 +2809,8 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   const [isSending, setIsSending] = useState(false);
   const [nudgeCount, setNudgeCount] = useState(0);
   const [showAgeVerification, setShowAgeVerification] = useState(false);
+  const [transcriptions, setTranscriptions] = useState<Record<string, string>>({});
+  const [transcribingId, setTranscribingId] = useState<string | null>(null);
 
   useEffect(() => {
     // DEBUG LOG: Initial check for age verification status
@@ -3578,6 +3630,53 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     });
   }, [currentPartner, targetLanguage, handleUsageCheck, user.nativeLanguage, user.uid]);
 
+  const handleRequestTranscription = async (audioUrl: string, messageIndex: number) => {
+    // Check if already transcribed or currently transcribing
+    if (transcriptions[audioUrl] || transcribingId === audioUrl) {
+      // Toggle visibility if already transcribed
+      if (transcriptions[audioUrl]) {
+        setTranscriptions(prev => ({
+          ...prev,
+          [audioUrl]: prev[audioUrl].startsWith('HIDDEN:')
+            ? prev[audioUrl].substring(7) // Remove HIDDEN: prefix
+            : 'HIDDEN:' + prev[audioUrl] // Add HIDDEN: prefix
+        }));
+      }
+      return;
+    }
+
+    setTranscribingId(audioUrl);
+    try {
+      // 1. Fetch the audio blob from the URL
+      const response = await fetch(audioUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch audio: ${response.statusText}`);
+      }
+      const audioBlob = await response.blob();
+
+      // 2. Determine the language code (Use partner's native language)
+       const partnerLanguageObject =
+         LANGUAGES.find(
+           (lang) =>
+             lang.name.toLowerCase() === currentPartner?.nativeLanguage.toLowerCase(),
+         ) || LANGUAGES.find((lang) => lang.code === "en-US")!;
+       const languageCode = partnerLanguageObject.code;
+
+
+      // 3. Call the transcription service
+      const transcriptionText = await geminiService.transcribeAudio(audioBlob, languageCode);
+
+      // 4. Update state
+      setTranscriptions(prev => ({ ...prev, [audioUrl]: transcriptionText || "Transcription failed." }));
+
+    } catch (error) {
+      console.error("Error fetching or transcribing audio:", error);
+      setTranscriptions(prev => ({ ...prev, [audioUrl]: "Error getting transcription." }));
+    } finally {
+      setTranscribingId(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans flex flex-col">
       {showAgeVerification && (
@@ -3752,6 +3851,9 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
           userIsGroupCreator={user?.uid === activeGroup?.creatorId}
           onShareGroupLink={handleShareGroupLink}
           onSetGroupTopic={handleSetGroupTopic}
+          transcriptions={transcriptions}
+          transcribingId={transcribingId}
+          handleRequestTranscription={handleRequestTranscription}
           newMessage={newMessage}
           setNewMessage={setNewMessage}
           isSending={isSending}

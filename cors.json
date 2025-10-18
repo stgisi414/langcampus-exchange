@@ -1,0 +1,14 @@
+[
+  {
+    "origin": [
+      "https://practicefor.fun",
+      "https://www.practicefor.fun",
+      "https://langcampus-exchange.web.app",
+      "http://127.0.0.1:5000",
+      "http://localhost:5000",
+      "http://localhost:5173"
+    ],
+    "method": ["GET"],
+    "maxAgeSeconds": 3600
+  }
+]
