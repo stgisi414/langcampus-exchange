@@ -1,6 +1,7 @@
+// stgisi414/langcampus-exchange/langcampus-exchange-3b6faae819bb48e19293301de447720f8c74f458/services/groupService.ts
 import { doc, setDoc, updateDoc, onSnapshot, arrayUnion, arrayRemove, deleteDoc, getDoc, deleteField } from "firebase/firestore";
 import { db } from '../firebaseConfig.ts';
-import { GroupChat, Message, Partner, UserProfileData, TeachMeCache } from '../types.ts';
+import { GroupChat, Message, Partner, UserProfileData, TeachMeCache, TeachMeType } from '../types.ts'; // Added TeachMeType
 import * as geminiService from './geminiService';
 import { deleteAudioMessage } from './storageService.ts';
 
@@ -156,4 +157,12 @@ export const getGroupById = async (groupId: string): Promise<GroupChat | null> =
         return docSnap.data() as GroupChat;
     }
     return null;
+};
+
+// 9. Updates the group's last message (for display/preview purposes)
+export const updateLastMessage = async (groupId: string, message: string): Promise<void> => {
+    const groupRef = doc(db, GROUPS_COLLECTION, groupId);
+    await updateDoc(groupRef, {
+        lastMessage: message
+    });
 };

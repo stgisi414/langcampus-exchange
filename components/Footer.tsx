@@ -1,7 +1,11 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 
-const Footer: React.FC = () => {
+interface FooterProps {
+  onShowLangcampusModal: () => void;
+}
+
+const Footer: React.FC<FooterProps> = ({ onShowLangcampusModal }) => {
   return (
     <footer className="bg-white dark:bg-gray-800 shadow-inner mt-12 py-6">
       <div className="container mx-auto px-4 text-center text-gray-600 dark:text-gray-400">
@@ -13,6 +17,11 @@ const Footer: React.FC = () => {
           <Link to="/privacy-policy" className="hover:text-blue-500 transition-colors">
             Privacy Policy
           </Link>
+          {/* --- ADD: New link --- */}
+          <span>|</span>
+          <button onClick={onShowLangcampusModal} className="hover:text-blue-500 transition-colors">
+            Try Langcampus Music Quiz
+          </button>
         </div>
         <p className="text-sm">
           &copy; {new Date().getFullYear()} Langcampus Exchange. All Rights Reserved.

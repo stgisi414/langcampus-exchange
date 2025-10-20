@@ -149,6 +149,67 @@ export const FEATURES = [
     },
 ];
 
+const AboutLangcampusModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
+  <div
+    className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4"
+    role="dialog"
+    aria-modal="true"
+  >
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg animate-fade-in-down flex flex-col max-h-[90vh]">
+      <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+          Discover Langcampus Music Quiz
+        </h2>
+        <button
+          onClick={onClose}
+          className="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200"
+          aria-label="Close modal"
+        >
+          <CloseIcon className="w-6 h-6" />
+        </button>
+      </div>
+      <div className="p-6 space-y-4 overflow-y-auto">
+        <p className="text-gray-700 dark:text-gray-300">
+          <strong>Langcampus Music Quiz</strong> is our other platform designed to help you learn languages in a fun and engaging way—through music!
+        </p>
+        <ul className="list-disc list-inside space-y-2 text-gray-600 dark:text-gray-400">
+          <li>
+            <strong>Learn with Lyrics:</strong> Search for any song on YouTube.
+          </li>
+          <li>
+            <strong>Interactive Quizzes:</strong> Take AI-generated quizzes based on the song's lyrics.
+          </li>
+          <li>
+            <strong>Master Vocabulary:</strong> Practice vocabulary with multiple choice, matching, and sequencing questions.
+          </li>
+          <li>
+            <strong>Listen and Learn:</strong> Improve your listening skills by filling in the blanks as the song plays.
+          </li>
+        </ul>
+        <p className="text-gray-700 dark:text-gray-300">
+          It's the perfect companion to your conversational practice here on <strong>Langcampus Exchange</strong>!
+        </p>
+      </div>
+      <div className="flex justify-between items-center p-4 border-t dark:border-gray-700">
+        <button
+          onClick={onClose}
+          className="px-6 py-2 bg-gray-500 text-white font-bold rounded-lg hover:bg-gray-600 transition-colors"
+        >
+          Close
+        </button>
+        <a
+          href="https://langcamp.us"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-6 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition-colors"
+        >
+          Try Langcampus Music Quiz
+        </a>
+      </div>
+    </div>
+  </div>
+);
+
 const VideoGalleryModal: React.FC<{
   videos: YouTubeVideo[];
   isLoading: boolean;
@@ -2848,11 +2909,11 @@ const ChatModal: React.FC<ChatModalProps> = ({
   );
 };
 
-const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const Layout: React.FC<{ children: React.ReactNode; onShowLangcampusModal: () => void }> = ({ children, onShowLangcampusModal }) => {
   return (
     <>
       {children}
-      <Footer />
+      <Footer onShowLangcampusModal={onShowLangcampusModal} />
     </>
   );
 };
@@ -3156,7 +3217,7 @@ const AppContent: React.FC<AppContentProps> = ({ user, errorModal, setErrorModal
                     [activeGroup.id]: [...(prev[activeGroup.id] || []), voiceMessage],
                 }));
                 await groupService.addMessageToGroup(activeGroup.id, voiceMessage);
-                await firestoreService.updateLastMessage(activeGroup.id, voiceMessage.text || "(Voice Message)");
+                await groupService.updateLastMessage(activeGroup.id, voiceMessage.text || "(Voice Message)");
             } else {
                // For solo chat, we optimistically add the message and then transcribe for AI response
                setCurrentChatMessages((prevMessages) => [...prevMessages, voiceMessage]);
@@ -4080,6 +4141,7 @@ const App: React.FC = () => {
   const showErrorModal = (title: string, message: string) => {
     setErrorModal({ title, message });
   };
+  const [showLangcampusModal, setShowLangcampusModal] = useState(false);
 
   if (loading) {
     return (
@@ -4105,12 +4167,16 @@ const App: React.FC = () => {
         path="/*"
         element={
           user ? (
-            <Layout>
+            <Layout onShowLangcampusModal={() => setShowLangcampusModal(true)}>
               <AppContent
                 user={user}
                 errorModal={errorModal}
                 setErrorModal={setErrorModal} 
               />
+              {/* --- ADD: Render the new modal (controlled by state in App) --- */}
+              {showLangcampusModal && (
+                <AboutLangcampusModal onClose={() => setShowLangcampusModal(false)} />
+              )}
             </Layout>
           ) : (
             <LoginScreen />
