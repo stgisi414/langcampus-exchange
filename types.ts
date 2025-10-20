@@ -28,15 +28,21 @@ export interface Partner {
 }
 
 export interface Message {
+  id: string; // Add a unique ID for each message
   sender: 'user' | 'ai';
-  senderId?: string; // Add this to track the user's ID
-  senderName?: string; // Add this to display the user's name
+  senderId?: string;
+  senderName?: string;
   text: string;
   correction?: string;
   translation?: string;
-  audioUrl?: string; 
+  audioUrl?: string;
   audioDuration?: number;
   timestamp?: number;
+  replyTo?: { // Add this optional object
+    messageId: string;
+    text: string;
+    senderName?: string;
+  };
 }
 
 export type QuizQuestion = {

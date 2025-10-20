@@ -2092,6 +2092,9 @@ const ChatModal: React.FC<ChatModalProps> = ({
   onSetGroupTopic,
   onSendTextMessage,
   onSendVoiceMessage,
+  onSendAudio,
+  replyingToMessage,
+  setReplyingToMessage,
   newMessage,
   setNewMessage,
   isSending,
@@ -2124,6 +2127,7 @@ const ChatModal: React.FC<ChatModalProps> = ({
   const [speakingMessageIndex, setSpeakingMessageIndex] = useState<number | null>(null);
   const audioStreamRef = useRef<MediaStream | null>(null);
   const recorderRef = useRef<RecordRTC | null>(null);
+  const messageRefs = useRef<Map<string, HTMLDivElement | null>>(new Map());
 
   useEffect(() => {
     // 1. Clear any existing timer when dependencies change
@@ -2466,23 +2470,32 @@ const ChatModal: React.FC<ChatModalProps> = ({
 
     const messagesSnapshot = [...messages];
 
+    const replyInfo = replyingToMessage ? { // Capture reply state
+        messageId: replyingToMessage.id,
+        text: replyingToMessage.text,
+        senderName: replyingToMessage.senderName
+    } : undefined;
+    setReplyingToMessage(null);
+
     await handleUsageCheck("messages", async () => {
       try {
+        const timestamp = Date.now();
         const audioUrl = await storageService.uploadAudioMessage(audioBlob, identifier, currentUserId);
         const voiceMessage: Message = {
+          id: `msg-user-audio-${timestamp}`, // Generate unique ID
           sender: "user",
           text: "(Voice Message)",
           audioUrl,
           audioDuration: duration,
           senderId: currentUserId,
           senderName: user.displayName || 'User',
-          timestamp: Date.now()
+          timestamp: timestamp,
+          replyTo: replyInfo, // Add reply info here
         };
         await onSendVoiceMessage(voiceMessage);
       } catch (error) {
-        console.error("Upload or Post Failed:", error);
-        alert("Failed to send voice message. Please try again.");
-        return;
+          console.error("Failed to send voice message:", error);
+          showErrorModal("Failed to send voice message.", "Please try again.");
       }
 
       if (groupChat) {
@@ -2510,6 +2523,33 @@ const ChatModal: React.FC<ChatModalProps> = ({
     });
     setRecordedBlob(null);
     setIsRecording(false);
+  };
+
+  const handleStartReply = (message: Message) => {
+    // Only allow replying to user messages, not AI messages
+    if (message.sender === 'user') {
+      setReplyingToMessage(message);
+    }
+  };
+
+  const handleCancelReply = () => {
+    setReplyingToMessage(null);
+  };
+
+  const handleSendAudioInModal = async (audioBlob: Blob, duration: number) => {
+    await onSendAudio(audioBlob, duration);
+    setRecordedBlob(null);
+    setIsRecording(false);
+  };
+
+  const scrollToMessage = (messageId: string) => {
+    const element = messageRefs.current.get(messageId);
+    element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Optional: Add a temporary highlight effect
+    element?.classList.add('bg-blue-200', 'dark:bg-blue-800', 'transition-colors', 'duration-1000');
+    setTimeout(() => {
+        element?.classList.remove('bg-blue-200', 'dark:bg-blue-800', 'transition-colors', 'duration-1000');
+    }, 1500);
   };
 
   if (isMinimized) {
@@ -2603,10 +2643,14 @@ const ChatModal: React.FC<ChatModalProps> = ({
         >
           {messages.map((msg, index) => {
             const isMyMessage = msg.senderId === user?.uid;
+            // --- Add a unique ID if it doesn't exist (useful if loading old messages) ---
+            const messageId = msg.id || `msg-${index}-${msg.timestamp || Date.now()}`;
+            msg.id = messageId; // Ensure the message object has the ID
 
             return (
               <div
-                key={index}
+                key={messageId}
+                ref={(el) => messageRefs.current.set(messageId, el)}
                 className={`flex items-end gap-2 ${isMyMessage ? "justify-end" : "justify-start"}`}
               >
                 {!isMyMessage && (
@@ -2621,8 +2665,32 @@ const ChatModal: React.FC<ChatModalProps> = ({
                   />
                 )}
                 <div
-                  className={`max-w-md p-3 rounded-lg ${isMyMessage ? "bg-blue-500 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white"}`}
+                  className={`max-w-md p-3 rounded-lg relative group ${isMyMessage ? "bg-blue-500 text-white" : "bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white"}`}
                 >
+                  {msg.sender === 'user' && !isMyMessage && (
+                    <button
+                      onClick={() => handleStartReply(msg)}
+                      className="absolute -top-2 -right-2 p-1 bg-gray-400 dark:bg-gray-600 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity text-xs"
+                      aria-label="Reply"
+                      title="Reply"
+                    >
+                       ↩️
+                    </button>
+                  )}
+
+                  {msg.replyTo && (
+                     <div
+                      onClick={() => scrollToMessage(msg.replyTo!.messageId)}
+                      className="mb-2 p-2 text-xs bg-black bg-opacity-10 dark:bg-white dark:bg-opacity-10 rounded cursor-pointer hover:bg-opacity-20 dark:hover:bg-opacity-20 border-l-2 border-gray-500 dark:border-gray-400"
+                      title="Scroll to original message"
+                     >
+                          <p className="font-semibold">{msg.replyTo.senderName || 'User'}:</p>
+                          <p className="opacity-80 line-clamp-2">
+                              {msg.replyTo.text}
+                          </p>
+                     </div>
+                  )}
+
                   {!isMyMessage && msg.sender !== "ai" && groupChat && (
                     <p className="text-xs font-bold text-gray-500 dark:text-gray-400 mb-1">
                       {msg.senderName || "Another User"}
@@ -2685,6 +2753,18 @@ const ChatModal: React.FC<ChatModalProps> = ({
         </div>
 
         <div className="px-4 py-2 border-t dark:border-gray-700">
+          {replyingToMessage && (
+              <div className="mb-2 p-2 text-xs bg-gray-100 dark:bg-gray-800 rounded flex justify-between items-center border-l-2 border-blue-500">
+                  <div>
+                      <p className="font-semibold text-gray-700 dark:text-gray-300">Replying to {replyingToMessage.senderName || 'User'}:</p>
+                      <p className="text-gray-600 dark:text-gray-400 line-clamp-1">{replyingToMessage.text}</p>
+                  </div>
+                  <button onClick={handleCancelReply} className="p-1 text-gray-500 hover:text-red-500" aria-label="Cancel reply">
+                      <CloseIcon className="w-4 h-4" />
+                  </button>
+              </div>
+            )}
+
           {isRecording || recordedBlob ? (
             <AudioRecorder
               isRecording={isRecording}
@@ -2778,7 +2858,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 };
 
 // AppContent Component - now receives user as a prop
-const AppContent: React.FC<AppContentProps> = ({ user }) => {
+const AppContent: React.FC<AppContentProps> = ({ user, errorModal, setErrorModal }) => {
   const [nativeLanguage, setNativeLanguage] = useState<string>(
     () => user?.nativeLanguage || localStorage.getItem("nativeLanguage") || LANGUAGES[0].code,
   );
@@ -2811,6 +2891,7 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
   const [showAgeVerification, setShowAgeVerification] = useState(false);
   const [transcriptions, setTranscriptions] = useState<Record<string, string>>({});
   const [transcribingId, setTranscribingId] = useState<string | null>(null);
+  const [replyingToMessage, setReplyingToMessage] = useState<Message | null>(null);
 
   useEffect(() => {
     // DEBUG LOG: Initial check for age verification status
@@ -2948,15 +3029,28 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
     if (!newMessage.trim() || isSending) return;
 
     const messageToSend = newMessage;
+    // This will now work because replyingToMessage is in the same component scope
+    const replyInfo = replyingToMessage ? {
+        messageId: replyingToMessage.id,
+        text: replyingToMessage.text,
+        senderName: replyingToMessage.senderName
+    } : undefined;
+
     setNewMessage('');
+    setReplyingToMessage(null); // This also works now
 
     await handleUsageCheck('messages', async () => {
+        if (!user) return;
+        const timestamp = Date.now();
+        // FIX: Conditionally add the replyTo property
         const userMessage: Message = {
-            sender: 'user',
-            text: messageToSend,
-            senderId: user.uid,
-            senderName: user.displayName || 'User',
-            timestamp: Date.now() 
+          id: `msg-user-${timestamp}`,
+          sender: 'user',
+          text: messageToSend,
+          senderId: user.uid,
+          senderName: user.displayName || 'User',
+          timestamp: timestamp,
+          ...(replyInfo && { replyTo: replyInfo }),
         };
 
         if (activeGroup) {
@@ -2986,11 +3080,13 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
             }
         } else {
             setIsSending(true);
-            setCurrentChatMessages((prev) => [...prev, userMessage]); 
+            // --- FIX: Pass userMessage directly ---
+            setCurrentChatMessages((prev) => [...prev, userMessage]);
             const messagesContext = [...currentChatMessages, userMessage];
 
             try {
                 firestoreService.addXp(user.uid, 1);
+                const aiTimestamp = Date.now();
                 const aiResponse = await geminiService.getChatResponse(
                     messagesContext,
                     currentPartner!,
@@ -2999,18 +3095,77 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
                     teachMeCache,
                     false
                 );
-                setCurrentChatMessages((prev) => [...prev, { ...aiResponse, timestamp: Date.now() }]);
+                setCurrentChatMessages((prev) => [...prev, { ...aiResponse, id: `msg-ai-${aiTimestamp}`, timestamp: aiTimestamp }]);
             } catch (error) {
                 console.error("Solo Chat Response Error:", error);
+                const errorTimestamp = Date.now();
                 const errorMessage: Message = {
+                    id: `msg-error-${errorTimestamp}`,
                     sender: "ai",
                     text: "Sorry, I encountered an error. Please try again.",
-                    timestamp: Date.now()
+                    timestamp: errorTimestamp
                 };
                 setCurrentChatMessages((prev) => [...prev, errorMessage]);
             } finally {
                 setIsSending(false);
             }
+        }
+    });
+  };
+
+  const handleSendAudio = async (audioBlob: Blob, duration: number) => {
+    if (!user) {
+      console.error("User not found for sending audio");
+      return;
+    }
+
+    const identifier = activeGroup?.id || partner?.name;
+    if (!identifier) {
+      console.error("Chat identifier not found for sending audio");
+      return;
+    }
+
+    const messagesSnapshot = activeGroup ? groupMessages[activeGroup.id] || [] : currentChatMessages;
+
+    const replyInfo = replyingToMessage ? {
+        messageId: replyingToMessage.id,
+        text: replyingToMessage.text,
+        senderName: replyingToMessage.senderName
+    } : undefined;
+    setReplyingToMessage(null);
+
+    await handleUsageCheck("messages", async () => {
+        try {
+            const timestamp = Date.now();
+            const audioUrl = await storageService.uploadAudioMessage(audioBlob, identifier, user.uid);
+            const voiceMessage: Message = {
+                id: `msg-user-audio-${timestamp}`,
+                sender: "user",
+                text: "(Voice Message)",
+                audioUrl,
+                audioDuration: duration,
+                senderId: user.uid,
+                senderName: user.displayName || 'User',
+                timestamp: timestamp,
+                ...(replyInfo && { replyTo: replyInfo }),
+            };
+
+            if (activeGroup) {
+                setGroupMessages((prev) => ({
+                    ...prev,
+                    [activeGroup.id]: [...(prev[activeGroup.id] || []), voiceMessage],
+                }));
+                await groupService.addMessageToGroup(activeGroup.id, voiceMessage);
+                await firestoreService.updateLastMessage(activeGroup.id, voiceMessage.text || "(Voice Message)");
+            } else {
+               // For solo chat, we optimistically add the message and then transcribe for AI response
+               setCurrentChatMessages((prevMessages) => [...prevMessages, voiceMessage]);
+               // This function should also be in AppContent
+               await onTranscribeAndRespond(audioBlob, partnerLanguageCode, messagesSnapshot);
+            }
+        } catch (error) {
+            console.error("Failed to send voice message:", error);
+            showErrorModal("Failed to send voice message. Please try again.");
         }
     });
   };
@@ -3860,6 +4015,9 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
           setIsSending={setIsSending}
           onTextSubmit={handleTextSubmit}
           onSendTextMessage={handleSendTextMessage}
+          onSendAudio={handleSendAudio}
+          replyingToMessage={replyingToMessage}
+          setReplyingToMessage={setReplyingToMessage}
           onSendVoiceMessage={handleSendVoiceMessage}
           onTranscribeAndRespond={handleTranscribeAndRespond}
           nudgeCount={nudgeCount} 
@@ -3868,6 +4026,13 @@ const AppContent: React.FC<AppContentProps> = ({ user }) => {
           onDeleteNote={handleDeleteNote}
           onReorderNotes={handleReorderNotes}
           onSpeakNote={handleSpeakNote}
+        />
+      )}
+      {errorModal && (
+        <ErrorModal
+          title={errorModal.title}
+          message={errorModal.message}
+          onClose={() => setErrorModal(null)}
         />
       )}
       {showSubscriptionModal && (
@@ -3910,6 +4075,12 @@ const LanguageSelector: React.FC<{
 const App: React.FC = () => {
   const { user, loading } = useAuth();
 
+  // This function will handle displaying the modal by setting the state that controls its visibility
+  const [errorModal, setErrorModal] = useState<{ title: string; message: string } | null>(null);
+  const showErrorModal = (title: string, message: string) => {
+    setErrorModal({ title, message });
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-gray-100 dark:bg-gray-900">
@@ -3935,7 +4106,11 @@ const App: React.FC = () => {
         element={
           user ? (
             <Layout>
-              <AppContent user={user} />
+              <AppContent
+                user={user}
+                errorModal={errorModal}
+                setErrorModal={setErrorModal} 
+              />
             </Layout>
           ) : (
             <LoginScreen />
