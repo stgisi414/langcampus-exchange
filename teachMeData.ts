@@ -751,7 +751,7 @@ export const grammarData = {
         { "title": "Common Phrasal Verbs with 'Take' (e.g., take off, take up, take after)", "level": 4, "tags": ["verbs", "phrasal verbs", "vocabulary", "take"] },
         { "title": "Common Phrasal Verbs with 'Make' (e.g., make up, make out, make for)", "level": 4, "tags": ["verbs", "phrasal verbs", "vocabulary", "make"] },
         { "title": "Common Phrasal Verbs with 'Put' (e.g., put up with, put off, put on)", "level": 4, "tags": ["verbs", "phrasal verbs", "vocabulary", "put"] },
-        
+        { "title": "Common Phrasal Verbs with 'Leave' (e.g., leave out, leave behind, leave up to)", "level": 4, "tags": ["verbs", "phrasal verbs", "vocabulary", "leave"]},
         // Advanced (Level 5)
         // Original: { "title": "Future Perfect Continuous", "level": 5, "tags": ["verbs", "perfect tenses", "future tense", "continuous"] }
         { "title": "Future Perfect Continuous: Introduction (Duration of action up to a future point)", "level": 5, "tags": ["verbs", "perfect tenses", "future perfect continuous", "introduction"] },
