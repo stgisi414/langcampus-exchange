@@ -3714,7 +3714,7 @@ const AppContent: React.FC<AppContentProps> = ({ user, errorModal, setErrorModal
 
     try {
       const session = await createCheckoutSession(payments, {
-        price: "price_1SAjgiGYNyUbUaQ68m7HlTMu",
+        price: "price_1SL5i4CiwXwOoX3cdii9HWEr",
         success_url: `${window.location.origin}?checkout_success=true`,
         cancel_url: window.location.origin,
       });

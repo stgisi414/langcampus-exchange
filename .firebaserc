@@ -1,5 +1,13 @@
 {
   "projects": {
     "default": "langcampus-exchange"
+  },
+  "targets": {},
+  "etags": {
+    "langcampus-exchange": {
+      "extensionInstances": {
+        "firestore-stripe-payments": "d7c082de2ee956b338fb09b29cc1ce577234ad8bb8d464b26316a68a80c5bd08"
+      }
+    }
   }
 }
