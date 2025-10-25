@@ -627,7 +627,7 @@ export const FlashcardModal: React.FC<FlashcardModalProps> = ({
             onClick={onClose}
             className="text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg text-sm p-1.5"
           >
-            <XMarkIcon className="w-5 h-5" />
+            <XIcon className="w-5 h-5" />
           </button>
         </div>
 

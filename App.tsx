@@ -86,7 +86,7 @@ import GroupNotFound from "./components/GroupNotFound.tsx";
 import NotesModal from "./components/NotesModal.tsx";
 import RecordRTC from 'recordrtc';
 import AgeVerificationModal from "./components/AgeVerificationModal.tsx";
-import FlashcardModal from "./components/FlashcardModal";
+import { FlashcardModal } from "./components/FlashcardModal";
 
 // Helper for localStorage (Removed as we are using Firestore for persistence)
 

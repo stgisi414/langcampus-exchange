@@ -1,4 +1,4 @@
-import { Message, Partner, QuizQuestion, UserProfileData, TeachMeCache, YouTubeVideo, FlashcardSettings, Flashcard, FlashcardActivityType } from '../types';
+import { Message, Partner, QuizQuestion, UserProfileData, TeachMeCache, YouTubeVideo, FlashcardSettings } from '../types';
 
 // Make sure this is the correct URL for your deployed Cloud Function.
 //const PROXY_URL = "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiProxy"; // Replace if yours is different
@@ -850,37 +850,6 @@ For all other terms (regular words or phrases), provide the normal ${translation
 };
 
 /**
- * Gets a simple example sentence for a word using Gemini.
- * @param word The word in the target language.
- * @param targetLangName Target language name (e.g., "Spanish").
- * @param userNativeLangName The user's native language (for context).
- * @param level The user's level (for context).
- * @returns A promise resolving to the sentence string.
- */
-export const getSentence = async (
-  word: string,
-  targetLangName: string,
-  userNativeLangName: string,
-  level: number
-): Promise<string> => {
-  try {
-    const prompt = `
-      Provide one simple, clear example sentence using the ${targetLangName} term: "${word}".
-      The sentence MUST be written entirely in ${targetLangName}.
-      The sentence should be appropriate for a ${level === 1 ? 'Beginner (A1)' : 'learner'}.
-      Do not use ${userNativeLangName} in the sentence.
-      Respond ONLY with the sentence text, with no extra formatting or quotation marks.
-    `;
-
-    const response = await callGeminiProxy(prompt, "gemini-2.5-flash-lite");
-    return response.candidates[0].content.parts[0].text.trim().replace(/^["']|["']$/g, ""); // Clean quotes
-  } catch (error) {
-    console.error(`Error getting sentence for ${word} in ${targetLangName}:`, error);
-    return `Sentence unavailable for "${word}".`;
-  }
-};
-
-/**
  * Generates an image for a word using the Imagen 4.0 fast proxy Cloud Function.
  * @param word The word in the target language.
  * @param langName The name of the target language.
@@ -987,6 +956,7 @@ export const checkFlashcardReview = async (
   correctTerm: string,
   languageName: string
 ): Promise<'correct' | 'incorrect'> => {
+  // --- ADDED IMPLEMENTATION ---
   // If it's an exact match, don't waste an API call
   if (userInput.trim().toLowerCase() === correctTerm.trim().toLowerCase()) {
     return 'correct';
@@ -1018,55 +988,5 @@ export const checkFlashcardReview = async (
     // Fail safe: if AI check fails, fall back to strict check
     return userInput.trim().toLowerCase() === correctTerm.trim().toLowerCase() ? 'correct' : 'incorrect';
   }
+  // --- END ADDED IMPLEMENTATION ---
 };
-
-/**
- * Fetches the appropriate content for a flashcard based on the activity type.
- * This function is called by FlashcardModal.tsx.
- */
-export const generateFlashcardContent = async (
-  flashcard: Flashcard,
-  activityType: FlashcardActivityType,
-  targetLangName: string,
-  nativeLangName: string,
-  level: number,
-  topicTitle: string
-): Promise<Flashcard> => {
-  const updatedCard = { ...flashcard };
-
-  try {
-    switch (activityType) {
-      case 'translation':
-        if (!updatedCard.translation) {
-          // Uses your existing getTranslation function
-          updatedCard.translation = await getTranslation(updatedCard.term, targetLangName, nativeLangName, level);
-        }
-        break;
-      case 'definition':
-        if (!updatedCard.definition) {
-          // Uses your existing getDefinition function
-          updatedCard.definition = await getDefinition(updatedCard.term, targetLangName, nativeLangName);
-        }
-        break;
-      case 'image':
-        if (updatedCard.imageUrl === undefined) { // Only fetch if not already fetched
-          // Uses your existing generateImageForWord function
-          updatedCard.imageUrl = await generateImageForWord(updatedCard.term, targetLangName, level, topicTitle);
-        }
-        break;
-      case 'sentence':
-        if (!updatedCard.sentence) {
-          // Uses our new getSentence function
-          updatedCard.sentence = await getSentence(updatedCard.term, targetLangName, nativeLangName, level);
-        }
-        break;
-      default:
-        console.warn(`Unknown activity type: ${activityType}`);
-    }
-  } catch (error) {
-    console.error(`Error generating content for "${flashcard.term}" (Type: ${activityType}):`, error);
-  }
-
-  return updatedCard;
-};
-
