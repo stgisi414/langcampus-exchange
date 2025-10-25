@@ -85,6 +85,7 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
     
     const [selectedLanguageCode, setSelectedLanguageCode] = useState(lastSettings.languageCode || targetLanguage);
     const [selectedLevel, setSelectedLevel] = useState(lastSettings.level || 1);
+    const [teachMeType, setTeachMeType] = useState<TeachMeType>(lastSettings.teachMeType || 'Vocabulary');
     const [selectedTopic, setSelectedTopic] = useState<string | null>(lastSettings.topic !== undefined ? lastSettings.topic : null);
     const [activityType, setActivityType] = useState<FlashcardActivityType>(lastSettings.activityType || 'translation');
     const [mode, setMode] = useState<FlashcardMode>(lastSettings.mode || 'study');
@@ -114,7 +115,16 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
     const recorderRef = useRef<RecordRTC | null>(null);
     const audioStreamRef = useRef<MediaStream | null>(null);
     const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-    const settingsRef = useRef<FlashcardSettings>({}); // <-- Declaration is here
+    const settingsRef = useRef<FlashcardSettings>({
+        languageCode: selectedLanguageCode,
+        level: selectedLevel,
+        teachMeType: teachMeType,
+        topic: selectedTopic,
+        activityType: activityType,
+        mode: mode,
+        amount: amount,
+        translationTargetLanguageCode: translationTargetLanguageCode,
+    });
     const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
 
@@ -141,11 +151,19 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
     // Get available topics based on selected language and level
     const availableTopics = useMemo(() => {
         const langKey = targetLangName as keyof typeof teachMeData.grammarData;
-        const grammar = teachMeData.grammarData[langKey] || [];
-        const vocab = teachMeData.vocabData || [];
-        // Combine and filter by level
-        return [...grammar, ...vocab].filter(topic => topic.level === selectedLevel);
-    }, [selectedLevel, targetLangName, teachMeData]);
+        let sourceData: any[] = [];
+
+        if (teachMeType === 'Grammar') {
+            sourceData = teachMeData.grammarData[langKey] || [];
+        } else if (teachMeType === 'Vocabulary') {
+            sourceData = teachMeData.vocabData || [];
+        } else if (teachMeType === 'Conversation') {
+            sourceData = teachMeData.conversationData[langKey] || [];
+        }
+
+        // Filter by level
+        return sourceData.filter(topic => topic.level === selectedLevel);
+    }, [selectedLevel, targetLangName, teachMeType, teachMeData]);
 
     // --- EFFECTS & CALLBACKS (Order is important!) ---
 
@@ -155,6 +173,7 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
             languageCode: selectedLanguageCode,
             level: selectedLevel,
             topic: selectedTopic,
+            teachMeType: teachMeType, // <-- ADD THIS
             activityType: activityType,
             mode: mode,
             amount: amount,
@@ -174,7 +193,7 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
                 clearTimeout(saveTimeoutRef.current);
             }
         };
-    }, [selectedLanguageCode, selectedLevel, selectedTopic, activityType, mode, amount, translationTargetLanguageCode, user.uid]);
+    }, [selectedLanguageCode, selectedLevel, selectedTopic, teachMeType, activityType, mode, amount, translationTargetLanguageCode, user.uid]);
 
 
     // Load content (translation, definition, image) for a card on demand
@@ -244,6 +263,7 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
             languageCode: selectedLanguageCode,
             level: selectedLevel,
             topic: selectedTopic,
+            teachMeType: teachMeType,
             activityType: activityType,
             mode: mode,
             amount: amount,
@@ -263,7 +283,7 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
                 console.log(`Asking AI for ${amount} words for "${selectedTopic}" in ${targetLangName}...`);
                 const prompt = `
                     Generate a JSON array of exactly ${amount} unique key vocabulary words or short phrases (nouns, verbs, adjectives; max 3 words each)
-                    strictly in the ${targetLangName} language, directly related to the content of the lesson topic "${selectedTopic}".
+                    strictly in the ${targetLangName} language, directly related to the content of the lesson topic "${selectedTopic}" (which is a ${teachMeType} lesson).
                     Focus on learnable content words from the topic itself.
                     Absolutely DO NOT include meta-words like "grammar", "vocabulary", "lesson", "introduction", "overview", "example", "level", "review", etc.
                     Do not include English words unless the topic is specifically about English loanwords in ${targetLangName}.
@@ -657,6 +677,14 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
                                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Level</label>
                                 <select value={selectedLevel} onChange={e => setSelectedLevel(parseInt(e.target.value))} className="mt-1 block w-full input-style">
                                     {[1, 2, 3, 4, 5].map(lvl => <option key={lvl} value={lvl}>Level {lvl}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Topic Type</label>
+                                <select value={teachMeType} onChange={e => setTeachMeType(e.target.value as TeachMeType)} className="mt-1 block w-full input-style">
+                                    <option value="Vocabulary">Vocabulary</option>
+                                    <option value="Grammar">Grammar</option>
+                                    <option value="Conversation">Conversation</option>
                                 </select>
                             </div>
                             <div>

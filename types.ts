@@ -156,6 +156,7 @@ export interface FlashcardSettings {
   languageCode?: string;
   level?: number;
   topic?: string | null;
+  teachMeType?: TeachMeType;
   activityType?: FlashcardActivityType; // Make sure FlashcardActivityType is exported or defined here
   mode?: FlashcardMode; // Make sure FlashcardMode is exported or defined here
   amount?: number;

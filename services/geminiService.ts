@@ -855,13 +855,14 @@ For all other terms (regular words or phrases), provide the normal ${translation
  * @param langName The name of the target language.
  * @returns A promise resolving to the image URL string.
  */
-export const callImagenProxy = async (word: string, langName: string): Promise<string> => {
-    console.log(`Requesting image generation for "${word}" in ${langName} via proxy.`);
+export const callImagenProxy = async (imagePrompt: string): Promise<string> => {
+    // Log only the beginning of potentially long prompts
+    console.log(`Requesting image generation with prompt: "${imagePrompt.substring(0,100)}..." via proxy.`);
     try {
-        const response = await fetch(IMAGEN_PROXY_URL, { // Use the defined proxy URL
+        const response = await fetch(IMAGEN_PROXY_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ word, language: langName }), // Send word and language
+          body: JSON.stringify({ prompt: imagePrompt }), // Send the provided prompt
         });
 
         if (!response.ok) {
@@ -875,13 +876,12 @@ export const callImagenProxy = async (word: string, langName: string): Promise<s
             console.error("Imagen proxy response missing imageUrl:", data);
             throw new Error('Image generation succeeded but no URL was returned.');
         }
-        console.log(`Image URL received for "${word}": ${data.imageUrl.substring(0, 50)}...`);
+        console.log(`Image URL received: ${data.imageUrl.substring(0, 50)}...`);
         return data.imageUrl;
 
     } catch (error) {
         console.error("Error calling the Imagen proxy function:", error);
-        // Return a placeholder on failure
-        return `https://via.placeholder.com/300x200.png?text=Error+generating+${encodeURIComponent(word)}`;
+        return `https://via.placeholder.com/300x200.png?text=Error+generating+image`; // Generic error placeholder
     }
 };
 
@@ -924,12 +924,11 @@ export const generateImageForWord = async (
   word: string,
   langName: string,
   level: number,
-  topicTitle: string | null // <-- Allow null
+  topicTitle: string | null
 ): Promise<string> => {
-  // FIX: Handle null or undefined topicTitle safely
-  const normalizedTopic = topicTitle ? topicTitle.toLowerCase() : ""; // <-- Use empty string if null
+  const normalizedTopic = topicTitle ? topicTitle.toLowerCase() : "";
 
-  // Check if this is a Level 1 alphabet/character lesson
+  // Still use Image Search for simple characters in Level 1 alphabet lessons
   if (level === 1 && (
       normalizedTopic.includes('alphabet') ||
       normalizedTopic.includes('vowel') ||
@@ -938,12 +937,59 @@ export const generateImageForWord = async (
       normalizedTopic.includes('katakana') ||
       normalizedTopic.includes('hiragana')
     )) {
-    // Use Google Image Search for simple characters
+    console.log(`Using Image Search for character: "${word}"`);
     const query = `${langName} letter ${word} alphabet`;
     return await searchForImage(query);
   } else {
-    // Use Imagen for all other words
-    return await callImagenProxy(word, langName);
+    // --- NEW STEP: Generate a descriptive prompt via Gemini ---
+    let descriptiveImagePrompt = `A simple, clear, minimalist drawing or icon representing the concept of "${word}" in ${langName}. White background, no text, no letters, simple icon style.`; // Define a sensible fallback
+
+    try {
+      // Prompt for Gemini to generate the Imagen prompt
+      const promptGenPrompt = `
+        You are an AI assistant helping create image generation prompts for language flashcards.
+        Given a word/phrase, its language, and the lesson topic, generate a concise, visually descriptive prompt suitable for an AI image generator (like Imagen 4.0).
+
+        **CRITICAL RULES:**
+        1.  Focus ONLY on visual elements. Describe the *concept* or *object* the word represents without literally writing the word.
+        2.  Do NOT include the original word "${word}" directly in the prompt if it's likely to cause the AI to render it as text. Instead, describe what it *looks like* or *represents*. (e.g., for "apple", prompt might be "A shiny red apple fruit").
+        3.  Explicitly include these style instructions in the prompt: "minimalist style, simple drawing, white background, no text, no letters, icon".
+        4.  Keep the prompt clear and relatively short (max 30 words).
+
+        Word/Phrase: "${word}"
+        Language: ${langName}
+        Lesson Topic: "${topicTitle || 'General Vocabulary'}"
+
+        Generate the image prompt now. Respond ONLY with the prompt text itself. Do not include quotation marks around your response or any conversational filler.`;
+
+      console.log(`Generating descriptive prompt for Imagen for word: "${word}"`);
+      const response = await callGeminiProxy(promptGenPrompt, "gemini-2.5-flash-lite"); // Use Flash for speed
+      // Ensure candidate and parts exist before accessing text
+      const generatedPrompt = response?.candidates?.[0]?.content?.parts?.[0]?.text?.trim().replace(/^["']|["']$/g, '');
+
+      if (generatedPrompt) {
+        // Combine the generated description with required style elements if not already present
+        let finalPrompt = generatedPrompt;
+        if (!finalPrompt.includes("minimalist style")) finalPrompt += ", minimalist style";
+        if (!finalPrompt.includes("simple drawing")) finalPrompt += ", simple drawing";
+        if (!finalPrompt.includes("white background")) finalPrompt += ", white background";
+        if (!finalPrompt.includes("no text")) finalPrompt += ", no text";
+        if (!finalPrompt.includes("no letters")) finalPrompt += ", no letters";
+        if (!finalPrompt.includes("icon")) finalPrompt += ", icon style";
+
+        descriptiveImagePrompt = finalPrompt;
+        console.log(`Using generated prompt: "${descriptiveImagePrompt}"`);
+      } else {
+         console.warn("Gemini returned empty or invalid prompt, using fallback.");
+         // Fallback is already set above
+      }
+    } catch (error) {
+      console.error("Error generating descriptive prompt for Imagen, using fallback:", error);
+      // Fallback is already set above, just log the error
+    }
+
+    // --- Call Imagen with the (potentially improved) prompt ---
+    return await callImagenProxy(descriptiveImagePrompt);
   }
 };
 
