@@ -1,4 +1,4 @@
-import { Message, Partner, QuizQuestion, UserProfileData, TeachMeCache, YouTubeVideo } from '../types';
+import { Message, Partner, QuizQuestion, UserProfileData, TeachMeCache, YouTubeVideo, FlashcardSettings } from '../types';
 
 // Make sure this is the correct URL for your deployed Cloud Function.
 //const PROXY_URL = "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiProxy"; // Replace if yours is different
@@ -21,6 +21,14 @@ const YOUTUBE_PROXY_URL =
   process.env.NODE_ENV === 'development'
     ? "/youtubeProxy"
     : "https://us-central1-langcampus-exchange.cloudfunctions.net/youtubeProxy";
+const IMAGEN_PROXY_URL =
+  process.env.NODE_ENV === 'development'
+    ? "/imagenProxy"
+    : "https://us-central1-langcampus-exchange.cloudfunctions.net/imagenProxy";
+const IMAGE_SEARCH_PROXY_URL =
+  process.env.NODE_ENV === 'development'
+    ? "/imageSearchProxy"
+    : "https://us-central1-langcampus-exchange.cloudfunctions.net/imageSearchProxy";
 
 /**
  * A helper function to safely parse JSON from the AI,
@@ -88,7 +96,7 @@ const colorMap: Record<string, { skin: string[], hair: string[] }> = {
  * @param prompt The text prompt to send to the Gemini API.
  * @returns The JSON response from the API.
  */
-const callGeminiProxy = async (prompt: string, model: string = "gemini-2.5-flash-lite") => {
+export const callGeminiProxy = async (prompt: string, model: string = "gemini-2.5-flash-lite") => {
   try {
     const response = await fetch(PROXY_URL, {
       method: 'POST',
@@ -763,4 +771,222 @@ export const getInitialWelcomeMessage = async (partner: Partner): Promise<Messag
     // Fallback message
     return { sender: 'ai', text: `Hi, I'm ${partner.name}. Let's chat!`, translation: "", correction: "" };
   }
+};
+
+/**
+ * Gets a simple definition for a word using Gemini.
+ * @param word The word in the target language.
+ * @param targetLangName Target language name (e.g., "Spanish").
+ * @param userNativeLangName The user's native language (for context).
+ * @returns A promise resolving to the definition string.
+ */
+export const getDefinition = async (
+  word: string,
+  targetLangName: string,
+  userNativeLangName: string // We keep this to pass from the modal, but update the prompt
+): Promise<string> => {
+  try {
+    // --- UPDATED PROMPT ---
+    // Be very explicit that the definition MUST be in the target language.
+    const prompt = `
+      Provide a simple definition for the ${targetLangName} term: "${word}".
+      The definition MUST be written entirely in ${targetLangName}.
+      Do not use ${userNativeLangName} (English) in the definition.
+      Keep it concise (1-2 sentences) and suitable for a language learner.
+      Respond ONLY with the definition text.
+    `;
+    // --- END UPDATED PROMPT ---
+
+    const response = await callGeminiProxy(prompt, "gemini-2.5-flash-lite");
+    // Trim potentially leading/trailing whitespace or newlines from AI response
+    return response.candidates[0].content.parts[0].text.trim();
+  } catch (error) {
+    console.error(`Error getting definition for ${word} in ${targetLangName}:`, error);
+    return `Definition unavailable for "${word}".`;
+  }
+};
+
+/**
+ * Gets a translation for a word using Gemini.
+ * @param word The word in the target language.
+ * @param targetLangName Target language name (e.g., "Spanish").
+ * @param translationTargetLangName The language name to translate TO (e.g., "English").
+ * @param level The selected lesson level (to handle special cases).
+ * @returns A promise resolving to the translation string.
+ */
+export const getTranslation = async (
+  word: string,
+  targetLangName: string,
+  translationTargetLangName: string,
+  level: number // <-- ADDED this parameter
+): Promise<string> => {
+  try {
+    // --- NEW PROMPT LOGIC ---
+    let prompt = `Translate the following term from ${targetLangName} to ${translationTargetLangName}: "${word}"\n`;
+
+    // Add special instructions for Level 1 learners
+    if (level === 1 && targetLangName.toLowerCase() === 'korean') {
+      prompt += `
+SPECIAL INSTRUCTION: This is for a Level 1 Korean learner. If the term is a single character that is part of the Hangul alphabet (like a single vowel 'ㅜ' or consonant 'ㄱ'), do not translate it as a word. Instead, respond *only* with its common English phonetic pronunciation (e.g., for 'ㅜ', respond 'oo'; for 'ㅏ', respond 'ah').
+For all other terms (regular words or phrases), provide the normal ${translationTargetLangName} translation.
+`;
+    } else {
+      // This is the default instruction for other levels
+      prompt += `Provide the normal translation.
+`;
+    }
+
+    // Add the final formatting instruction
+    prompt += `Respond ONLY with the single translated word, short phrase, or phonetic pronunciation. Do not add any extra explanation or formatting.`;
+    // --- END NEW PROMPT LOGIC ---
+
+    const response = await callGeminiProxy(prompt, "gemini-2.5-flash-lite");
+    // Trim potentially leading/trailing whitespace or newlines from AI response
+    return response.candidates[0].content.parts[0].text.trim();
+  } catch (error) {
+    console.error(`Error getting translation for ${word} to ${translationTargetLangName}:`, error);
+    return `Translation unavailable for "${word}".`;
+  }
+};
+
+/**
+ * Generates an image for a word using the Imagen 4.0 fast proxy Cloud Function.
+ * @param word The word in the target language.
+ * @param langName The name of the target language.
+ * @returns A promise resolving to the image URL string.
+ */
+export const callImagenProxy = async (word: string, langName: string): Promise<string> => {
+    console.log(`Requesting image generation for "${word}" in ${langName} via proxy.`);
+    try {
+        const response = await fetch(IMAGEN_PROXY_URL, { // Use the defined proxy URL
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ word, language: langName }), // Send word and language
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`Imagen proxy error (${response.status}):`, errorText);
+            throw new Error(`Image generation failed: ${errorText}`);
+        }
+
+        const data = await response.json();
+        if (!data.imageUrl) {
+            console.error("Imagen proxy response missing imageUrl:", data);
+            throw new Error('Image generation succeeded but no URL was returned.');
+        }
+        console.log(`Image URL received for "${word}": ${data.imageUrl.substring(0, 50)}...`);
+        return data.imageUrl;
+
+    } catch (error) {
+        console.error("Error calling the Imagen proxy function:", error);
+        // Return a placeholder on failure
+        return `https://via.placeholder.com/300x200.png?text=Error+generating+${encodeURIComponent(word)}`;
+    }
+};
+
+// --- This is the new function to call our new search proxy ---
+const searchForImage = async (query: string): Promise<string> => {
+  console.log(`Requesting Image Search for "${query}"...`);
+  try {
+    const response = await fetch(IMAGE_SEARCH_PROXY_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
+    });
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Image search proxy error (${response.status}): ${errorText}`);
+    }
+    const data = await response.json();
+    if (!data.imageUrl) {
+      throw new Error('Image search succeeded but no URL was returned.');
+    }
+    return data.imageUrl;
+  } catch (error) {
+    console.error("Error calling the Image Search proxy function:", error);
+    return `https://via.placeholder.com/300x200.png?text=Error+searching+${encodeURIComponent(query)}`;
+  }
+};
+
+
+// --- This is the NEW exported function that replaces the old one ---
+/**
+ * Gets an image for a flashcard, deciding whether to
+ * use Image Search or Imagen generation based on context.
+ * @param word The word (e.g., "ㅜ" or "apple").
+ * @param langName The language name (e.g., "Korean").
+ * @param level The lesson level.
+ * @param topicTitle The title of the lesson.
+ * @returns A promise resolving to the image URL string.
+ */
+export const generateImageForWord = async (
+  word: string,
+  langName: string,
+  level: number,
+  topicTitle: string
+): Promise<string> => {
+  const normalizedTopic = topicTitle.toLowerCase();
+  
+  // Check if this is a Level 1 alphabet/character lesson
+  if (level === 1 && (
+      normalizedTopic.includes('alphabet') || 
+      normalizedTopic.includes('vowel') || 
+      normalizedTopic.includes('consonant') ||
+      normalizedTopic.includes('hangul')
+    )) {
+    // Use Google Image Search for simple characters
+    const query = `${langName} letter ${word} alphabet`;
+    return await searchForImage(query);
+  } else {
+    // Use Imagen for all other words
+    return await callImagenProxy(word, langName);
+  }
+};
+
+/**
+ * Uses Gemini to check if a user's review answer is correct.
+ * @param userInput The user's typed answer.
+ * @param correctTerm The correct flashcard term.
+ * @param languageName The language of the terms (e.g., "Korean").
+ * @returns A promise resolving to "correct" or "incorrect".
+ */
+export const checkFlashcardReview = async (
+  userInput: string,
+  correctTerm: string,
+  languageName: string
+): Promise<'correct' | 'incorrect'> => {
+  // --- ADDED IMPLEMENTATION ---
+  // If it's an exact match, don't waste an API call
+  if (userInput.trim().toLowerCase() === correctTerm.trim().toLowerCase()) {
+    return 'correct';
+  }
+
+  // If it's not an exact match, ask Gemini to validate
+  const prompt = `
+    Task: Check if a user's answer in a language flashcard review is correct.
+    Language: ${languageName}
+    Correct Answer: "${correctTerm}"
+    User's Answer: "${userInput}"
+
+    Is the User's Answer an acceptable, correct alternative or synonym for the Correct Answer?
+    Consider common typos, singular/plural forms, or slightly different but valid translations.
+    Respond with only a single word: "correct" or "incorrect".
+  `;
+
+  try {
+    const response = await callGeminiProxy(prompt, "gemini-2.5-flash-lite");
+    const result = response.candidates[0].content.parts[0].text.trim().toLowerCase();
+
+    if (result === 'correct') {
+      return 'correct';
+    } else {
+      return 'incorrect';
+    }
+  } catch (error) {
+    console.error("Error checking flashcard review:", error);
+    // Fail safe: if AI check fails, fall back to strict check
+    return userInput.trim().toLowerCase() === correctTerm.trim().toLowerCase() ? 'correct' : 'incorrect';
+  }
+  // --- END ADDED IMPLEMENTATION ---
 };

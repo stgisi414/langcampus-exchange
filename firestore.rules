@@ -9,7 +9,8 @@ service cloud.firestore {
         // Allow updates to general profile info at any time
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'name', 'hobbies', 'bio', 'nativeLanguage', 'targetLanguage', 
-          'savedChat', 'teachMeCache', 'notes', 'activeGroupId', 'usage', 'xp'
+          'savedChat', 'teachMeCache', 'notes', 'activeGroupId', 'usage', 'xp',
+          'flashcardSettings'
         ]) ||
         // Allow adding new fields for backwards compatibility with old user accounts
         (

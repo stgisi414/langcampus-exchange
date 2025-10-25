@@ -154,3 +154,78 @@ export const DocumentTextIcon: React.FC<IconProps> = ({ className }) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
     </svg>
 );
+
+export const FlashcardsIcon: React.FC<IconProps> = ({ className }) => (
+  <svg
+    className={className}
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 48 48"
+    fill="none" // Changed fill to none based on SVG style
+    stroke="currentColor" // Changed stroke to currentColor to match other icons
+    strokeLinecap="round" // Converted from SVG style
+    strokeLinejoin="round" // Converted from SVG style
+    strokeWidth="1.5" // Added a default strokeWidth, adjust if needed
+  >
+    <g> {/* Removed id="b" */}
+      <g> {/* Removed id="c" */}
+        <path // Removed id="d", applied style via props/defaults
+          d="M14.2425,7.5612h19.5149c1.4716,0,2.6563,1.1851,2.6563,2.6573v27.5631c0,1.4721-1.1847,2.6572-2.6563,2.6572H14.2425c-1.4716,0-2.6563-1.1851-2.6563-2.6572V10.2185c0-1.4721,1.1847-2.6573,2.6563-2.6573Z"
+        />
+        <g> {/* Removed id="e" */}
+          <path d="M15.3502,16.8855h17.7024" /> {/* Removed id="f" */}
+          <path d="M15.3502,20.3124h17.7024" /> {/* Removed id="g" */}
+          <path d="M15.3502,23.7393h17.7024" /> {/* Removed id="h" */}
+          <path d="M15.3502,27.1663h17.7024" /> {/* Removed id="i" */}
+          <path d="M15.3502,13.4586h7.097" />   {/* Removed id="j" */}
+          <path d="M15.3502,30.5932h7.097" />   {/* Removed id="k" */}
+          <path d="M15.3502,34.0201h17.7024" /> {/* Removed id="l" */}
+        </g>
+        <path d="M11.5847,37.7356h24.8306" /> {/* Removed id="m" */}
+        <path d="M19.8585,37.7355v2.7027" />   {/* Removed id="n" */}
+        <path d="M28.1416,37.7355v2.7027" />   {/* Removed id="o" */}
+      </g>
+      <path // Removed id="p"
+        d="M11.5688,36.8379L5.5919,14.5237c-.3809-1.422.4568-2.8734,1.8783-3.2545h0l4.1006-1.0992"
+      />
+      <path // Removed id="q"
+        d="M36.4312,36.8379l5.9769-22.3142c.3809-1.422-.4568-2.8734-1.8783-3.2545h0l-4.1006-1.0992"
+      />
+    </g>
+  </svg>
+);
+
+export const CheckIcon: React.FC<IconProps> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} class={className}>
+        <path d="M20 6 9 17l-5-5"/>
+    </svg>
+);
+
+export const XIcon: React.FC<IconProps> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} class={className}>
+        <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
+    </svg>
+);
+
+export const ChevronLeftIcon: React.FC<IconProps> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} class={className}>
+        <path d="m15 18-6-6 6-6"/>
+    </svg>
+);
+
+export const ChevronRightIcon: React.FC<IconProps> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} class={className}>
+        <path d="m9 18 6-6-6-6"/>
+    </svg>
+);
+
+export const RefreshIcon: React.FC<IconProps> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} class={className}>
+        <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>
+    </svg>
+);
+
+export const CrownIcon: React.FC<IconProps> = ({ className }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} class={className}>
+        <path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z"/><path d="M5 21h14"/>
+    </svg>
+);

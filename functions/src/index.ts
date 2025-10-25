@@ -1,5 +1,5 @@
 import cors from "cors";
-import { onRequest, Request as FunctionsRequest } from "firebase-functions/v2/https";
+import { onRequest, Request as FunctionsRequest, HttpsError } from "firebase-functions/v2/https"; // Import HttpsError
 import { Response as ExpressResponse } from "express";
 import * as logger from "firebase-functions/logger";
 import Stripe from "stripe";
@@ -8,9 +8,14 @@ import { initializeApp, getApps } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { SpeechClient } from "@google-cloud/speech";
 import { TextToSpeechClient } from "@google-cloud/text-to-speech";
+import { getStorage } from 'firebase-admin/storage'; // Import Storage
+import { v4 as uuidv4 } from 'uuid'; // Import uuid
+
 if (getApps().length === 0) {
   initializeApp();
 }
+
+const bucket = getStorage().bucket();
 
 const allowedOrigins = [
   "https://langcampus-exchange.web.app",
@@ -335,6 +340,117 @@ export const createStripePortalLink = onRequest(
       } catch (error: any) {
         logger.error(`Error creating portal link:`, error);
         response.status(500).send({ error: "Failed to create portal link." });
+      }
+    });
+  }
+);
+
+export const imagenProxy = onRequest(
+  // No secrets needed here as we use the service account token
+  { timeoutSeconds: 120 }, // Increase timeout for image generation + upload
+  (request: FunctionsRequest, response: ExpressResponse) => {
+    corsHandler(request, response, async () => {
+      logger.info("imagenProxy started, CORS check passed.");
+      if (request.method !== "POST") {
+        return response.status(405).send("Method Not Allowed");
+      }
+      const { word, language } = request.body;
+      if (!word || !language) {
+        return response.status(400).send("Bad Request: Missing word or language");
+      }
+
+      // Construct the specific Imagen 4.0 fast model URL for your project
+      // Replace 'langcampus-exchange' if your project ID is different
+      const imageModelUrl = `https://us-central1-aiplatform.googleapis.com/v1/projects/langcampus-exchange/locations/us-central1/publishers/google/models/imagen-4.0-fast-generate-001:predict`;
+
+      // Use a more descriptive prompt for the flashcard context
+      const imagePrompt = `A simple, clear, minimalist drawing or icon representing the word "${word}" in ${language}. White background, no text or letters.`;
+
+      try {
+        // Fetch the access token using the metadata server (works in Cloud Functions)
+        const tokenResponse = await fetch("http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token", { headers: { "Metadata-Flavor": "Google" } });
+        if (!tokenResponse.ok) {
+           logger.error("Error fetching access token:", { status: tokenResponse.status, text: await tokenResponse.text() });
+           throw new HttpsError("internal", "Could not obtain access token for Imagen API.");
+        }
+        const tokenData = await tokenResponse.json();
+        const accessToken = tokenData.access_token;
+
+        if (!accessToken) {
+            throw new HttpsError("internal", "Access token was empty.");
+        }
+
+        const imageApiRequest = {
+          instances: [{
+            prompt: imagePrompt,
+            // Add negative prompts to improve image quality
+            negativePrompt: "text, words, letters, writing, captions, headlines, titles, signs, numbers, fonts, blurry, unclear, abstract, complex background",
+          }],
+          parameters: {
+              sampleCount: 1,
+              // Aspect ratio might be better as 1:1 or 4:3 for flashcards
+              aspectRatio: "1:1",
+              mimeType: "image/jpeg" // JPEG is generally smaller
+          },
+        };
+
+        logger.info("Sending request to Imagen API:", { url: imageModelUrl, prompt: imagePrompt });
+
+        const imageApiResponse = await fetch(imageModelUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify(imageApiRequest),
+        });
+
+        if (!imageApiResponse.ok) {
+          const errorText = await imageApiResponse.text();
+          logger.error("Error from Imagen API:", { status: imageApiResponse.status, text: errorText });
+          throw new HttpsError("internal", `Imagen API failed with status ${imageApiResponse.status}`);
+        }
+
+        const imageData = await imageApiResponse.json();
+        logger.info("Received response from Imagen API");
+
+        // Extract the base64 encoded image bytes
+        const base64ImageBytes = imageData.predictions?.[0]?.bytesBase64Encoded;
+        if (!base64ImageBytes) {
+          logger.error("No image data found in Imagen response", imageData);
+          throw new HttpsError("internal", "Failed to generate image data from Imagen.");
+        }
+
+        // Decode and save to Cloud Storage
+        const imageBuffer = Buffer.from(base64ImageBytes, 'base64');
+        const fileName = `flashcard_images/${uuidv4()}.jpeg`; // Store in a specific folder
+        const file = bucket.file(fileName);
+
+        logger.info(`Uploading image to Storage: ${fileName}`);
+        await file.save(imageBuffer, {
+          metadata: {
+            contentType: 'image/jpeg',
+            // Optional: Add cache control for better performance
+            cacheControl: 'public, max-age=31536000', // Cache for 1 year
+          },
+        });
+
+        // Make the file publicly readable
+        await file.makePublic();
+        const imageUrl = file.publicUrl();
+        logger.info(`Image successfully uploaded: ${imageUrl}`);
+
+        // Return the public URL
+        return response.json({ imageUrl });
+
+      } catch (error: any) {
+        logger.error("Error in imagenProxy function:", error);
+        // Check if it's already an HttpsError
+        if (error instanceof HttpsError) {
+            return response.status(error.httpErrorCode.status).send(error.message);
+        }
+        // Otherwise, return a generic 500 error
+        return response.status(500).send("Internal Server Error: Image generation failed.");
       }
     });
   }

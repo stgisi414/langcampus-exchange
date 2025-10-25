@@ -39,6 +39,16 @@ export default defineConfig(({ mode }) => {
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/youtubeProxy/, '/youtubeProxy'),
           },
+          '/imagenProxy': {
+            target: 'https://127.0.0.1:5001/langcampus-exchange/us-central1',
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/imagenProxy/, '/imagenProxy')
+          },
+          '/imageSearchProxy': {
+            target: 'http://127.0.0.1:5001/langcampus-exchange/us-central1',
+            changeOrigin: true,
+            rewrite: (path) => path.replace(/^\/imageSearchProxy/, '/imageSearchProxy')
+          },
         },
       },
     };

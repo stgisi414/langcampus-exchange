@@ -1,7 +1,7 @@
 import { doc, getDoc, updateDoc, increment, setDoc, arrayUnion, arrayRemove } from "firebase/firestore";
 import { User } from "firebase/auth";
 import { db } from '../firebaseConfig.ts';
-import { UserData, UsageKey, SavedChat, SubscriptionStatus, TeachMeCache, Note, UserProfileData } from '../types.ts';
+import { UserData, UsageKey, SavedChat, SubscriptionStatus, TeachMeCache, Note, UserProfileData, FlashcardSettings } from '../types.ts';
 import { deleteAudioMessage } from './storageService.ts';
 
 const DAILY_LIMITS = {
@@ -50,6 +50,7 @@ export const initializeUserProfile = async (uid: string, user: AuthUser) => {
       isAgeVerified: false,
       birthDate: null,
       contentPreference: 'standard',
+      flashcardSettings: {},
     };
     await setDoc(userRef, newUserProfile, { merge: true }); // Use merge to be safe with stripe extension
   } else {
@@ -61,6 +62,7 @@ export const initializeUserProfile = async (uid: string, user: AuthUser) => {
         isAgeVerified: data.isAgeVerified || false,
         birthDate: data.birthDate || null,
         contentPreference: data.contentPreference || 'standard',
+        flashcardSettings: data.flashcardSettings || {},
       });
     }
   }
@@ -229,4 +231,9 @@ export const reorderNotesInFirestore = async (userId: string, newNotes: Note[]) 
   await updateDoc(userRef, {
     notes: newNotes
   });
+};
+
+export const saveFlashcardSettings = async (userId: string, settings: FlashcardSettings) => {
+  const userRef = doc(db, "customers", userId);
+  await updateDoc(userRef, { flashcardSettings: settings });
 };

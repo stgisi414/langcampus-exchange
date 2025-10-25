@@ -49,7 +49,9 @@ import {
   MasterIcon,
   YouTubeIcon,
   MinimizeIcon,
-  DocumentTextIcon
+  DocumentTextIcon,
+  FlashcardsIcon,
+  CrownIcon
 } from "./components/Icons";
 import LoadingSpinner from "./components/LoadingSpinner";
 import {
@@ -84,6 +86,7 @@ import GroupNotFound from "./components/GroupNotFound.tsx";
 import NotesModal from "./components/NotesModal.tsx";
 import RecordRTC from 'recordrtc';
 import AgeVerificationModal from "./components/AgeVerificationModal.tsx";
+import FlashcardModal from "./components/FlashcardModal";
 
 // Helper for localStorage (Removed as we are using Firestore for persistence)
 
@@ -2953,6 +2956,7 @@ const AppContent: React.FC<AppContentProps> = ({ user, errorModal, setErrorModal
   const [transcriptions, setTranscriptions] = useState<Record<string, string>>({});
   const [transcribingId, setTranscribingId] = useState<string | null>(null);
   const [replyingToMessage, setReplyingToMessage] = useState<Message | null>(null);
+  const [showFlashcardModal, setShowFlashcardModal] = useState(false);
 
   useEffect(() => {
     // DEBUG LOG: Initial check for age verification status
@@ -3791,60 +3795,98 @@ const AppContent: React.FC<AppContentProps> = ({ user, errorModal, setErrorModal
     }
   };
 
-  const handleSpeakNote = useCallback(async (text: string, topic: string): Promise<void> => {
-    const baseLangCode = targetLanguage;
-    const gender = currentPartner?.gender || 'male';
-    const foreignLangCode = user.nativeLanguage || 'en-US'; 
-    const voiceMapForForeignLang = VOICE_MAP[foreignLangCode];
-    let foreignVoiceName: string | undefined;
-    if (voiceMapForForeignLang) {
-        foreignVoiceName = voiceMapForForeignLang[gender] || voiceMapForForeignLang['male'];
-    }
-    const finalForeignVoice = foreignVoiceName || VOICE_MAP['en-US']['male']; 
+  // stgisi414/langcampus-exchange/langcampus-exchange-3e3a964be23cb9f3bc45579ca4c7b0bb0c34a4c0/App.tsx
 
-    return new Promise<void>(async (resolve) => {
-      await handleUsageCheck("audioPlays", async () => {
-          try {
-              const ssmlText = await geminiService.tagTextForTTS(text, baseLangCode, finalForeignVoice);
-              const audioContent = await geminiService.synthesizeSpeech(ssmlText, baseLangCode, gender);
-              const audioBlob = new Blob([base64ToArrayBuffer(audioContent)], { type: 'audio/mpeg' });
-              const audioUrl = URL.createObjectURL(audioBlob);
-              const audio = new Audio(audioUrl);
-              
-              audio.play();
-              audio.onended = () => {
-                  resolve();
-              };
-              audio.onerror = () => {
-                  console.error("Audio playback failed or stopped unexpectedly.");
-                  resolve(); 
-              };
-          } catch (error) {
-              console.error("Error synthesizing speech for note, falling back to browser TTS:", error);
+  const handleSpeakNote = useCallback(async (text: string, contextOrLangCode: string): Promise<void> => {
+      // --- This logic detects if the call is from the flashcard modal ---
+      // We check if the 'contextOrLangCode' string looks like a language code (e.g., 'ko-KR', 'en-US')
+      const isFlashcardCall = /^[a-z]{2}-[A-Z]{2}$/.test(contextOrLangCode);
+
+      if (isFlashcardCall) {
+          // --- SIMPLE PATH (for Flashcards) ---
+          const languageCode = contextOrLangCode; // The string IS the language code
+          const gender = 'female'; // Use a consistent default gender for flashcards
+          const voiceMap = VOICE_MAP[languageCode] || VOICE_MAP['en-US'];
+          const voiceName = voiceMap[gender] || voiceMap['female'];
+
+          return new Promise<void>(async (resolve) => {
               try {
-                  if ('speechSynthesis' in window) {
-                      const utterance = new SpeechSynthesisUtterance(text);
-                      utterance.lang = baseLangCode;
-                      utterance.onend = () => resolve();
-                      window.speechSynthesis.speak(utterance);
-                  } else {
+                  // No usage check, no SSML tagging
+                  const audioContent = await geminiService.synthesizeSpeech(
+                      `<speak>${text}</speak>`, // Just wrap in speak tags
+                      languageCode,
+                      gender
+                  );
+                  const audioBlob = new Blob([base64ToArrayBuffer(audioContent)], { type: 'audio/mpeg' });
+                  const audioUrl = URL.createObjectURL(audioBlob);
+                  const audio = new Audio(audioUrl);
+                  audio.play();
+                  audio.onended = () => resolve();
+                  audio.onerror = () => {
+                      console.error("Flashcard audio playback failed.");
                       resolve();
-                  }
-              } catch (speechError) {
-                  console.error("Browser speech synthesis failed to start:", speechError);
+                  };
+              } catch (error) {
+                  console.error("Error synthesizing speech for flashcard:", error);
                   resolve();
               }
+              setTimeout(() => resolve(), 15000); // Timeout fallback
+          });
+
+      } else {
+          // --- COMPLEX PATH (for Chat Partner) ---
+          // 'contextOrLangCode' is actually a 'topic' (which this function seems to ignore)
+          // This is your original code logic
+          const baseLangCode = targetLanguage;
+          const gender = currentPartner?.gender || 'male';
+          const foreignLangCode = user.nativeLanguage || 'en-US';
+          const voiceMapForForeignLang = VOICE_MAP[foreignLangCode];
+          let foreignVoiceName: string | undefined;
+          if (voiceMapForForeignLang) {
+              foreignVoiceName = voiceMapForForeignLang[gender] || voiceMapForForeignLang['male'];
           }
-      });
-      
-      setTimeout(() => {
-          if (process.env.NODE_ENV !== 'production') {
-              console.warn("handleSpeakNote timed out and forced resolution.");
-          }
-          resolve();
-      }, 15000);
-    });
-  }, [currentPartner, targetLanguage, handleUsageCheck, user.nativeLanguage, user.uid]);
+          const finalForeignVoice = foreignVoiceName || VOICE_MAP['en-US']['male'];
+
+          return new Promise<void>(async (resolve) => {
+              await handleUsageCheck("audioPlays", async () => {
+                  try {
+                      const ssmlText = await geminiService.tagTextForTTS(text, baseLangCode, finalForeignVoice);
+                      const audioContent = await geminiService.synthesizeSpeech(ssmlText, baseLangCode, gender);
+                      const audioBlob = new Blob([base64ToArrayBuffer(audioContent)], { type: 'audio/mpeg' });
+                      const audioUrl = URL.createObjectURL(audioBlob);
+                      const audio = new Audio(audioUrl);
+                      audio.play();
+                      audio.onended = () => resolve();
+                      audio.onerror = () => {
+                          console.error("Audio playback failed or stopped unexpectedly.");
+                          resolve();
+                      };
+                  } catch (error) {
+                      console.error("Error synthesizing speech for note, falling back to browser TTS:", error);
+                      try {
+                          if ('speechSynthesis' in window) {
+                              const utterance = new SpeechSynthesisUtterance(text);
+                              utterance.lang = baseLangCode;
+                              utterance.onend = () => resolve();
+                              window.speechSynthesis.speak(utterance);
+                          } else {
+                              resolve();
+                          }
+                      } catch (speechError) {
+                          console.error("Browser speech synthesis failed to start:", speechError);
+                          resolve();
+                      }
+                  }
+              });
+              setTimeout(() => {
+                  if (process.env.NODE_ENV !== 'production') {
+                      console.warn("handleSpeakNote timed out and forced resolution.");
+                  }
+                  resolve();
+              }, 15000);
+          });
+      }
+  }, [currentPartner, targetLanguage, handleUsageCheck, user.nativeLanguage, user.uid, geminiService.synthesizeSpeech, geminiService.tagTextForTTS]); // Added services to dependency array
 
   const handleRequestTranscription = async (audioUrl: string, messageIndex: number) => {
     // Check if already transcribed or currently transcribing
@@ -3890,6 +3932,12 @@ const AppContent: React.FC<AppContentProps> = ({ user, errorModal, setErrorModal
       setTranscriptions(prev => ({ ...prev, [audioUrl]: "Error getting transcription." }));
     } finally {
       setTranscribingId(null);
+    }
+  };
+
+  const handleAddXp = (amount: number) => {
+    if (user && amount > 0) {
+      firestoreService.addXp(user.uid, amount); // Direct call here is OK
     }
   };
 
@@ -4026,6 +4074,31 @@ const AppContent: React.FC<AppContentProps> = ({ user, errorModal, setErrorModal
                     Select your languages and click "Find New Pals" to start your
                     journey.
                 </p>
+                {user.subscription?.toLowerCase() === 'subscriber' ? (
+                  // User IS a Pro subscriber
+                  <p className="text-xl text-gray-500 dark:text-gray-400 mt-2">
+                      Or review language material with{' '}
+                      <button
+                          onClick={() => setShowFlashcardModal(true)}
+                          className="inline-flex items-center text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline font-semibold"
+                      >
+                          <FlashcardsIcon className="w-5 h-5 inline-block mr-1" />
+                          flashcards
+                      </button>.
+                  </p>
+                ) : (
+                  // User is NOT a Pro subscriber
+                  <p className="text-xl text-gray-500 dark:text-gray-400 mt-2">
+                      Or review language material with{' '}
+                      <button
+                          onClick={() => setShowSubscriptionModal(true)} // Open subscription modal
+                          className="inline-flex items-center text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline font-semibold"
+                      >
+                          <CrownIcon className="w-5 h-5 inline-block mr-1 text-yellow-500" />
+                          Flashcards (Pro)
+                      </button>.
+                  </p>
+                )}
                 <div className="mt-16">
                     <h2 className="text-3xl font-bold text-center mb-8 text-gray-800 dark:text-gray-200">
                         Unlock Your Fluency with Our Powerful Features
@@ -4102,6 +4175,18 @@ const AppContent: React.FC<AppContentProps> = ({ user, errorModal, setErrorModal
           onSubscribe={handleUpgrade}
           reason={subscriptionModalReason}
           isUpgrading={isUpgrading}
+        />
+      )}
+      {showFlashcardModal && user && (
+        <FlashcardModal
+          user={user}
+          targetLanguage={targetLanguage}
+          nativeLanguage={nativeLanguage}
+          onClose={() => setShowFlashcardModal(false)}
+          onAddXp={handleAddXp}
+          availableLanguages={LANGUAGES}
+          teachMeData={{ grammarData, vocabData, conversationData }} // Pass teachMeData
+          onSpeak={handleSpeakNote} // Reuse speak function
         />
       )}
     </div>

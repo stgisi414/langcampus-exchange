@@ -143,6 +143,19 @@ export interface Note {
   createdAt: number;
 }
 
+export interface FlashcardSettings {
+  languageCode?: string;
+  level?: number;
+  topic?: string | null;
+  activityType?: FlashcardActivityType; // Make sure FlashcardActivityType is exported or defined here
+  mode?: FlashcardMode; // Make sure FlashcardMode is exported or defined here
+  amount?: number;
+  translationTargetLanguageCode?: string; // Add this for the new selector
+}
+
+export type FlashcardActivityType = 'translation' | 'definition' | 'image';
+export type FlashcardMode = 'study' | 'review';
+
 export interface UserData {
   uid: string;
   email: string | null;
@@ -169,4 +182,6 @@ export interface UserData {
   birthDate?: string; // Stored as 'YYYY-MM-DD'
   isAgeVerified?: boolean;
   contentPreference?: 'standard' | 'pg13' | 'r21plus';
+
+  flashcardSettings?: FlashcardSettings;
 }

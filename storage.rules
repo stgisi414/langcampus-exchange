@@ -1,8 +1,26 @@
 rules_version = '2';
-service firebase.storage {
-  match /b/{bucket}/o {
-    match /{allPaths=**} {
-      allow read, write: if request.auth != null; // Allows authenticated users to read/write
-    }
-  }
-}
+ service firebase.storage {
+   match /b/{bucket}/o {
+     // Rule for user-specific audio messages
+     match /audio_messages/{userId}/{fileName} {
+       // Only allow the authenticated user matching the userId in the path
+       // to read or write files within their own folder.
+       allow read, write: if request.auth != null && request.auth.uid == userId;
+     }
+
+     // Rule for generated flashcard images
+     match /flashcard_images/{fileName} {
+        // Allow anyone to read these images (needed for displaying in the app).
+       allow read: if true;
+       // Allow any authenticated user (specifically your Cloud Function running
+       // as an authenticated user/service account) to write images.
+       allow write: if request.auth != null;
+     }
+
+     // It's good practice to deny access to unspecified paths explicitly,
+     // although Firebase Storage rules default to deny if no rule matches.
+     // match /{allOtherPaths=**} {
+     //   allow read, write: if false;
+     // }
+   }
+ }
