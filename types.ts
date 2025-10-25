@@ -153,7 +153,16 @@ export interface FlashcardSettings {
   translationTargetLanguageCode?: string; // Add this for the new selector
 }
 
-export type FlashcardActivityType = 'translation' | 'definition' | 'image';
+export type Flashcard = {
+  id: string;          // A unique identifier for the card
+  term: string;        // The word or phrase to be learned
+  translation?: string; // The translation (for 'translation' activity)
+  definition?: string;  // The definition (for 'definition' activity)
+  imageUrl?: string | null; // The image URL (for 'image' activity)
+  sentence?: string;    // The example sentence (for 'sentence' activity)
+};
+
+export type FlashcardActivityType = 'translation' | 'definition' | 'image' | 'sentence';
 export type FlashcardMode = 'study' | 'review';
 
 export interface UserData {

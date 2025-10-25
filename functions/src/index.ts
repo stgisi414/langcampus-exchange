@@ -455,3 +455,66 @@ export const imagenProxy = onRequest(
     });
   }
 );
+
+export const imageSearchProxy = onRequest(
+  { secrets: ["CUSTOM_SEARCH_API_KEY", "CUSTOM_SEARCH_ENGINE_ID"], timeoutSeconds: 60 }, // Standard timeout should be sufficient now
+  (request: FunctionsRequest, response: ExpressResponse) => {
+    // Apply CORS handling FIRST
+    corsHandler(request, response, async () => {
+      logger.info("imageSearchProxy started, CORS check passed.");
+
+      // Now check the method AFTER CORS headers are potentially handled
+      if (request.method !== "POST") {
+        // Note: corsHandler might automatically handle OPTIONS,
+        // but explicitly allowing POST is clearer.
+        // If OPTIONS requests still fail, you might need more specific handling,
+        // but typically the middleware handles it if run first.
+        return response.status(405).send("Method Not Allowed");
+      }
+
+      const { query } = request.body;
+      if (!query) {
+        return response.status(400).send("Bad Request: Missing query");
+      }
+
+      const apiKey = process.env.CUSTOM_SEARCH_API_KEY; // Assuming you add this secret
+      const cx = process.env.CUSTOM_SEARCH_ENGINE_ID; // Assuming you add this secret
+
+      if (!apiKey || !cx) {
+        logger.error("API Key or Custom Search Engine ID not configured.");
+        return response.status(500).send("Internal Server Error: Search configuration missing.");
+      }
+
+      const searchUrl = `https://www.googleapis.com/customsearch/v1?key=${apiKey}&cx=${cx}&q=${encodeURIComponent(query)}&searchType=image&num=1&safe=active`;
+
+      try {
+        logger.info(`Performing image search for: "${query}"`);
+        const searchResponse = await fetch(searchUrl);
+
+        if (!searchResponse.ok) {
+          const errorText = await searchResponse.text();
+          logger.error("Error from Google Custom Search API:", { status: searchResponse.status, text: errorText });
+          // Propagate the status code if possible, otherwise use 502 Bad Gateway
+          const statusCode = searchResponse.status >= 400 && searchResponse.status < 600 ? searchResponse.status : 502;
+          return response.status(statusCode).send(`Image search failed: ${errorText}`);
+        }
+
+        const searchData = await searchResponse.json();
+        const imageUrl = searchData?.items?.[0]?.link;
+
+        if (!imageUrl) {
+          logger.warn("No image found in search results for:", query);
+          // Send a 404 Not Found if no image is returned by the search
+          return response.status(404).json({ imageUrl: null, message: "No image found for this query." });
+        }
+
+        logger.info(`Image found for "${query}": ${imageUrl.substring(0, 50)}...`);
+        return response.status(200).json({ imageUrl });
+
+      } catch (error: any) {
+        logger.error("Error in imageSearchProxy function:", error);
+        return response.status(500).send("Internal Server Error: Image search failed.");
+      }
+    }); // End of corsHandler scope
+  }
+);

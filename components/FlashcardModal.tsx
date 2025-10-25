@@ -1,605 +1,642 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { UserData, Language, TeachMeType, FlashcardSettings, FlashcardActivityType, FlashcardMode } from '../types';
-import { CloseIcon, ChevronLeftIcon, ChevronRightIcon, CheckIcon, XIcon, RefreshIcon, VolumeUpIcon } from './Icons';
-import LoadingSpinner from './LoadingSpinner';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { 
+  Flashcard, 
+  FlashcardActivityType, 
+  FlashcardMode, 
+  Language, 
+  TeachMeData,
+  UserProfileData,
+  VocabData
+} from '../types'; // Make sure all these types are in your types.ts
 import * as geminiService from '../services/geminiService';
-import * as firestoreService from '../services/firestoreService';
+import LoadingSpinner from './LoadingSpinner';
+import {
+  VolumeUpIcon,
+  XIcon,
+  CheckIcon,
+  LightBulbIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon
+} from './Icons.tsx';
 
-interface Flashcard {
-    id: string;
-    term: string; // The word/phrase in the target language
-    translation?: string; // Translation in native language
-    definition?: string; // Definition in target language (maybe simplified)
-    imageUrl?: string; // URL for the generated image
-}
-
-interface TeachMeData {
-    grammarData: Record<string, any[]>;
-    vocabData: any[];
-    conversationData: Record<string, any[]>;
-}
+// Define a new SessionState that includes setup
+type ModalSessionState = 'configuring' | 'studying' | 'reviewing' | 'finished';
 
 interface FlashcardModalProps {
-    user: UserData;
-    targetLanguage: string; // User's default target language code (e.g., 'es-ES')
-    nativeLanguage: string; // User's native language code
-    onClose: () => void;
-    onAddXp: (amount: number) => void;
-    availableLanguages: Language[];
-    teachMeData: TeachMeData;
-    onSpeak: (text: string, languageCode: string) => Promise<void>;
+  user: UserProfileData;
+  targetLanguage: string; // This is the language code (e.g., "ko")
+  nativeLanguage: string; // This is the language code (e.g., "en")
+  onClose: () => void;
+  onAddXp: (xp: number) => void;
+  availableLanguages: Language[];
+  teachMeData: TeachMeData;
+  onSpeak: (text: string, langCode: string) => void;
 }
 
-// Helper: A simple LanguageSelector component (can be moved to Icons.tsx or its own file)
-const LanguageSelector: React.FC<{
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: Language[];
-  className?: string;
-}> = ({ label, value, onChange, options, className }) => (
-  <div className={`flex items-center gap-2 ${className}`}>
-    <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex-shrink-0">
-      {label}
-    </label>
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 input-style"
-    >
-      {options.map((lang) => (
-        <option key={lang.code} value={lang.code}>
-          {lang.name}
-        </option>
-      ))}
-    </select>
-  </div>
-);
-
-
-// Helper to extract potential words from TeachMe data (simple example)
-const extractWordsFromTopic = (topicData: any): string[] => {
-    if (!topicData || !topicData.title) return [];
-    // A very basic extraction from the title.
-    const words = topicData.title.match(/[\p{L}\p{N}]+/gu) || [];
-    // Filter out very short words
-    return words.filter(w => w.length > 2);
-};
-
-
-const FlashcardModal: React.FC<FlashcardModalProps> = ({
-    user,
-    targetLanguage,
-    nativeLanguage,
-    onClose,
-    onAddXp,
-    availableLanguages,
-    teachMeData,
-    onSpeak,
+export const FlashcardModal: React.FC<FlashcardModalProps> = ({
+  user,
+  targetLanguage,
+  nativeLanguage,
+  onClose,
+  onAddXp,
+  availableLanguages,
+  teachMeData,
+  onSpeak
 }) => {
-    // --- STATE ---
-    // Load last settings from user profile or use defaults
-    const lastSettings = user.flashcardSettings || {};
-    
-    const [selectedLanguageCode, setSelectedLanguageCode] = useState(lastSettings.languageCode || targetLanguage);
-    const [selectedLevel, setSelectedLevel] = useState(lastSettings.level || 1);
-    const [selectedTopic, setSelectedTopic] = useState<string | null>(lastSettings.topic !== undefined ? lastSettings.topic : null);
-    const [activityType, setActivityType] = useState<FlashcardActivityType>(lastSettings.activityType || 'translation');
-    const [mode, setMode] = useState<FlashcardMode>(lastSettings.mode || 'study');
-    const [amount, setAmount] = useState(lastSettings.amount || 5);
-    const [translationTargetLanguageCode, setTranslationTargetLanguageCode] = useState(lastSettings.translationTargetLanguageCode || nativeLanguage);
+  // --- STATE FOR MODAL ---
+  const [modalState, setModalState] = useState<ModalSessionState>('configuring');
+  
+  // --- STATE FOR SETUP SCREEN ---
+  // Use `teachMeData` to find the vocab for the target language
+  const vocabTopics = useMemo(() => {
+    return teachMeData.vocabData[targetLanguage] || [];
+  }, [teachMeData.vocabData, targetLanguage]);
 
-    const [sessionState, setSessionState] = useState<'setup' | 'loading' | 'active' | 'finished'>('setup');
-    const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
-    const [currentIndex, setCurrentIndex] = useState(0);
-    const [isFlipped, setIsFlipped] = useState(false);
-    const [reviewInput, setReviewInput] = useState('');
-    const [feedback, setFeedback] = useState<'correct' | 'incorrect' | null>(null);
-    const [score, setScore] = useState(0);
-    const [isLoadingContent, setIsLoadingContent] = useState(false);
-    const [hasViewedPrompt, setHasViewedPrompt] = useState(false);
-    const [isCheckingReview, setIsCheckingReview] = useState(false);
+  const [selectedTopic, setSelectedTopic] = useState<VocabData | null>(vocabTopics[0] || null);
+  const [selectedActivityType, setSelectedActivityType] = useState<FlashcardActivityType>('translation');
+  const [selectedMode, setSelectedMode] = useState<FlashcardMode>('study');
 
-    // Refs for debouncing settings saves
-    const settingsRef = useRef<FlashcardSettings>({});
-    const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // --- STATE FOR FLASHCARD SESSION ---
+  const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isFlipped, setIsFlipped] = useState(false);
+  const [isLoadingContent, setIsLoadingContent] = useState(false);
 
-    // --- MEMOS ---
+  // State for Review Mode
+  const [reviewInput, setReviewInput] = useState('');
+  const [feedback, setFeedback] = useState<'correct' | 'incorrect' | null>(null);
+  const [hasViewedPrompt, setHasViewedPrompt] = useState(false);
 
-    // Get the name of the language being studied
-    const targetLangName = useMemo(() => 
-        availableLanguages.find(l => l.code === selectedLanguageCode)?.name || selectedLanguageCode, 
-        [selectedLanguageCode, availableLanguages]
-    );
-    
-    // Get the name of the language to translate *to*
-    const translationTargetLangName = useMemo(() => 
-        availableLanguages.find(l => l.code === translationTargetLanguageCode)?.name || translationTargetLanguageCode, 
-        [translationTargetLanguageCode, availableLanguages]
-    );
+  // State for Definition Translation
+  const [translatedDefinition, setTranslatedDefinition] = useState<string | null>(null);
+  const [isTranslatingDefinition, setIsTranslatingDefinition] = useState(false);
 
-    // Get the name of the user's *actual* native language (for definition prompts)
-    const userNativeLangName = useMemo(() => 
-        availableLanguages.find(l => l.code === nativeLanguage)?.name || nativeLanguage,
-        [nativeLanguage, availableLanguages]
-    );
+  // State for Sentence Translation
+  const [exampleSentence, setExampleSentence] = useState<string | null>(null);
+  const [translatedSentence, setTranslatedSentence] = useState<string | null>(null);
+  const [isLoadingSentence, setIsLoadingSentence] = useState(false);
+  const [isTranslatingSentence, setIsTranslatingSentence] = useState(false);
+  
+  // --- DERIVED VALUES ---
+  const currentCard = useMemo(() => flashcards[currentIndex], [flashcards, currentIndex]);
+  const targetLangName = useMemo(() => availableLanguages.find(lang => lang.code === targetLanguage)?.name || 'the selected language', [availableLanguages, targetLanguage]);
+  const translationTargetLangName = useMemo(() => availableLanguages.find(lang => lang.code === nativeLanguage)?.name || 'your language', [availableLanguages, nativeLanguage]);
 
-    // Get available topics based on selected language and level
-    const availableTopics = useMemo(() => {
-        const langKey = targetLangName as keyof typeof teachMeData.grammarData;
-        const grammar = teachMeData.grammarData[langKey] || [];
-        const vocab = teachMeData.vocabData || [];
-        // Combine and filter by level
-        return [...grammar, ...vocab].filter(topic => topic.level === selectedLevel);
-    }, [selectedLevel, targetLangName, teachMeData]);
+  // Options for setup dropdowns
+  const activityTypeOptions = [
+    { value: 'translation', label: 'Word -> Translation' },
+    { value: 'definition', label: 'Word -> Definition' },
+    { value: 'sentence', label: 'Word -> Sentence' },
+    { value: 'image', label: 'Word -> Image' },
+  ];
+  const modeOptions = [
+    { value: 'study', label: 'Study Mode' },
+    { value: 'review', label: 'Review Mode' },
+  ];
 
-    // --- EFFECTS & CALLBACKS (Order is important!) ---
+  // --- FUNCTIONS ---
 
-    // Debounced effect to save settings to Firestore as they change
-    useEffect(() => {
-        settingsRef.current = {
-            languageCode: selectedLanguageCode,
-            level: selectedLevel,
-            topic: selectedTopic,
-            activityType: activityType,
-            mode: mode,
-            amount: amount,
-            translationTargetLanguageCode: translationTargetLanguageCode,
-        };
-        
-        if (saveTimeoutRef.current) {
-            clearTimeout(saveTimeoutRef.current);
-        }
-        
-        saveTimeoutRef.current = setTimeout(() => {
-            firestoreService.saveFlashcardSettings(user.uid, settingsRef.current);
-        }, 1500); // Save after 1.5 seconds of inactivity
+  /**
+   * Called when "Start Session" is clicked.
+   * Creates the flashcard deck and changes the modal state.
+   */
+  const handleStartSession = () => {
+    if (!selectedTopic) return;
 
-        return () => { // Cleanup on unmount
-            if (saveTimeoutRef.current) {
-                clearTimeout(saveTimeoutRef.current);
-            }
-        };
-    }, [selectedLanguageCode, selectedLevel, selectedTopic, activityType, mode, amount, translationTargetLanguageCode, user.uid]);
+    // Create the initial flashcard deck from the topic's items
+    const newFlashcards = selectedTopic.items.map(item => ({
+      id: item,
+      term: item
+      // All other content (translation, definition, etc.) will be lazy-loaded
+    }));
 
+    setFlashcards(newFlashcards);
+    setCurrentIndex(0);
+    setModalState(selectedMode === 'study' ? 'studying' : 'reviewing');
+  };
 
-    // Load content (translation, definition, image) for a card on demand
-    const loadCardContent = useCallback(async (card: Flashcard | undefined) => {
-        // Check if card exists and if the required content is already loaded
-        if (!card || 
-            (activityType === 'translation' && card.translation) || 
-            (activityType === 'definition' && card.definition) || 
-            (activityType === 'image' && card.imageUrl)) {
-            return; 
-        }
+  /**
+   * Helper to update a single card in the main `flashcards` state.
+   */
+  const handleUpdateCard = (index: number, updatedCard: Flashcard) => {
+    setFlashcards(prevCards => {
+      const newCards = [...prevCards];
+      if (newCards[index]) {
+        newCards[index] = updatedCard;
+      }
+      return newCards;
+    });
+  };
 
-        setIsLoadingContent(true);
-        try {
-            let updatedCard = { ...card };
-            
-            if (activityType === 'translation' && !card.translation) {
-                // Use the selected translation target language
-                updatedCard.translation = await geminiService.getTranslation(
-                    card.term, 
-                    targetLangName, 
-                    translationTargetLangName, 
-                    selectedLevel
-                );
-            } else if (activityType === 'definition' && !card.definition) {
-                // Use the user's actual native language to get a simple definition
-                updatedCard.definition = await geminiService.getDefinition(card.term, targetLangName, userNativeLangName);
-            } else if (activityType === 'image' && !card.imageUrl) {
-                updatedCard.imageUrl = await geminiService.generateImageForWord(card.term, targetLangName, selectedLevel, selectedTopic);
-            }
+  const fetchCardContent = useCallback(async (card: Flashcard, type: FlashcardActivityType) => {
+    if (!selectedTopic) return; // Need topic info
 
-            setFlashcards(prev => prev.map(fc => fc.id === updatedCard.id ? updatedCard : fc));
-        } catch (error) {
-            console.error(`Error loading content for card ${card.id}:`, error);
-        } finally {
-            setIsLoadingContent(false);
-        }
-    }, [activityType, targetLangName, translationTargetLangName, userNativeLangName, selectedLevel, selectedLevel, selectedTopic]);
+    let contentField: keyof Flashcard | null = null;
+    let setIsLoading: React.Dispatch<React.SetStateAction<boolean>> | null = null;
+    let setContent: ((content: any) => void) | null = null;
 
-
-    // Preload content for the *next* card
-    useEffect(() => {
-        if (sessionState === 'active' && currentIndex + 1 < flashcards.length) {
-            loadCardContent(flashcards[currentIndex + 1]);
-        }
-    }, [currentIndex, flashcards, sessionState, loadCardContent]);
-
-
-    // Start a new flashcard session
-    const startSession = async () => {
-        if (!selectedTopic) return;
-        setSessionState('loading');
-        setFeedback(null);
-        setReviewInput('');
-        setIsFlipped(false);
-        setCurrentIndex(0);
-        setScore(0);
-        setHasViewedPrompt(false);
-        setIsCheckingReview(false);
-
-        // Save current settings immediately
-        const currentSettings: FlashcardSettings = {
-            languageCode: selectedLanguageCode,
-            level: selectedLevel,
-            topic: selectedTopic,
-            activityType: activityType,
-            mode: mode,
-            amount: amount,
-            translationTargetLanguageCode: translationTargetLanguageCode,
-        };
-        firestoreService.saveFlashcardSettings(user.uid, currentSettings);
-
-        try {
-            const topicData = availableTopics.find(t => t.title === selectedTopic);
-            if (!topicData) throw new Error("Topic data not found");
-            
-            let words: string[] = []; // Start with an empty array
-            const extractedWords = extractWordsFromTopic(topicData); // Get extracted words as a fallback
-            
-            try {
-                // Always try to get words from the AI first, as it's more reliable
-                console.log(`Asking AI for ${amount} words for "${selectedTopic}" in ${targetLangName}...`);
-                const prompt = `
-                    Generate a JSON array of exactly ${amount} unique key vocabulary words or short phrases (nouns, verbs, adjectives; max 3 words each)
-                    strictly in the ${targetLangName} language, directly related to the content of the lesson topic "${selectedTopic}".
-                    Focus on learnable content words from the topic itself.
-                    Absolutely DO NOT include meta-words like "grammar", "vocabulary", "lesson", "introduction", "overview", "example", "level", "review", etc.
-                    Do not include English words unless the topic is specifically about English loanwords in ${targetLangName}.
-                    Do not include proper nouns unless they are essential vocabulary for the topic (e.g., names of concepts).
-                    Prioritize words likely to be useful for a learner at level ${selectedLevel}.
-                    Respond ONLY with the JSON array of strings, e.g., ["word1", "phrase two", "word3"].
-                `;
-                 const response = await geminiService.callGeminiProxy(prompt, "gemini-2.5-flash-lite");
-                 
-                 // --- FIX: Extract JSON from markdown-wrapped response ---
-                 let rawText = response.candidates[0].content.parts[0].text;
-                 const startIndex = rawText.indexOf('[');
-                 const endIndex = rawText.lastIndexOf(']');
-                 
-                 if (startIndex === -1 || endIndex === -1) {
-                     throw new Error("No JSON array found in AI response text: " + rawText);
-                 }
-                 
-                 const jsonString = rawText.substring(startIndex, endIndex + 1);
-                 const aiWords = JSON.parse(jsonString); // Parse the *clean* string
-                 // --- END FIX ---
-
-                 if (Array.isArray(aiWords) && aiWords.length > 0) {
-                    words = [...new Set(aiWords)]; // Use *only* AI words, deduplicated
-                 } else {
-                    console.warn("AI returned no words, falling back to extraction.");
-                    words = extractedWords; // Fallback to extracted words
-                 }
-            } catch (aiError) {
-                 console.error("AI word generation failed, falling back to extraction:", aiError);
-                 words = extractedWords; // Fallback to extracted words
-            }
-             
-            if (words.length === 0) {
-                throw new Error("No vocabulary words could be found or generated for this topic.");
-            }
-
-            // Shuffle and slice to the desired amount
-            const selectedWords = words.sort(() => 0.5 - Math.random()).slice(0, amount);
-
-            const fetchedCards: Flashcard[] = selectedWords.map((word, index) => ({
-                id: `${selectedTopic}-${index}-${word}`,
-                term: word,
-            }));
-
-            setFlashcards(fetchedCards);
-            setSessionState('active');
-            // Preload content for the *first* card
-            await loadCardContent(fetchedCards[0]);
-
-        } catch (error) {
-            console.error("Error starting flashcard session:", error);
-            alert(`Failed to start session for "${selectedTopic}". Please try another topic.`);
-            setSessionState('setup');
-        }
-    };
-
-    const handleFlip = () => {
-        if (sessionState !== 'active') return;
-        setIsFlipped(!isFlipped);
-    };
-
-    const handleReviewSubmit = async () => { // <-- CHANGED: Made async
-        if (sessionState !== 'active' || !reviewInput.trim() || isCheckingReview) return;
-        
-        setIsCheckingReview(true); // <-- ADDED: Show loading
-        const currentCard = flashcards[currentIndex];
-        
-        try {
-            const result = await geminiService.checkFlashcardReview(
-                reviewInput,
-                currentCard.term,
-                targetLangName
-            );
-            setFeedback(result);
-            if (result === 'correct') {
-                onAddXp(1); // Add 1 XP
-                setScore(s => s + 1);
-            }
-        } catch (error) {
-            console.error("Error during review check:", error);
-            setFeedback('incorrect'); // Default to incorrect on error
-        } finally {
-            setIsCheckingReview(false); // <-- ADDED: Hide loading
-        }
-    };
-
-    const nextCard = () => {
-        if (currentIndex < flashcards.length - 1) {
-            setCurrentIndex(currentIndex + 1);
-            setIsFlipped(false);
-            setReviewInput('');
-            setFeedback(null);
-            setHasViewedPrompt(false);
-            // loadCardContent(flashcards[currentIndex + 1]); // This is now handled by the useEffect
+    switch (type) {
+      case 'translation':
+        if (!card.translation) contentField = 'translation';
+        break;
+      case 'definition':
+        if (!card.definition) contentField = 'definition';
+        break;
+      case 'image':
+        if (card.imageUrl === undefined) contentField = 'imageUrl';
+        break;
+      case 'sentence':
+        if (!card.sentence) {
+          contentField = 'sentence';
+          setIsLoading = setIsLoadingSentence;
+          setContent = setExampleSentence;
         } else {
-            setSessionState('finished');
+          setExampleSentence(card.sentence);
         }
-    };
+        break;
+      default:
+        return;
+    }
+    
+    // Set main loader for all types except sentence (which has its own)
+    if (type !== 'sentence' && contentField) {
+      setIsLoadingContent(true);
+    }
+    if (setIsLoading) {
+      setIsLoading(true);
+    }
 
-    const prevCard = () => {
-        if (currentIndex > 0) {
-            setCurrentIndex(currentIndex - 1);
-            setIsFlipped(false);
-            setReviewInput('');
-            setFeedback(null);
-            setHasViewedPrompt(false);
+    if (contentField) {
+      try {
+        const updatedCard = await geminiService.generateFlashcardContent(
+          card,
+          type,
+          targetLangName,
+          translationTargetLangName,
+          selectedTopic.level,
+          selectedTopic.topic
+        );
+
+        handleUpdateCard(currentIndex, updatedCard);
+
+        if (setContent && contentField in updatedCard) {
+          setContent(updatedCard[contentField as keyof Flashcard]);
         }
-    };
+      } catch (error) {
+        console.error(`Error fetching content for ${type}:`, error);
+      } finally {
+        if (type !== 'sentence') setIsLoadingContent(false);
+        if (setIsLoading) setIsLoading(false);
+      }
+    } else {
+      // Content already exists or no fetch needed
+      setIsLoadingContent(false);
+      if (setIsLoading) setIsLoading(false);
+    }
+  }, [
+    currentIndex,
+    selectedTopic,
+    targetLangName,
+    translationTargetLangName,
+  ]);
 
-    const restartSession = () => {
-        startSession(); // Re-fetch and start over
-    };
+  // This useEffect triggers when the session starts (studying/reviewing)
+  // and when the card index changes.
+  useEffect(() => {
+    if ((modalState === 'studying' || modalState === 'reviewing') && currentCard) {
+      // Reset states for the new card
+      setIsLoadingContent(true);
+      setExampleSentence(null);
+      setIsLoadingSentence(false);
+      setTranslatedDefinition(null);
+      setIsTranslatingDefinition(false);
+      setTranslatedSentence(null);
+      setIsTranslatingSentence(false);
+      setIsFlipped(false);
+      
+      // Fetch primary content for the current card
+      fetchCardContent(currentCard, selectedActivityType);
 
-    const backToSetup = () => {
-        setSessionState('setup');
-        setFlashcards([]);
-        setCurrentIndex(0);
-        setSelectedTopic(null); // Reset topic
-    };
+      // Handle content that might already exist from a previous fetch
+      if (selectedActivityType === 'translation' && currentCard.translation) setIsLoadingContent(false);
+      if (selectedActivityType === 'definition' && currentCard.definition) setIsLoadingContent(false);
+      if (selectedActivityType === 'image' && currentCard.imageUrl !== undefined) setIsLoadingContent(false);
+      if (selectedActivityType === 'sentence' && currentCard.sentence) {
+        setExampleSentence(currentCard.sentence);
+        setIsLoadingContent(false);
+        setIsLoadingSentence(false);
+      }
 
-    const handleSpeakTerm = () => {
-        if (flashcards[currentIndex]) {
-            onSpeak(flashcards[currentIndex].term, selectedLanguageCode);
-        }
-    };
+      // Pre-fetch next card's content silently
+      const nextCardIndex = currentIndex + 1;
+      if (nextCardIndex < flashcards.length && selectedTopic) {
+        const nextCard = flashcards[nextCardIndex];
+        geminiService.generateFlashcardContent(
+          nextCard,
+          selectedActivityType,
+          targetLangName,
+          translationTargetLangName,
+          selectedTopic.level,
+          selectedTopic.topic
+        ).then(updatedNextCard => {
+          handleUpdateCard(nextCardIndex, updatedNextCard);
+        }).catch(error => {
+          console.error("Error pre-fetching content:", error);
+        });
+      }
+    }
+  }, [
+    currentIndex,
+    modalState,
+    currentCard,
+    selectedActivityType,
+    fetchCardContent,
+    flashcards.length,
+    selectedTopic,
+    targetLangName,
+    translationTargetLangName
+  ]);
+  
+  // Reset index and state when modal is closed
+  useEffect(() => {
+    if (!onClose) return; // This modal is always "open" when rendered
+    
+    // Reset to config screen when closed
+    setModalState('configuring');
+    setCurrentIndex(0);
+    setFlashcards([]);
+    setIsFlipped(false);
+    // ... other resets
+    
+  }, [onClose]); // This is not ideal, but `isOpen` isn't a prop.
+                 // We'll rely on the parent unmounting/remounting.
+                 // Let's reset when the modal *opens* (i.e., mounts)
+  useEffect(() => {
+    setModalState('configuring');
+    setCurrentIndex(0);
+    setFlashcards([]);
+    setIsFlipped(false);
+    setFeedback(null);
+    setReviewInput('');
+    // etc.
+  }, []); // Empty dependency array means this runs on mount
 
-    // --- RENDER LOGIC ---
+  const handleFlip = () => {
+    if (modalState === 'studying') {
+      setIsFlipped(!isFlipped);
+    }
+  };
 
-    const currentCard = flashcards[currentIndex];
+  const handleSubmitReview = async () => {
+    if (!currentCard || feedback) return;
+
+    const result = await geminiService.checkFlashcardReview(
+      reviewInput,
+      currentCard.term,
+      targetLangName
+    );
+    setFeedback(result);
+    if (result === 'correct') {
+      onAddXp(5); // Add XP for correct review
+    }
+  };
+
+  const nextCard = () => {
+    if (currentIndex < flashcards.length - 1) {
+      setCurrentIndex(currentIndex + 1);
+      // Resets for the next card
+      setIsFlipped(false);
+      setReviewInput('');
+      setFeedback(null);
+      setHasViewedPrompt(false);
+      setTranslatedDefinition(null);
+      setIsTranslatingDefinition(false);
+      setExampleSentence(null);
+      setTranslatedSentence(null);
+      setIsTranslatingSentence(false);
+    } else {
+      setModalState('finished');
+      // onSessionComplete(flashcards); // We don't have this prop, but that's ok
+    }
+  };
+
+  const prevCard = () => {
+    if (currentIndex > 0) {
+      setCurrentIndex(currentIndex - 1);
+      // Resets
+      setIsFlipped(false);
+      setReviewInput('');
+      setFeedback(null);
+      setHasViewedPrompt(false);
+      setTranslatedDefinition(null);
+      setIsTranslatingDefinition(false);
+      setExampleSentence(null);
+      setTranslatedSentence(null);
+      setIsTranslatingSentence(false);
+    }
+  };
+
+  const handleTranslateDefinition = async () => {
+    if (!currentCard?.definition || isTranslatingDefinition || translatedDefinition || !selectedTopic) return;
+
+    setIsTranslatingDefinition(true);
+    try {
+      const translation = await geminiService.getTranslation(
+        currentCard.definition,
+        targetLangName,
+        translationTargetLangName,
+        selectedTopic.level
+      );
+      setTranslatedDefinition(translation);
+    } catch (error) {
+      console.error("Error translating definition:", error);
+      setTranslatedDefinition("Translation failed.");
+    } finally {
+      setIsTranslatingDefinition(false);
+    }
+  };
+
+  const handleTranslateSentence = async () => {
+    if (!exampleSentence || isTranslatingSentence || translatedSentence || !selectedTopic) return;
+
+    setIsTranslatingSentence(true);
+    try {
+      const translation = await geminiService.getTranslation(
+        exampleSentence,
+        targetLangName,
+        translationTargetLangName,
+        selectedTopic.level
+      );
+      setTranslatedSentence(translation);
+    } catch (error) {
+      console.error("Error translating sentence:", error);
+      setTranslatedSentence("Translation failed.");
+    } finally {
+      setIsTranslatingSentence(false);
+    }
+  };
+
+  const handleStudyAgain = () => {
+    setModalState('configuring'); // Go back to setup screen
+    setCurrentIndex(0);
+    setFlashcards([]);
+    setIsFlipped(false);
+    setReviewInput('');
+    setFeedback(null);
+    setHasViewedPrompt(false);
+    // ... all other resets
+  };
+
+  const handleViewPrompt = () => {
+    setHasViewedPrompt(true);
+  };
+  
+  // --- RENDER LOGIC ---
+
+  const renderSetupScreen = () => (
+    <>
+      <div className="p-4 md:p-6 flex-grow flex flex-col space-y-4">
+        <div>
+          <label htmlFor="topicSelect" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Topic
+          </label>
+          <select
+            id="topicSelect"
+            className="mt-1 w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600"
+            value={selectedTopic?.topic || ''}
+            onChange={(e) => {
+              const topicObj = vocabTopics.find(t => t.topic === e.target.value) || null;
+              setSelectedTopic(topicObj);
+            }}
+          >
+            {vocabTopics.length === 0 && <option disabled>No topics found for {targetLangName}</option>}
+            {vocabTopics.map(topic => (
+              <option key={topic.topic} value={topic.topic}>
+                {topic.topic} (Level {topic.level})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="activityTypeSelect" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Activity Type
+          </label>
+          <select
+            id="activityTypeSelect"
+            className="mt-1 w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600"
+            value={selectedActivityType}
+            onChange={(e) => setSelectedActivityType(e.target.value as FlashcardActivityType)}
+          >
+            {activityTypeOptions.map(option => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="modeSelect" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            Mode
+          </label>
+          <select
+            id="modeSelect"
+            className="mt-1 w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600"
+            value={selectedMode}
+            onChange={(e) => setSelectedMode(e.target.value as FlashcardMode)}
+          >
+            {modeOptions.map(option => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div className="flex items-center justify-end p-4 border-t dark:border-gray-700">
+        <button
+          onClick={handleStartSession}
+          disabled={!selectedTopic}
+          className="px-6 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50"
+        >
+          Start Session
+        </button>
+      </div>
+    </>
+  );
+
+  const renderFlashcardScreen = () => {
     let frontContent: React.ReactNode = null;
     let backContent: React.ReactNode = null;
-    let reviewPrompt: React.ReactNode = null;
 
     if (currentCard) {
-        if (mode === 'study') {
-            frontContent = <span className="text-3xl font-bold">{currentCard.term}</span>;
-            if (activityType === 'translation') {
-                backContent = isLoadingContent && !currentCard.translation ? <LoadingSpinner size="sm" /> : currentCard.translation;
-            } else if (activityType === 'definition') {
-                backContent = isLoadingContent && !currentCard.definition ? <LoadingSpinner size="sm" /> : currentCard.definition;
-            } else if (activityType === 'image') {
-                backContent = isLoadingContent && !currentCard.imageUrl ? 
-                    <LoadingSpinner size="sm" /> : 
-                    <img src={currentCard.imageUrl} alt={currentCard.term} className="max-w-full max-h-48 mx-auto" />;
-            }
-        } else { // review mode
-            if (activityType === 'translation') {
-                reviewPrompt = isLoadingContent && !currentCard.translation ? <LoadingSpinner size="sm" /> : currentCard.translation;
-            } else if (activityType === 'definition') {
-                reviewPrompt = isLoadingContent && !currentCard.definition ? <LoadingSpinner size="sm" /> : currentCard.definition;
-            } else if (activityType === 'image') {
-                reviewPrompt = isLoadingContent && !currentCard.imageUrl ? 
-                    <LoadingSpinner size="sm" /> : 
-                    <img src={currentCard.imageUrl} alt="Guess the word" className="max-w-full max-h-48 mx-auto" />;
-            }
+      if (modalState === 'studying') {
+        frontContent = <span className="text-3xl font-bold">{currentCard.term}</span>;
+
+        if (selectedActivityType === 'translation') {
+          backContent = isLoadingContent ? <LoadingSpinner size="sm" /> : (currentCard.translation || "N/A");
+        } else if (selectedActivityType === 'definition') {
+          if (isLoadingContent) {
+            backContent = <LoadingSpinner size="sm" />;
+          } else if (currentCard.definition) {
+            backContent = (
+              <div className="text-center w-full">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <span className="flex-grow">{currentCard.definition}</span>
+                  <button onClick={(e) => { e.stopPropagation(); onSpeak(currentCard.definition!, targetLanguage); }} className="p-1 text-gray-500 hover:text-blue-500 flex-shrink-0" title="Read definition"><VolumeUpIcon className="w-5 h-5" /></button>
+                  <button onClick={(e) => { e.stopPropagation(); handleTranslateDefinition(); }} className="p-1 text-gray-500 hover:text-blue-500 flex-shrink-0 disabled:opacity-50" disabled={isTranslatingDefinition || !!translatedDefinition} title={`Translate to ${translationTargetLangName}`}>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 21l5.25-11.25L21 21m-9-3h7.5M3 5.621a48.474 48.474 0 016-.371m0 0c1.12 0 2.233.038 3.334.114M9 5.25V3m3.334 2.364C11.176 10.658 7.69 15.08 3 17.502m9.334-12.138c.896.061 1.785.147 2.666.257m-4.589 8.495a18.023 18.023 0 01-3.827-5.802" /></svg>
+                  </button>
+                </div>
+                {isTranslatingDefinition && <div className="mt-2 text-sm text-gray-500"><LoadingSpinner size="sm" /> Translating...</div>}
+                {translatedDefinition && <div className="mt-2 pt-2 border-t dark:border-gray-600 text-sm text-gray-600 dark:text-gray-400"><strong>{translationTargetLangName}:</strong> {translatedDefinition}</div>}
+              </div>
+            );
+          } else {
+            backContent = "Definition not available.";
+          }
+        } else if (selectedActivityType === 'image') {
+          if (isLoadingContent) {
+            backContent = <LoadingSpinner size="sm" />;
+          } else if (currentCard.imageUrl) {
+            backContent = <img src={currentCard.imageUrl} alt={currentCard.term} className="max-h-full max-w-full object-contain rounded-md" />;
+          } else {
+            backContent = "Image not available.";
+          }
+        } else if (selectedActivityType === 'sentence') {
+          if (isLoadingSentence) {
+            backContent = <LoadingSpinner size="sm" />;
+          } else if (exampleSentence) {
+            backContent = (
+              <div className="text-center w-full">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <span className="flex-grow italic">"{exampleSentence}"</span>
+                  <button onClick={(e) => { e.stopPropagation(); onSpeak(exampleSentence, targetLanguage); }} className="p-1 text-gray-500 hover:text-blue-500 flex-shrink-0" title="Read sentence"><VolumeUpIcon className="w-5 h-5" /></button>
+                  <button onClick={(e) => { e.stopPropagation(); handleTranslateSentence(); }} className="p-1 text-gray-500 hover:text-blue-500 flex-shrink-0 disabled:opacity-50" disabled={isTranslatingSentence || !!translatedSentence} title={`Translate to ${translationTargetLangName}`}>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 21l5.25-11.25L21 21m-9-3h7.5M3 5.621a48.474 48.474 0 016-.371m0 0c1.12 0 2.233.038 3.334.114M9 5.25V3m3.334 2.364C11.176 10.658 7.69 15.08 3 17.502m9.334-12.138c.896.061 1.785.147 2.666.257m-4.589 8.495a18.023 18.023 0 01-3.827-5.802" /></svg>
+                  </button>
+                </div>
+                {isTranslatingSentence && <div className="mt-2 text-sm text-gray-500"><LoadingSpinner size="sm" /> Translating...</div>}
+                {translatedSentence && <div className="mt-2 pt-2 border-t dark:border-gray-600 text-sm text-gray-600 dark:text-gray-400"><strong>{translationTargetLangName}:</strong> {translatedSentence}</div>}
+              </div>
+            );
+          } else {
+            backContent = "Example sentence not available.";
+          }
         }
+      } else { // review mode
+        if (selectedActivityType === 'translation') {
+          frontContent = isLoadingContent ? <LoadingSpinner size="sm" /> : (currentCard.translation || "N/A");
+        } else if (selectedActivityType === 'definition') {
+          frontContent = isLoadingContent ? <LoadingSpinner size="sm" /> : (currentCard.definition || "N/A");
+        } else if (selectedActivityType === 'image') {
+          if (isLoadingContent) {
+            frontContent = <LoadingSpinner size="sm" />;
+          } else if (currentCard.imageUrl) {
+            frontContent = <img src={currentCard.imageUrl} alt="Flashcard prompt" className="max-h-full max-w-full object-contain rounded-md" />;
+          } else {
+            frontContent = "Image not available.";
+          }
+        } else if (selectedActivityType === 'sentence') {
+          if (isLoadingSentence) {
+            frontContent = <LoadingSpinner size="sm" />;
+          } else if (exampleSentence) {
+            frontContent = (
+              <div className="text-center">
+                <p className="mb-2">What word fits here?</p>
+                <p className="italic">"{exampleSentence.replace(new RegExp(currentCard.term, 'i'), '_____')}"</p>
+              </div>
+            );
+          } else {
+            frontContent = "Sentence not available.";
+          }
+        }
+        
+        backContent = (
+          <div className="w-full flex flex-col items-center">
+            <input
+              type="text"
+              value={reviewInput}
+              onChange={(e) => setReviewInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && !feedback && handleSubmitReview()}
+              className={`w-full p-2 border rounded-md dark:bg-gray-700 ${
+                feedback === 'correct' ? 'border-green-500' : feedback === 'incorrect' ? 'border-red-500' : 'dark:border-gray-600'
+              }`}
+              placeholder={`Type the ${targetLangName} word...`}
+              disabled={!!feedback}
+            />
+            {!feedback && <button onClick={handleSubmitReview} className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">Check</button>}
+            {feedback && (
+              <div className="mt-4 w-full text-center">
+                {feedback === 'correct' ? <p className="text-green-500 font-bold">Correct!</p> : <div className="text-red-500"><p className="font-bold">Not quite.</p><p>Correct answer: <strong>{currentCard.term}</strong></p></div>}
+                <button onClick={nextCard} className="mt-2 w-full px-4 py-2 bg-gray-700 text-white rounded-md hover:bg-gray-800">Next</button>
+              </div>
+            )}
+            {!feedback && !hasViewedPrompt && <button onClick={handleViewPrompt} className="mt-2 text-sm text-gray-500 hover:text-gray-400">Need a hint?</button>}
+            {hasViewedPrompt && <p className="mt-2 text-sm text-gray-400">The word starts with: <strong>{currentCard.term[0]}</strong></p>}
+          </div>
+        );
+      }
     }
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4" role="dialog" aria-modal="true">
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-lg h-[80vh] flex flex-col animate-fade-in-down">
-                {/* Header */}
-                <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">Flashcards: {targetLangName}</h2>
-                    <button onClick={onClose} className="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200" aria-label="Close Flashcards">
-                        <CloseIcon className="w-6 h-6" />
-                    </button>
-                </div>
-
-                {/* Body */}
-                <div className="flex-grow p-6 overflow-y-auto">
-                    {/* Setup Screen */}
-                    {sessionState === 'setup' && (
-                        <div className="space-y-4">
-                            <LanguageSelector
-                                label="Study Language:"
-                                value={selectedLanguageCode}
-                                onChange={setSelectedLanguageCode}
-                                options={availableLanguages}
-                            />
-                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Level</label>
-                                <select value={selectedLevel} onChange={e => setSelectedLevel(parseInt(e.target.value))} className="mt-1 block w-full input-style">
-                                    {[1, 2, 3, 4, 5].map(lvl => <option key={lvl} value={lvl}>Level {lvl}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Topic</label>
-                                <select value={selectedTopic || ""} onChange={e => setSelectedTopic(e.target.value || null)} className="mt-1 block w-full input-style" required>
-                                    <option value="" disabled>-- Select a Topic --</option>
-                                    {availableTopics.map(topic => <option key={topic.title} value={topic.title}>{topic.title}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Activity Type</label>
-                                <select value={activityType} onChange={e => setActivityType(e.target.value as FlashcardActivityType)} className="mt-1 block w-full input-style">
-                                    <option value="translation">Word - Translation</option>
-                                    <option value="definition">Word - Definition</option>
-                                    <option value="image">Word - Image</option>
-                                </select>
-                            </div>
-
-                            {/* Conditional Translation Language Selector */}
-                            {activityType === 'translation' && (
-                                <LanguageSelector
-                                    label="Translate To:"
-                                    value={translationTargetLanguageCode}
-                                    onChange={setTranslationTargetLanguageCode}
-                                    options={availableLanguages}
-                                    className="mt-2"
-                                />
-                            )}
-
-                             <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Mode</label>
-                                <select value={mode} onChange={e => setMode(e.target.value as FlashcardMode)} className="mt-1 block w-full input-style">
-                                    <option value="study">Study</option>
-                                    <option value="review">Review</option>
-                                </select>
-                            </div>
-                             <div>
-                                <label htmlFor="amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Number of Cards (5-15)</label>
-                                <input
-                                    id="amount" type="number" min="5" max="15" value={amount}
-                                    onChange={e => setAmount(Math.max(5, Math.min(15, parseInt(e.target.value) || 5)))}
-                                    className="mt-1 block w-full input-style"
-                                />
-                            </div>
-                            <button onClick={startSession} disabled={!selectedTopic} className="w-full button-primary disabled:opacity-50">
-                                Start Session
-                            </button>
-                        </div>
-                    )}
-
-                    {/* Loading Screen */}
-                    {sessionState === 'loading' && (
-                        <div className="flex justify-center items-center h-full">
-                            <LoadingSpinner />
-                            <p className="ml-4">Generating flashcards...</p>
-                        </div>
-                    )}
-
-                    {/* Active Session Screen */}
-                    {sessionState === 'active' && currentCard && (
-                        <div className="flex flex-col items-center justify-between h-full">
-                            <div className="text-sm text-gray-500 dark:text-gray-400">Card {currentIndex + 1} of {flashcards.length}</div>
-
-                            {/* Flashcard Area */}
-                            <div className="w-full h-64 border dark:border-gray-600 rounded-lg flex items-center justify-center p-4 my-4 relative text-center bg-gray-50 dark:bg-gray-700 cursor-pointer"
-                                 onClick={mode === 'study' ? handleFlip : undefined}
-                                 style={{ perspective: '1000px' }}
-                                 >
-                                {mode === 'study' ? (
-                                    <div className={`w-full h-full transition-transform duration-500 ${isFlipped ? '[transform:rotateY(180deg)]' : ''}`} style={{ transformStyle: 'preserve-3d' }}>
-                                        {/* Front */}
-                                        <div className="absolute inset-0 flex items-center justify-center p-4 backface-hidden">
-                                            {frontContent}
-                                            <button onClick={(e) => { e.stopPropagation(); handleSpeakTerm(); }} className="absolute top-2 right-2 p-1 text-gray-500 hover:text-blue-500">
-                                                <VolumeUpIcon className="w-5 h-5" />
-                                            </button>
-                                        </div>
-                                        {/* Back */}
-                                        <div className="absolute inset-0 flex items-center justify-center p-4 bg-blue-50 dark:bg-blue-900 [transform:rotateY(180deg)] backface-hidden">
-                                            {backContent}
-                                        </div>
-                                    </div>
-                                ) : (
-                                    // Review Mode
-                                    <div className="w-full flex flex-col items-center justify-center">
-                                        <div className="mb-4">{reviewPrompt}</div>
-                                        {!hasViewedPrompt && feedback === null && (
-                                            // 1. Show prompt, wait for user
-                                            <button 
-                                                onClick={() => setHasViewedPrompt(true)} 
-                                                className="button-primary"
-                                            >
-                                                Ready to Guess
-                                            </button>
-                                        )}
-
-                                        {hasViewedPrompt && feedback === null && (
-                                            // 2. Show input field
-                                            <form className="w-full max-w-xs" onSubmit={(e) => { e.preventDefault(); handleReviewSubmit(); }}>
-                                                <input
-                                                    type="text"
-                                                    value={reviewInput}
-                                                    onChange={(e) => setReviewInput(e.target.value)}
-                                                    placeholder="Type the word..."
-                                                    className="w-full input-style text-center mb-2"
-                                                    autoFocus
-                                                    disabled={isCheckingReview} // <-- ADDED
-                                                />
-                                                <button typeA="submit" className="w-full button-primary" disabled={isCheckingReview}>
-                                                    {isCheckingReview ? <LoadingSpinner size="sm" /> : 'Check'}
-                                                </button>
-                                            </form>
-                                        )}
-
-                                        {feedback !== null && (
-                                            // 3. Show feedback
-                                            <div className={`p-3 rounded text-center ${feedback === 'correct' ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300' : 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'}`}>
-                                                {feedback === 'correct' ? <CheckIcon className="w-6 h-6 inline mr-2"/> : <XIcon className="w-6 h-6 inline mr-2"/>}
-                                                {feedback === 'correct' ? 'Correct!' : `Correct Answer: ${currentCard.term}`}
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-                            </div>
-
-                            {/* Navigation */}
-                            <div className="flex justify-between w-full">
-                                <button onClick={prevCard} disabled={currentIndex === 0 || (mode === 'review' && feedback === null)} className="button-secondary disabled:opacity-50">
-                                    <ChevronLeftIcon className="w-5 h-5 inline mr-1" /> Prev
-                                </button>
-                                {mode === 'study' && <button onClick={handleFlip} className="button-secondary">{isFlipped ? 'Show Term' : 'Show Answer'}</button>}
-                                <button onClick={nextCard} disabled={mode === 'review' && feedback === null} className="button-secondary disabled:opacity-50">
-                                    Next <ChevronRightIcon className="w-5 h-5 inline ml-1" />
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Finished Screen */}
-                    {sessionState === 'finished' && (
-                        <div className="text-center space-y-4">
-                            <h3 className="text-2xl font-bold">Session Complete!</h3>
-                            {mode === 'review' && <p className="text-xl">Your score: {score} / {flashcards.length}</p>}
-                            <p>You reviewed words related to: {selectedTopic}</p>
-                            <div className="flex justify-center gap-4">
-                                <button onClick={restartSession} className="button-secondary flex items-center gap-1">
-                                    <RefreshIcon className="w-5 h-5"/> Restart
-                                </button>
-                                <button onClick={backToSetup} className="button-primary">New Session</button>
-                            </div>
-                        </div>
-                    )}
-                </div>
+      <>
+        <div className="p-4 md:p-6 flex-grow flex flex-col items-center justify-center min-h-[350px]">
+          <div
+            className={`flip-card w-full h-64 md:h-80 perspective ${isFlipped || modalState === 'reviewing' ? 'flipped' : ''}`}
+            onClick={handleFlip}
+          >
+            <div className="flip-card-inner">
+              <div className="flip-card-front">{frontContent}</div>
+              <div className="flip-card-back">{backContent}</div>
             </div>
-
-            {/* Styles */}
-            <style>{`
-                .input-style { padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; background-color: white; color: black; }
-                .dark .input-style { border-color: #555; background-color: #333; color: white; }
-                .button-primary { padding: 10px 15px; background-color: #3b82f6; color: white; font-weight: bold; border-radius: 6px; transition: background-color 0.2s; }
-                .button-primary:hover { background-color: #2563eb; }
-                .button-secondary { padding: 8px 12px; background-color: #e5e7eb; color: #374151; font-weight: bold; border-radius: 6px; transition: background-color 0.2s; }
-                .button-secondary:hover { background-color: #d1d5db; }
-                .dark .button-secondary { background-color: #4b5563; color: #e5e7eb; }
-                .dark .button-secondary:hover { background-color: #6b7280; }
-                .backface-hidden { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
-            `}</style>
+          </div>
         </div>
+        <div className="flex items-center justify-between p-4 border-t dark:border-gray-700">
+          <button onClick={prevCard} disabled={currentIndex === 0} className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30"><ChevronLeftIcon className="w-6 h-6" /></button>
+          <span className="text-sm text-gray-500 dark:text-gray-400">{currentIndex + 1} / {flashcards.length}</span>
+          <button onClick={nextCard} disabled={modalState === 'reviewing' && !feedback} className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30"><ChevronRightIcon className="w-6 h-6" /></button>
+        </div>
+      </>
     );
+  };
+
+  const renderFinishedScreen = () => (
+    <div className="p-4 md:p-6 flex-grow flex flex-col items-center justify-center min-h-[350px] text-center">
+      <h4 className="text-xl font-bold mb-4">Session Complete!</h4>
+      <button
+        onClick={handleStudyAgain}
+        className="px-6 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
+      >
+        New Session
+      </button>
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75" onClick={onClose}>
+      <div
+        className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl w-11/12 max-w-lg max-h-[90vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+            {modalState === 'configuring' && 'Flashcard Setup'}
+            {(modalState === 'studying' || modalState === 'reviewing') && (selectedTopic?.topic || 'Flashcard Session')}
+            {modalState === 'finished' && 'Session Complete'}
+          </h3>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg text-sm p-1.5"
+          >
+            <XMarkIcon className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Content Area */}
+        {modalState === 'configuring' && renderSetupScreen()}
+        {(modalState === 'studying' || modalState === 'reviewing') && renderFlashcardScreen()}
+        {modalState === 'finished' && renderFinishedScreen()}
+      </div>
+    </div>
+  );
 };
 
-export default FlashcardModal;
