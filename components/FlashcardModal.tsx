@@ -4,6 +4,7 @@ import { CloseIcon, ChevronLeftIcon, ChevronRightIcon, CheckIcon, XIcon, Refresh
 import LoadingSpinner from './LoadingSpinner';
 import * as geminiService from '../services/geminiService';
 import * as firestoreService from '../services/firestoreService';
+import * as RecordRTC from 'recordrtc';
 
 interface Flashcard {
     id: string;
@@ -77,7 +78,6 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
     availableLanguages,
     teachMeData,
     onSpeak,
-    onListen,
 }) => {
     // --- STATE ---
     // Load last settings from user profile or use defaults
@@ -107,11 +107,16 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
     const [isLoadingSentenceTranslation, setIsLoadingSentenceTranslation] =
     useState(false);
     const [isListening, setIsListening] = useState(false);
+    const [isTranscribing, setIsTranscribing] = useState(false);
 
 
     // Refs for debouncing settings saves
-    const settingsRef = useRef<FlashcardSettings>({});
+    const recorderRef = useRef<RecordRTC | null>(null);
+    const audioStreamRef = useRef<MediaStream | null>(null);
+    const silenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const settingsRef = useRef<FlashcardSettings>({}); // <-- Declaration is here
     const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
 
     // --- MEMOS ---
 
@@ -454,31 +459,106 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
         }
     };
 
-    const handleMicClick = async () => {
-        if (isListening) {
-          // Note: This implementation assumes your onListen prop
-          // handles its own cancellation/stopping if needed.
-          // We'll just toggle the state here.
-          setIsListening(false);
-          return;
-        }
+    const startRecording = useCallback(async () => {
+        if (isListening) return;
 
-        if (!onListen) {
-          console.error('onListen prop is not provided to FlashcardModal');
-          return;
-        }
-
-        setIsListening(true);
         try {
-          // Call your provided STT function
-          const transcript = await onListen(selectedLanguageCode);
-          if (transcript) {
-            setReviewInput(transcript); // Set input with the result
-          }
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            audioStreamRef.current = stream;
+
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+            const options: RecordRTC.Options = {
+                type: 'audio',
+                mimeType: isIOS ? 'audio/mp4' : 'audio/webm',
+                numberOfAudioChannels: 1,
+                sampleRate: 48000,
+                bufferSize: 16384,
+                disableLogs: true,
+            };
+            const browserIsSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+            if (browserIsSafari) {
+                options.recorderType = RecordRTC.StereoAudioRecorder;
+            }
+
+            // --- FIX: Use the 'default' export for the constructor ---
+            // The 'as any' is used here to bypass strict TypeScript checking for the default property
+            // if the type definitions (@types/recordrtc) don't explicitly define it this way.
+            const newRecorder = new (RecordRTC as any).default(stream, options);
+            // --- END FIX ---
+
+            newRecorder.startRecording();
+            recorderRef.current = newRecorder;
+
+            setReviewInput('');
+            setFeedback(null);
+            setIsListening(true);
+            setIsTranscribing(false);
+
         } catch (error) {
-          console.error('Speech recognition error:', error);
+            console.error("Error starting flashcard recording:", error);
+            alert("Could not start recording. Please check microphone permissions.");
+            setIsListening(false);
+        }
+    }, [isListening]);
+
+    const stopRecordingAndTranscribe = useCallback(async () => {
+        if (!recorderRef.current || !isListening) return;
+
+        // Clear any silence timeout if implemented
+        if (silenceTimeoutRef.current) clearTimeout(silenceTimeoutRef.current);
+
+        setIsListening(false); // Update button state immediately
+        setIsTranscribing(true); // Show transcribing indicator
+
+        try {
+            await new Promise<Blob>((resolve, reject) => {
+                 if (!recorderRef.current) return reject("Recorder not available");
+                 recorderRef.current.stopRecording(() => {
+                    const blob = recorderRef.current!.getBlob();
+                    if (audioStreamRef.current) {
+                        audioStreamRef.current.getTracks().forEach(track => track.stop());
+                        audioStreamRef.current = null;
+                    }
+                    recorderRef.current?.destroy();
+                    recorderRef.current = null;
+                    resolve(blob);
+                 });
+            }).then(async (audioBlob) => {
+                if (audioBlob && audioBlob.size > 100) { // Check if blob has some data
+                    // Get the language code for the currently selected flashcard language
+                    const langCodeToTranscribe = selectedLanguageCode; // Use state variable
+                    const transcription = await geminiService.transcribeAudio(audioBlob, langCodeToTranscribe);
+                    setReviewInput(transcription || ""); // Update input field
+                    // Optional: Automatically submit after transcription?
+                    // if (transcription) {
+                    //    handleReviewSubmit(); // Need to adapt handleReviewSubmit to use the state directly
+                    // }
+                } else {
+                    console.warn("Recorded audio blob is empty or too small.");
+                }
+            });
+        } catch (error) {
+            console.error('Error stopping recording or transcribing:', error);
+            setReviewInput(""); // Clear input on error
         } finally {
-          setIsListening(false); // Stop listening state on success or error
+            setIsTranscribing(false); // Hide transcribing indicator
+             // Ensure recorder refs are cleared even on error
+             if (audioStreamRef.current) {
+                audioStreamRef.current.getTracks().forEach(track => track.stop());
+                audioStreamRef.current = null;
+            }
+            if(recorderRef.current){
+                 recorderRef.current?.destroy();
+                 recorderRef.current = null;
+            }
+        }
+    }, [isListening, selectedLanguageCode, geminiService.transcribeAudio]);
+
+    const handleMicClick = () => {
+        if (isListening) {
+            stopRecordingAndTranscribe();
+        } else {
+            startRecording();
         }
     };
 
@@ -695,36 +775,41 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
                                         )}
                                         {hasViewedPrompt && feedback === null && (
                                             <form className="w-full max-w-xs" onSubmit={(e) => { e.preventDefault(); handleReviewSubmit(); }}>
-                                                <div className="flex items-center space-x-2">
+                                                <div className="flex items-center space-x-2 mb-2"> {/* Added mb-2 */}
                                                     <input
                                                         type="text"
                                                         value={reviewInput}
                                                         onChange={(e) => setReviewInput(e.target.value)}
-                                                        placeholder="Type the word..."
-                                                        className="w-full input-style text-center mb-2"
+                                                        placeholder="Type or speak the word..." // Updated placeholder
+                                                        className="w-full input-style text-center" // Removed mb-2 from here
                                                         autoFocus
-                                                        disabled={isCheckingReview || isListening}
+                                                        // *** Disable input while listening/transcribing ***
+                                                        disabled={isCheckingReview || isListening || isTranscribing}
                                                     />
                                                     <button
                                                         type="button"
                                                         onClick={handleMicClick}
-                                                        // MODIFIED: Removed speechRecognitionAvailable check
-                                                        disabled={isCheckingReview || isListening}
+                                                        // *** Disable button during check/transcription ***
+                                                        disabled={isCheckingReview || isTranscribing}
                                                         className={`p-2 rounded-full transition-colors ${
                                                           isListening
-                                                            ? 'bg-red-500 text-white animate-pulse' // Added pulse animation
+                                                            ? 'bg-red-500 text-white animate-pulse'
                                                             : 'bg-blue-500 text-white hover:bg-blue-600'
                                                         } disabled:opacity-50 disabled:cursor-not-allowed`}
                                                         aria-label={
                                                           isListening ? 'Stop listening' : 'Start listening'
                                                         }
                                                     >
-                                                        <MicIcon className="w-5 h-5" />
+                                                        {/* *** Show spinner when transcribing *** */}
+                                                        {isTranscribing ? <LoadingSpinner size="sm" /> : <MicIcon className="w-5 h-5" />}
                                                     </button>
                                                 </div>
-                                                <button type="submit" className="w-full button-primary" disabled={isCheckingReview || isListening}>
+                                                <button type="submit" className="w-full button-primary"
+                                                    // *** Disable submit while listening/transcribing ***
+                                                    disabled={isCheckingReview || isListening || isTranscribing || !reviewInput.trim()}
+                                                    >
                                                         {isCheckingReview ? <LoadingSpinner size="sm" /> : 'Check'}
-                                                    </button>
+                                                </button>
                                             </form>
                                         )}
                                         {feedback !== null && (

@@ -178,39 +178,63 @@ export const transcribeAudio = onRequest(
                 return response.status(400).send("Bad Request: Missing audioBytes, languageCode, or mimeType");
             }
 
+            const baseMimeType = mimeType.split(';')[0].trim().toLowerCase();
+            logger.info(`Received transcription request. Original MimeType: "${mimeType}", Base MimeType: "${baseMimeType}", LanguageCode: ${languageCode}`);
+
             let encoding: any;
-            // FIX: Use startsWith to handle codecs (e.g., audio/webm;codecs=opus) and video/webm (common audio stream format)
-            if (mimeType.startsWith('audio/webm') || mimeType.startsWith('video/webm')) {
+            let sampleRateHertz: number | undefined = undefined;
+
+            if (baseMimeType === 'audio/webm' || baseMimeType === 'video/webm') {
                 encoding = 'WEBM_OPUS';
-            } else if (mimeType.startsWith('audio/mp4')) {
-                encoding = 'MP4_AUDIO'; // Corrected value
-            } else if (mimeType.startsWith('audio/wav')) {
-                encoding = 'LINEAR16'; // Added support for WAV
+            } else if (baseMimeType === 'audio/mp4' || baseMimeType === 'audio/aac' || baseMimeType === 'audio/x-m4a') {
+                encoding = 'MP4A';
+            } else if (baseMimeType === 'audio/wav' || baseMimeType === 'audio/wave' || baseMimeType === 'audio/x-wav') {
+                encoding = 'LINEAR16';
+                sampleRateHertz = 48000;
+            } else if (baseMimeType === 'audio/ogg') {
+                encoding = 'OGG_OPUS';
             } else {
+                logger.warn(`Unsupported base audio format received: ${baseMimeType}`);
                 return response.status(400).send("Unsupported audio format");
             }
+
+            // --- FIX: Declare config object *before* the try block ---
+            const config: any = {
+                encoding: encoding,
+                languageCode: languageCode,
+            };
+            if (sampleRateHertz) {
+                config.sampleRateHertz = sampleRateHertz;
+            }
+            // --- END FIX ---
 
             try {
                 const speechClient = new SpeechClient();
                 const audio = { content: audioBytes };
-                const config = {
-                    encoding: encoding,
-                    sampleRateHertz: 48000, // Use a supported sample rate
-                    languageCode: languageCode,
-                };
+
+                logger.info("Sending config to Speech API:", config); // Log the config before sending
                 const requestPayload = { audio: audio, config: config };
 
                 const [operation] = await speechClient.longRunningRecognize(requestPayload);
                 const [transcriptionResponse] = await operation.promise();
-                
+
                 const transcription = transcriptionResponse.results
                     ?.map((result) => result.alternatives?.[0].transcript)
                     .join("\n");
 
-                return response.json({ transcription });
+                logger.info("Transcription successful:", transcription ? `"${transcription.substring(0, 50)}..."` : "(Empty)");
+                return response.json({ transcription: transcription || "" });
+
             } catch (error) {
                 logger.error("Error transcribing audio:", error);
-                return response.status(500).send("Internal Server Error: Could not transcribe audio.");
+                const errorMessage = error instanceof Error ? error.message : "Could not transcribe audio.";
+                // --- FIX: 'config' is now accessible here for logging ---
+                if (error instanceof Error && error.message.includes('INVALID_ARGUMENT')) {
+                    logger.error("Speech API Error: Invalid argument. Config sent was:", config); // Log the config
+                    return response.status(400).send(`Speech API Error: Invalid argument. Please check audio format compatibility.`); // Don't send config in response
+                }
+                // --- END FIX ---
+                return response.status(500).send(`Internal Server Error: ${errorMessage}`);
             }
         });
     }
