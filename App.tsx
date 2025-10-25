@@ -4187,6 +4187,7 @@ const AppContent: React.FC<AppContentProps> = ({ user, errorModal, setErrorModal
           availableLanguages={LANGUAGES}
           teachMeData={{ grammarData, vocabData, conversationData }} // Pass teachMeData
           onSpeak={handleSpeakNote} // Reuse speak function
+          onListen={handleRequestTranscription}
         />
       )}
     </div>

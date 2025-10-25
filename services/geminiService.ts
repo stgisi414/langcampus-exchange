@@ -924,16 +924,19 @@ export const generateImageForWord = async (
   word: string,
   langName: string,
   level: number,
-  topicTitle: string
+  topicTitle: string | null // <-- Allow null
 ): Promise<string> => {
-  const normalizedTopic = topicTitle.toLowerCase();
-  
+  // FIX: Handle null or undefined topicTitle safely
+  const normalizedTopic = topicTitle ? topicTitle.toLowerCase() : ""; // <-- Use empty string if null
+
   // Check if this is a Level 1 alphabet/character lesson
   if (level === 1 && (
-      normalizedTopic.includes('alphabet') || 
-      normalizedTopic.includes('vowel') || 
+      normalizedTopic.includes('alphabet') ||
+      normalizedTopic.includes('vowel') ||
       normalizedTopic.includes('consonant') ||
-      normalizedTopic.includes('hangul')
+      normalizedTopic.includes('hangul') ||
+      normalizedTopic.includes('katakana') ||
+      normalizedTopic.includes('hiragana')
     )) {
     // Use Google Image Search for simple characters
     const query = `${langName} letter ${word} alphabet`;
@@ -941,6 +944,40 @@ export const generateImageForWord = async (
   } else {
     // Use Imagen for all other words
     return await callImagenProxy(word, langName);
+  }
+};
+
+/**
+ * Generates a simple example sentence for a word using Gemini.
+ * @param word The word in the target language.
+ * @param targetLangName Target language name (e.g., "Spanish").
+ * @param userNativeLangName The user's native language (for context).
+ * @returns A promise resolving to the sentence string.
+ */
+export const getSentence = async (
+  word: string,
+  targetLangName: string,
+  userNativeLangName: string
+): Promise<string> => {
+  try {
+    const prompt = `
+      Create one simple example sentence using the ${targetLangName} term: "${word}".
+      The sentence MUST be written entirely in ${targetLangName}.
+      Do not use ${userNativeLangName} in the sentence itself.
+      Keep the sentence concise (max 10-12 words) and suitable for a language learner.
+      Ensure the sentence clearly demonstrates the meaning or usage of the word "${word}".
+      Respond ONLY with the sentence text. Do not add quotation marks or any explanation.
+    `;
+
+    const response = await callGeminiProxy(prompt, "gemini-2.5-flash-lite");
+    // Trim potentially leading/trailing whitespace or newlines from AI response
+    let sentence = response.candidates[0].content.parts[0].text.trim();
+    // Remove potential surrounding quotes sometimes added by the AI
+    sentence = sentence.replace(/^["']|["']$/g, '');
+    return sentence;
+  } catch (error) {
+    console.error(`Error getting sentence for ${word} in ${targetLangName}:`, error);
+    return `Sentence unavailable for "${word}".`;
   }
 };
 

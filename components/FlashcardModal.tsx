@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { UserData, Language, TeachMeType, FlashcardSettings, FlashcardActivityType, FlashcardMode } from '../types';
-import { CloseIcon, ChevronLeftIcon, ChevronRightIcon, CheckIcon, XIcon, RefreshIcon, VolumeUpIcon } from './Icons';
+import { CloseIcon, ChevronLeftIcon, ChevronRightIcon, CheckIcon, XIcon, RefreshIcon, VolumeUpIcon, SentenceIcon, MicIcon } from './Icons';
 import LoadingSpinner from './LoadingSpinner';
 import * as geminiService from '../services/geminiService';
 import * as firestoreService from '../services/firestoreService';
@@ -28,6 +28,7 @@ interface FlashcardModalProps {
     availableLanguages: Language[];
     teachMeData: TeachMeData;
     onSpeak: (text: string, languageCode: string) => Promise<void>;
+    onListen: (languageCode: string) => Promise<string>;
 }
 
 // Helper: A simple LanguageSelector component (can be moved to Icons.tsx or its own file)
@@ -76,6 +77,7 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
     availableLanguages,
     teachMeData,
     onSpeak,
+    onListen,
 }) => {
     // --- STATE ---
     // Load last settings from user profile or use defaults
@@ -99,6 +101,13 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
     const [isLoadingContent, setIsLoadingContent] = useState(false);
     const [hasViewedPrompt, setHasViewedPrompt] = useState(false);
     const [isCheckingReview, setIsCheckingReview] = useState(false);
+    const [definitionTranslation, setDefinitionTranslation] = useState<string | null>(null);
+    const [isLoadingDefTranslation, setIsLoadingDefTranslation] = useState(false);
+    const [sentenceTranslation, setSentenceTranslation] = useState<string | null>(null);
+    const [isLoadingSentenceTranslation, setIsLoadingSentenceTranslation] =
+    useState(false);
+    const [isListening, setIsListening] = useState(false);
+
 
     // Refs for debouncing settings saves
     const settingsRef = useRef<FlashcardSettings>({});
@@ -165,41 +174,45 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
 
     // Load content (translation, definition, image) for a card on demand
     const loadCardContent = useCallback(async (card: Flashcard | undefined) => {
-        // Check if card exists and if the required content is already loaded
-        if (!card || 
-            (activityType === 'translation' && card.translation) || 
-            (activityType === 'definition' && card.definition) || 
-            (activityType === 'image' && card.imageUrl)) {
-            return; 
+        if (!card ||
+            (activityType === 'translation' && card.translation) ||
+            (activityType === 'definition' && card.definition) ||
+            (activityType === 'image' && card.imageUrl) ||
+            (activityType === 'sentence' && card.sentence)) { // ADD sentence check
+            return;
         }
 
         setIsLoadingContent(true);
+        // Reset definition translation when loading new card content
+        setDefinitionTranslation(null);
         try {
             let updatedCard = { ...card };
-            
+            const currentTopic = selectedTopic; // Capture selectedTopic at call time
+
             if (activityType === 'translation' && !card.translation) {
-                // Use the selected translation target language
                 updatedCard.translation = await geminiService.getTranslation(
-                    card.term, 
-                    targetLangName, 
-                    translationTargetLangName, 
+                    card.term,
+                    targetLangName,
+                    translationTargetLangName,
                     selectedLevel
                 );
             } else if (activityType === 'definition' && !card.definition) {
-                // Use the user's actual native language to get a simple definition
                 updatedCard.definition = await geminiService.getDefinition(card.term, targetLangName, userNativeLangName);
             } else if (activityType === 'image' && !card.imageUrl) {
-                updatedCard.imageUrl = await geminiService.generateImageForWord(card.term, targetLangName);
+                // FIX: Pass the captured selectedTopic (topicTitle)
+                updatedCard.imageUrl = await geminiService.generateImageForWord(card.term, targetLangName, selectedLevel, currentTopic);
+            } else if (activityType === 'sentence' && !card.sentence) { // ADD sentence fetching
+                updatedCard.sentence = await geminiService.getSentence(card.term, targetLangName, userNativeLangName);
             }
 
             setFlashcards(prev => prev.map(fc => fc.id === updatedCard.id ? updatedCard : fc));
         } catch (error) {
             console.error(`Error loading content for card ${card.id}:`, error);
+            // Optionally set an error state on the card itself
         } finally {
             setIsLoadingContent(false);
         }
-    }, [activityType, targetLangName, translationTargetLangName, userNativeLangName, selectedLevel]);
-
+    }, [activityType, targetLangName, translationTargetLangName, userNativeLangName, selectedLevel, selectedTopic]);
 
     // Preload content for the *next* card
     useEffect(() => {
@@ -340,6 +353,10 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
             setReviewInput('');
             setFeedback(null);
             setHasViewedPrompt(false);
+            setDefinitionTranslation(null);
+            setIsLoadingDefTranslation(false);
+            setSentenceTranslation(null);
+            setIsLoadingSentenceTranslation(false);
             // loadCardContent(flashcards[currentIndex + 1]); // This is now handled by the useEffect
         } else {
             setSessionState('finished');
@@ -353,6 +370,10 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
             setReviewInput('');
             setFeedback(null);
             setHasViewedPrompt(false);
+            setDefinitionTranslation(null);
+            setIsLoadingDefTranslation(false);
+            setSentenceTranslation(null);
+            setIsLoadingSentenceTranslation(false);
         }
     };
 
@@ -373,6 +394,94 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
         }
     };
 
+    const handleSpeakBackContent = () => {
+        if (!currentCard) return;
+        let textToSpeak = '';
+        let langCodeToSpeak = '';
+
+        if (activityType === 'translation' && currentCard.translation) {
+            textToSpeak = currentCard.translation;
+            langCodeToSpeak = translationTargetLanguageCode; // Speak in the translation language
+        } else if (activityType === 'definition' && currentCard.definition) {
+            textToSpeak = currentCard.definition;
+            langCodeToSpeak = selectedLanguageCode; // Speak definition in target language
+        } else if (activityType === 'sentence' && currentCard.sentence) {
+            textToSpeak = currentCard.sentence;
+            langCodeToSpeak = selectedLanguageCode; // Speak sentence in target language
+        }
+
+        if (textToSpeak) {
+            onSpeak(textToSpeak, langCodeToSpeak);
+        }
+    };
+
+    // ADD: Handler to get translation for definition
+    const handleTranslateDefinition = async () => {
+        if (!currentCard || !currentCard.definition || isLoadingDefTranslation || definitionTranslation) return;
+        setIsLoadingDefTranslation(true);
+        try {
+            const translation = await geminiService.getTranslation(
+                currentCard.definition,
+                targetLangName, // From target language
+                translationTargetLangName, // To native/selected language
+                selectedLevel // Pass level for context
+            );
+            setDefinitionTranslation(translation);
+        } catch (error) {
+            console.error("Error translating definition:", error);
+            setDefinitionTranslation("Translation failed.");
+        } finally {
+            setIsLoadingDefTranslation(false);
+        }
+    };
+
+    const handleTranslateSentence = async () => {
+        if (!currentCard || !currentCard.sentence || isLoadingSentenceTranslation || sentenceTranslation) return;
+        setIsLoadingSentenceTranslation(true);
+        try {
+            const translation = await geminiService.getTranslation(
+                currentCard.sentence,
+                targetLangName, // From target language
+                translationTargetLangName, // To native/selected language
+                selectedLevel // Pass level for context
+            );
+            setSentenceTranslation(translation);
+        } catch (error) {
+            console.error("Error translating sentence:", error);
+            setSentenceTranslation("Translation failed.");
+        } finally {
+            setIsLoadingSentenceTranslation(false);
+        }
+    };
+
+    const handleMicClick = async () => {
+        if (isListening) {
+          // Note: This implementation assumes your onListen prop
+          // handles its own cancellation/stopping if needed.
+          // We'll just toggle the state here.
+          setIsListening(false);
+          return;
+        }
+
+        if (!onListen) {
+          console.error('onListen prop is not provided to FlashcardModal');
+          return;
+        }
+
+        setIsListening(true);
+        try {
+          // Call your provided STT function
+          const transcript = await onListen(selectedLanguageCode);
+          if (transcript) {
+            setReviewInput(transcript); // Set input with the result
+          }
+        } catch (error) {
+          console.error('Speech recognition error:', error);
+        } finally {
+          setIsListening(false); // Stop listening state on success or error
+        }
+    };
+
     // --- RENDER LOGIC ---
 
     const currentCard = flashcards[currentIndex];
@@ -381,26 +490,62 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
     let reviewPrompt: React.ReactNode = null;
 
     if (currentCard) {
+        // --- Study Mode Rendering ---
         if (mode === 'study') {
             frontContent = <span className="text-3xl font-bold">{currentCard.term}</span>;
+
+            // Define back content based on activity type
             if (activityType === 'translation') {
                 backContent = isLoadingContent && !currentCard.translation ? <LoadingSpinner size="sm" /> : currentCard.translation;
             } else if (activityType === 'definition') {
-                backContent = isLoadingContent && !currentCard.definition ? <LoadingSpinner size="sm" /> : currentCard.definition;
+                backContent = (
+                    <div className="flex flex-col items-center">
+                        <span className="mb-2">{isLoadingContent && !currentCard.definition ? <LoadingSpinner size="sm" /> : currentCard.definition}</span>
+                        {/* REINSTATE: Translation button for definition */}
+                        {currentCard.definition && (
+                            <button
+                                onClick={(e) => { e.stopPropagation(); handleTranslateDefinition(); }}
+                                className="text-xs text-blue-200 hover:underline mt-2 disabled:opacity-90"
+                                disabled={isLoadingDefTranslation || !!definitionTranslation}
+                            >
+                                {isLoadingDefTranslation ? 'Translating...' : (definitionTranslation ? definitionTranslation : 'Translate')}
+                            </button>
+                        )}
+                    </div>
+                );
             } else if (activityType === 'image') {
-                backContent = isLoadingContent && !currentCard.imageUrl ? 
-                    <LoadingSpinner size="sm" /> : 
-                    <img src={currentCard.imageUrl} alt={currentCard.term} className="max-w-full max-h-48 mx-auto" />;
+                backContent = isLoadingContent && !currentCard.imageUrl ?
+                    <LoadingSpinner size="sm" /> :
+                    <img src={currentCard.imageUrl} alt={currentCard.term} className="max-w-full max-h-48 mx-auto object-contain" />;
+            } else if (activityType === 'sentence') { // ADD sentence display
+                backContent = (
+                    <div className="flex flex-col items-center">
+                        <span className="mb-2">{isLoadingContent && !currentCard.sentence ? <LoadingSpinner size="sm" /> : currentCard.sentence}</span>
+                        {currentCard.sentence && (
+                            <button
+                                onClick={(e) => { e.stopPropagation(); handleTranslateSentence(); }}
+                                className="text-xs text-blue-200 hover:underline mt-2 disabled:opacity-90"
+                                disabled={isLoadingSentenceTranslation || !!sentenceTranslation}
+                            >
+                                {isLoadingSentenceTranslation ? 'Translating...' : (sentenceTranslation ? sentenceTranslation : 'Translate')}
+                            </button>
+                        )}
+                    </div>
+                );
             }
-        } else { // review mode
+        }
+        // --- Review Mode Rendering ---
+        else { // review mode
             if (activityType === 'translation') {
                 reviewPrompt = isLoadingContent && !currentCard.translation ? <LoadingSpinner size="sm" /> : currentCard.translation;
             } else if (activityType === 'definition') {
                 reviewPrompt = isLoadingContent && !currentCard.definition ? <LoadingSpinner size="sm" /> : currentCard.definition;
             } else if (activityType === 'image') {
-                reviewPrompt = isLoadingContent && !currentCard.imageUrl ? 
-                    <LoadingSpinner size="sm" /> : 
-                    <img src={currentCard.imageUrl} alt="Guess the word" className="max-w-full max-h-48 mx-auto" />;
+                reviewPrompt = isLoadingContent && !currentCard.imageUrl ?
+                    <LoadingSpinner size="sm" /> :
+                    <img src={currentCard.imageUrl} alt="Guess the word" className="max-w-full max-h-48 mx-auto object-contain" />;
+            } else if (activityType === 'sentence') { // ADD sentence prompt
+                reviewPrompt = isLoadingContent && !currentCard.sentence ? <LoadingSpinner size="sm" /> : currentCard.sentence;
             }
         }
     }
@@ -421,6 +566,7 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
                     {/* Setup Screen */}
                     {sessionState === 'setup' && (
                         <div className="space-y-4">
+                            {/* ... LanguageSelector and Level select ... */}
                             <LanguageSelector
                                 label="Study Language:"
                                 value={selectedLanguageCode}
@@ -446,13 +592,18 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
                                     <option value="translation">Word - Translation</option>
                                     <option value="definition">Word - Definition</option>
                                     <option value="image">Word - Image</option>
+                                    <option value="sentence">Word - Sentence</option> {/* ADDED */}
                                 </select>
                             </div>
 
                             {/* Conditional Translation Language Selector */}
-                            {activityType === 'translation' && (
+                            {(activityType === 'translation' || activityType === 'definition' || activityType === 'sentence') && (
                                 <LanguageSelector
-                                    label="Translate To:"
+                                    label={
+                                        activityType === 'definition' ? 'Translate Definition To:' :
+                                        activityType === 'sentence' ? 'Translate Sentence To:' : // <-- Adjusted label
+                                        'Translate Word To:'
+                                    }
                                     value={translationTargetLanguageCode}
                                     onChange={setTranslationTargetLanguageCode}
                                     options={availableLanguages}
@@ -504,52 +655,86 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
                                         {/* Front */}
                                         <div className="absolute inset-0 flex items-center justify-center p-4 backface-hidden">
                                             {frontContent}
-                                            <button onClick={(e) => { e.stopPropagation(); handleSpeakTerm(); }} className="absolute top-2 right-2 p-1 text-gray-500 hover:text-blue-500">
+                                            {/* Speak button for Term */}
+                                            <button onClick={(e) => { e.stopPropagation(); handleSpeakTerm(); }} className="absolute top-2 right-2 p-1 text-gray-200 hover:text-blue-200">
                                                 <VolumeUpIcon className="w-5 h-5" />
                                             </button>
                                         </div>
                                         {/* Back */}
                                         <div className="absolute inset-0 flex items-center justify-center p-4 bg-blue-50 dark:bg-blue-900 [transform:rotateY(180deg)] backface-hidden">
                                             {backContent}
+                                            {/* Speak button for Back Content (only if not image) */}
+                                            {activityType !== 'image' && backContent && !(isLoadingContent && (
+                                                (activityType === 'translation' && !currentCard.translation) ||
+                                                (activityType === 'definition' && !currentCard.definition) ||
+                                                (activityType === 'sentence' && !currentCard.sentence)
+                                            )) && (
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); handleSpeakBackContent(); }}
+                                                    className="absolute top-2 right-2 p-1 text-gray-500 hover:text-blue-200"
+                                                    title="Read aloud"
+                                                    aria-label="Read back content aloud"
+                                                    >
+                                                    <VolumeUpIcon className="w-5 h-5" />
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                 ) : (
                                     // Review Mode
+                                    // ... (Review mode logic remains the same, ensure reviewPrompt uses correct content type)
                                     <div className="w-full flex flex-col items-center justify-center">
                                         <div className="mb-4">{reviewPrompt}</div>
                                         {!hasViewedPrompt && feedback === null && (
-                                            // 1. Show prompt, wait for user
-                                            <button 
-                                                onClick={() => setHasViewedPrompt(true)} 
+                                            <button
+                                                onClick={() => setHasViewedPrompt(true)}
                                                 className="button-primary"
                                             >
                                                 Ready to Guess
                                             </button>
                                         )}
-
                                         {hasViewedPrompt && feedback === null && (
-                                            // 2. Show input field
                                             <form className="w-full max-w-xs" onSubmit={(e) => { e.preventDefault(); handleReviewSubmit(); }}>
-                                                <input
-                                                    type="text"
-                                                    value={reviewInput}
-                                                    onChange={(e) => setReviewInput(e.target.value)}
-                                                    placeholder="Type the word..."
-                                                    className="w-full input-style text-center mb-2"
-                                                    autoFocus
-                                                    disabled={isCheckingReview} // <-- ADDED
-                                                />
-                                                <button typeA="submit" className="w-full button-primary" disabled={isCheckingReview}>
-                                                    {isCheckingReview ? <LoadingSpinner size="sm" /> : 'Check'}
-                                                </button>
+                                                <div className="flex items-center space-x-2">
+                                                    <input
+                                                        type="text"
+                                                        value={reviewInput}
+                                                        onChange={(e) => setReviewInput(e.target.value)}
+                                                        placeholder="Type the word..."
+                                                        className="w-full input-style text-center mb-2"
+                                                        autoFocus
+                                                        disabled={isCheckingReview || isListening}
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleMicClick}
+                                                        // MODIFIED: Removed speechRecognitionAvailable check
+                                                        disabled={isCheckingReview || isListening}
+                                                        className={`p-2 rounded-full transition-colors ${
+                                                          isListening
+                                                            ? 'bg-red-500 text-white animate-pulse' // Added pulse animation
+                                                            : 'bg-blue-500 text-white hover:bg-blue-600'
+                                                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                                        aria-label={
+                                                          isListening ? 'Stop listening' : 'Start listening'
+                                                        }
+                                                    >
+                                                        <MicIcon className="w-5 h-5" />
+                                                    </button>
+                                                </div>
+                                                <button type="submit" className="w-full button-primary" disabled={isCheckingReview || isListening}>
+                                                        {isCheckingReview ? <LoadingSpinner size="sm" /> : 'Check'}
+                                                    </button>
                                             </form>
                                         )}
-
                                         {feedback !== null && (
-                                            // 3. Show feedback
                                             <div className={`p-3 rounded text-center ${feedback === 'correct' ? 'bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300' : 'bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-300'}`}>
                                                 {feedback === 'correct' ? <CheckIcon className="w-6 h-6 inline mr-2"/> : <XIcon className="w-6 h-6 inline mr-2"/>}
                                                 {feedback === 'correct' ? 'Correct!' : `Correct Answer: ${currentCard.term}`}
+                                                {/* Optionally add speak button for correct term in review feedback */}
+                                                <button onClick={handleSpeakTerm} className="ml-2 p-1 align-middle">
+                                                    <VolumeUpIcon className="w-4 h-4" />
+                                                </button>
                                             </div>
                                         )}
                                     </div>
@@ -557,8 +742,8 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
                             </div>
 
                             {/* Navigation */}
-                            <div className="flex justify-between w-full">
-                                <button onClick={prevCard} disabled={currentIndex === 0 || (mode === 'review' && feedback === null)} className="button-secondary disabled:opacity-50">
+                             <div className="flex justify-between w-full">
+                                <button onClick={prevCard} disabled={currentIndex === 0 || (mode === 'review' && feedback === null && hasViewedPrompt)} className="button-secondary disabled:opacity-50">
                                     <ChevronLeftIcon className="w-5 h-5 inline mr-1" /> Prev
                                 </button>
                                 {mode === 'study' && <button onClick={handleFlip} className="button-secondary">{isFlipped ? 'Show Term' : 'Show Answer'}</button>}
@@ -570,6 +755,7 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
                     )}
 
                     {/* Finished Screen */}
+                    {/* ... (Finished screen remains the same) */}
                     {sessionState === 'finished' && (
                         <div className="text-center space-y-4">
                             <h3 className="text-2xl font-bold">Session Complete!</h3>
@@ -587,6 +773,7 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
             </div>
 
             {/* Styles */}
+            {/* ... (Styles remain the same) */}
             <style>{`
                 .input-style { padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; background-color: white; color: black; }
                 .dark .input-style { border-color: #555; background-color: #333; color: white; }

@@ -45,6 +45,15 @@ export interface Message {
   };
 }
 
+export interface Flashcard {
+    id: string;
+    term: string; // The word/phrase in the target language
+    translation?: string; // Translation in native language
+    definition?: string; // Definition in target language (maybe simplified)
+    imageUrl?: string; // URL for the generated image
+    sentence?: string; // ADDED: Example sentence in target language
+}
+
 export type QuizQuestion = {
   type: 'multiple-choice';
   question: string;
@@ -153,7 +162,7 @@ export interface FlashcardSettings {
   translationTargetLanguageCode?: string; // Add this for the new selector
 }
 
-export type FlashcardActivityType = 'translation' | 'definition' | 'image';
+export type FlashcardActivityType = 'translation' | 'definition' | 'image' | 'sentence';
 export type FlashcardMode = 'study' | 'review';
 
 export interface UserData {
