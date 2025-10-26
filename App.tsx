@@ -3344,20 +3344,18 @@ const AppContent: React.FC<AppContentProps> = ({ user, errorModal, setErrorModal
   const savedChat = user?.savedChat || null;
 
   const handleUsageCheck = async (feature: UsageKey, action: () => (void | Promise<void>)) => {
-    if (!user) return;
-    const canProceed = await checkAndIncrementUsage(
-      user.uid,
-      feature,
-      user.subscription,
-    );
-    if (canProceed) {
-      // CRITICAL FIX: Await the result of the action, 
-      // which is an async function (Promise) in handleTopicSelect
-      await action();
-    } else {
-      setSubscriptionModalReason("limit");
-      setShowSubscriptionModal(true);
-    }
+      if (!user) return;
+      const canProceed = await checkAndIncrementUsage(
+        user.uid,
+        feature,
+        user.subscription // Pass the subscription status
+      );
+      if (canProceed) {
+        await action();
+      } else {
+        setSubscriptionModalReason("limit");
+        setShowSubscriptionModal(true);
+      }
   };
 
   const findPartners = async () => {
@@ -3795,8 +3793,6 @@ const AppContent: React.FC<AppContentProps> = ({ user, errorModal, setErrorModal
     }
   };
 
-  // stgisi414/langcampus-exchange/langcampus-exchange-3e3a964be23cb9f3bc45579ca4c7b0bb0c34a4c0/App.tsx
-
   const handleSpeakNote = useCallback(async (text: string, contextOrLangCode: string): Promise<void> => {
       // --- This logic detects if the call is from the flashcard modal ---
       // We check if the 'contextOrLangCode' string looks like a language code (e.g., 'ko-KR', 'en-US')
@@ -4185,8 +4181,10 @@ const AppContent: React.FC<AppContentProps> = ({ user, errorModal, setErrorModal
           onClose={() => setShowFlashcardModal(false)}
           onAddXp={handleAddXp}
           availableLanguages={LANGUAGES}
-          teachMeData={{ grammarData, vocabData, conversationData }} // Pass teachMeData
-          onSpeak={handleSpeakNote} // Reuse speak function
+          teachMeData={{ grammarData, vocabData, conversationData }}
+          onSpeak={handleSpeakNote}
+          handleUsageCheck={handleUsageCheck} 
+          subscriptionStatus={user.subscription}
         />
       )}
     </div>

@@ -1,15 +1,16 @@
-import { doc, getDoc, updateDoc, increment, setDoc, arrayUnion, arrayRemove } from "firebase/firestore";
-import { User } from "firebase/auth";
+import { doc, getDoc, updateDoc, increment, setDoc, arrayUnion, arrayRemove, deleteField } from "firebase/firestore";
+import { User as AuthUser } from "firebase/auth";
 import { db } from '../firebaseConfig.ts';
 import { UserData, UsageKey, SavedChat, SubscriptionStatus, TeachMeCache, Note, UserProfileData, FlashcardSettings } from '../types.ts';
 import { deleteAudioMessage } from './storageService.ts';
 
 const DAILY_LIMITS = {
-  searches: 5,
-  messages: 20,
-  audioPlays: 5,
-  lessons: 10,
-  quizzes: 10,
+  searches: 5, // For free users
+  messages: 20, // For free users
+  audioPlays: 5, // For free users
+  lessons: 10, // For free users
+  quizzes: 10, // For free users
+  imagenGenerations: 30, // For SUBSCRIBERS
 };
 
 // Gets today's date in 'YYYY-MM-DD' format
@@ -45,25 +46,43 @@ export const initializeUserProfile = async (uid: string, user: AuthUser) => {
         audioPlays: 0,
         lessons: 0,
         quizzes: 0,
+        imagenGenerations: 0,
         lastUsageDate: getTodayDateString(),
       },
       isAgeVerified: false,
       birthDate: null,
       contentPreference: 'standard',
       flashcardSettings: {},
+      nativeLanguage: LANGUAGES[0].code, // Initialize with defaults
+      targetLanguage: LANGUAGES[1].code, // Initialize with defaults
+      activeSubscription: false, // Initialize activeSubscription
     };
     await setDoc(userRef, newUserProfile, { merge: true }); // Use merge to be safe with stripe extension
   } else {
-    // This is a returning user. Check if they need to be migrated.
     const data = docSnap.data();
-    if (data.isAgeVerified === undefined || data.birthDate === undefined || data.contentPreference === undefined) {
-      // User exists but is missing the new fields. Update them.
-      await updateDoc(userRef, {
-        isAgeVerified: data.isAgeVerified || false,
-        birthDate: data.birthDate || null,
-        contentPreference: data.contentPreference || 'standard',
-        flashcardSettings: data.flashcardSettings || {},
-      });
+    const updates: { [key: string]: any } = {}; // Use a flexible type for updates
+
+    // Ensure usage object and imagenGenerations exist
+    if (!data.usage) {
+        updates['usage'] = { // Initialize the whole usage object if missing
+             searches: 0, messages: 0, audioPlays: 0, lessons: 0, quizzes: 0, imagenGenerations: 0, lastUsageDate: getTodayDateString()
+        };
+    } else if (data.usage.imagenGenerations === undefined) {
+         updates['usage.imagenGenerations'] = 0; // Initialize just imagenGenerations
+    }
+     if (!data.usage?.lastUsageDate && !updates['usage']) { // Check if date is missing and usage wasn't just added
+        updates['usage.lastUsageDate'] = getTodayDateString();
+    }
+
+    // ... (rest of the migration logic for age verification, etc.) ...
+    if (data.isAgeVerified === undefined) updates.isAgeVerified = false;
+    if (data.birthDate === undefined) updates.birthDate = null;
+    if (data.contentPreference === undefined) updates.contentPreference = 'standard';
+    if (data.flashcardSettings === undefined) updates.flashcardSettings = {};
+
+
+    if (Object.keys(updates).length > 0) {
+        await updateDoc(userRef, updates);
     }
   }
 };
@@ -94,14 +113,15 @@ export const addXp = async (userId: string, amount: number) => {
   });
 };
 
-export const updateUserProfile = async (userId: string, profileData: UserProfileData) => {
+export const updateUserProfile = async (userId: string, profileData: Partial<UserProfileData>) => {
   const userRef = doc(db, "customers", userId); // Target 'customers' collection
-  await updateDoc(userRef, {
-    name: profileData.name,
-    hobbies: profileData.hobbies,
-    bio: profileData.bio,
-    contentPreference: profileData.contentPreference,
-  });
+  const updateData: Partial<UserData> = {
+      ...(profileData.name !== undefined && { name: profileData.name }),
+      ...(profileData.hobbies !== undefined && { hobbies: profileData.hobbies }),
+      ...(profileData.bio !== undefined && { bio: profileData.bio }),
+      ...(profileData.contentPreference !== undefined && { contentPreference: profileData.contentPreference }),
+  };
+  await updateDoc(userRef, updateData);
 };
 
 export const saveChatInFirestore = async (userId: string, chat: SavedChat) => {
@@ -112,12 +132,12 @@ export const saveChatInFirestore = async (userId: string, chat: SavedChat) => {
 export const deleteChatFromFirestore = async (userId: string) => {
   const userRef = doc(db, "customers", userId);
   const docSnap = await getDoc(userRef);
-  
+
   if (docSnap.exists() && docSnap.data()?.savedChat?.messages) {
     // 1. Get audio URLs from saved chat messages
     const messages = docSnap.data()!.savedChat.messages;
-    const audioUrlsToDelete = messages.map((m: any) => m.audioUrl).filter((url: string | undefined) => !!url);
-    
+    const audioUrlsToDelete = messages.map((m: any) => m.audioUrl).filter((url: string | undefined): url is string => !!url); // Type assertion
+
     // 2. Delete the files from storage concurrently
     const deletePromises = audioUrlsToDelete.map((url: string) => deleteAudioMessage(url));
     await Promise.all(deletePromises);
@@ -128,8 +148,8 @@ export const deleteChatFromFirestore = async (userId: string) => {
 };
 
 export const updateLanguagePreference = async (
-  userId: string, 
-  field: 'nativeLanguage' | 'targetLanguage', 
+  userId: string,
+  field: 'nativeLanguage' | 'targetLanguage',
   value: string
 ) => {
   const userRef = doc(db, "customers", userId);
@@ -151,29 +171,24 @@ export const deleteTeachMeCacheFromFirestore = async (userId: string) => {
 
 // Checks and increments usage, now aware that usage might need initialization
 export const checkAndIncrementUsage = async (userId: string, feature: UsageKey, subscriptionStatus: SubscriptionStatus): Promise<boolean> => {
-    // First, check if the user is a subscriber. If so, always allow the action.
-    if (subscriptionStatus === 'subscriber') {
-        return true;
-    }
-
-    // If they are a free user, proceed with the original limit check.
     const userRef = doc(db, "customers", userId);
     const docSnap = await getDoc(userRef);
 
     if (!docSnap.exists()) {
         console.error("Customer document not found. Usage check cannot proceed.");
-        return false;
+        return false; // Cannot proceed if user document doesn't exist
     }
 
     const userData = docSnap.data() as UserData;
     const today = getTodayDateString();
-    
-    // Initialize usage in memory if it's missing from the document
-    const usage = userData.usage || {
-        searches: 0, messages: 0, audioPlays: 0, lessons: 0, quizzes: 0, lastUsageDate: '1970-01-01'
-    };
 
-    // If the last usage was before today, reset the counts in Firestore
+    // Initialize usage in memory if missing
+    const usage = userData.usage || {
+        searches: 0, messages: 0, audioPlays: 0, lessons: 0, quizzes: 0, imagenGenerations: 0, lastUsageDate: '1970-01-01'
+    };
+    if (usage.imagenGenerations === undefined) usage.imagenGenerations = 0; // Ensure field exists
+
+    // Reset counts if it's a new day
     if (usage.lastUsageDate !== today) {
         const resetUsage = {
             "usage.searches": 0,
@@ -181,27 +196,49 @@ export const checkAndIncrementUsage = async (userId: string, feature: UsageKey, 
             "usage.audioPlays": 0,
             "usage.lessons": 0,
             "usage.quizzes": 0,
+            "usage.imagenGenerations": 0,
             "usage.lastUsageDate": today,
         };
         await updateDoc(userRef, resetUsage);
-        // Also update our in-memory copy so the check below works correctly
-        Object.assign(usage, { searches: 0, messages: 0, audioPlays: 0, lessons: 0, quizzes: 0, lastUsageDate: today });
+        // Update in-memory copy
+        Object.assign(usage, { searches: 0, messages: 0, audioPlays: 0, lessons: 0, quizzes: 0, imagenGenerations: 0, lastUsageDate: today });
     }
 
-    const currentUsage = usage[feature];
-    const limit = DAILY_LIMITS[feature];
+    const currentUsage = usage[feature] ?? 0;
+    let limit = Infinity; // Default to unlimited
 
+    // Apply limits based on subscription status
+    if (subscriptionStatus === 'subscriber') {
+        // Subscribers ONLY have a limit for 'imagenGenerations'
+        if (feature === 'imagenGenerations') {
+            limit = DAILY_LIMITS.imagenGenerations;
+        }
+    } else { // Free users
+        // Free users have limits for features OTHER THAN 'imagenGenerations'
+        if (feature !== 'imagenGenerations') {
+            limit = DAILY_LIMITS[feature as Exclude<UsageKey, 'imagenGenerations'>];
+        } else {
+             // Free users technically shouldn't reach imagen generation, but if they do, block it.
+             limit = 0;
+        }
+    }
+
+    // Check against the determined limit
     if (currentUsage >= limit) {
-        console.log(`Usage limit reached for ${feature}.`);
-        return false;
+        console.log(`Usage limit reached for ${feature} (Status: ${subscriptionStatus}). Current: ${currentUsage}, Limit: ${limit}`);
+        return false; // Limit reached
     }
 
-    // Increment the specific feature's count in Firestore
-    await updateDoc(userRef, {
-        [`usage.${feature}`]: increment(1)
-    });
-
-    return true;
+    // If within limit, increment the count
+    try {
+        await updateDoc(userRef, {
+            [`usage.${feature}`]: increment(1)
+        });
+        return true; // Can proceed
+    } catch (error) {
+        console.error(`Error incrementing usage for ${feature}:`, error);
+        return false; // Increment failed, block the action
+    }
 };
 
 export const addNoteToFirestore = async (userId: string, note: Note) => {

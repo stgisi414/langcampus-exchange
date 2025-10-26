@@ -1,4 +1,4 @@
-import { Message, Partner, QuizQuestion, UserProfileData, TeachMeCache, YouTubeVideo, FlashcardSettings } from '../types';
+import { Message, Partner, QuizQuestion, UserProfileData, TeachMeCache, YouTubeVideo, FlashcardSettings, UsageKey, SubscriptionStatus } from '../types';
 
 // Make sure this is the correct URL for your deployed Cloud Function.
 //const PROXY_URL = "https://us-central1-langcampus-exchange.cloudfunctions.net/geminiProxy"; // Replace if yours is different
@@ -913,22 +913,27 @@ const searchForImage = async (query: string): Promise<string> => {
 // --- This is the NEW exported function that replaces the old one ---
 /**
  * Gets an image for a flashcard, deciding whether to
- * use Image Search or Imagen generation based on context.
+ * use Image Search or Imagen generation based on context and usage limits.
  * @param word The word (e.g., "ㅜ" or "apple").
  * @param langName The language name (e.g., "Korean").
  * @param level The lesson level.
  * @param topicTitle The title of the lesson.
+ * @param handleUsageCheck Function to check and increment usage. // <-- ADDED
+ * @param subscriptionStatus Current user subscription status. // <-- ADDED
  * @returns A promise resolving to the image URL string.
  */
 export const generateImageForWord = async (
   word: string,
   langName: string,
   level: number,
-  topicTitle: string | null
+  topicTitle: string | null,
+  handleUsageCheck: (feature: UsageKey, action: () => Promise<void> | void) => Promise<void>,
+  subscriptionStatus: SubscriptionStatus
 ): Promise<string> => {
   const normalizedTopic = topicTitle ? topicTitle.toLowerCase() : "";
+  let useImagen = true; // Default to Imagen
 
-  // Still use Image Search for simple characters in Level 1 alphabet lessons
+  // Condition to fall back to Image Search immediately (e.g., simple characters)
   if (level === 1 && (
       normalizedTopic.includes('alphabet') ||
       normalizedTopic.includes('vowel') ||
@@ -937,16 +942,40 @@ export const generateImageForWord = async (
       normalizedTopic.includes('katakana') ||
       normalizedTopic.includes('hiragana')
     )) {
-    console.log(`Using Image Search for character: "${word}"`);
-    const query = `${langName} letter ${word} alphabet`;
-    return await searchForImage(query);
-  } else {
-    // --- NEW STEP: Generate a descriptive prompt via Gemini ---
-    let descriptiveImagePrompt = `A simple, clear, minimalist drawing or icon representing the concept of "${word}" in ${langName}. White background, no text, no letters, simple icon style.`; // Define a sensible fallback
+      useImagen = false;
+      console.log(`Using Image Search (reason: simple character): "${word}"`);
+  }
 
+  // If Imagen is the plan, check limits based on subscription
+  if (useImagen) {
+    if (subscriptionStatus === 'subscriber') {
+        let canUseImagen = false;
+        await handleUsageCheck('imagenGenerations', () => {
+            // This runs if the check passes (subscriber is within limit)
+            canUseImagen = true;
+        }); // Await ensures the check completes
+
+        if (!canUseImagen) {
+            useImagen = false; // Limit reached for subscriber
+            console.log(`Using Image Search (reason: Imagen limit reached for subscriber): "${word}"`);
+            // Optional: Show a specific message to the subscriber?
+            alert("You've reached your daily limit for AI image generations (30). Using image search instead.");
+        } else {
+            console.log(`Using Imagen Generation (subscriber, within limit): "${word}"`);
+        }
+    } else {
+        // Free user - should not be generating images via Imagen
+        useImagen = false;
+        console.log(`Using Image Search (reason: free user): "${word}"`);
+    }
+  }
+
+  // --- Perform the chosen image fetching method ---
+  if (useImagen) {
+    // --- Generate Imagen Prompt (logic remains the same) ---
+    let descriptiveImagePrompt = `A simple, clear, minimalist drawing or icon representing the concept of "${word}" in ${langName}. White background, no text, no letters, simple icon style.`;
     try {
-      // Prompt for Gemini to generate the Imagen prompt
-      const promptGenPrompt = `
+        const promptGenPrompt = `
         You are an AI assistant helping create image generation prompts for language flashcards.
         Given a word/phrase, its language, and the lesson topic, generate a concise, visually descriptive prompt suitable for an AI image generator (like Imagen 4.0).
 
@@ -963,12 +992,10 @@ export const generateImageForWord = async (
         Generate the image prompt now. Respond ONLY with the prompt text itself. Do not include quotation marks around your response or any conversational filler.`;
 
       console.log(`Generating descriptive prompt for Imagen for word: "${word}"`);
-      const response = await callGeminiProxy(promptGenPrompt, "gemini-2.5-flash-lite"); // Use Flash for speed
-      // Ensure candidate and parts exist before accessing text
+      const response = await callGeminiProxy(promptGenPrompt, "gemini-2.5-flash-lite");
       const generatedPrompt = response?.candidates?.[0]?.content?.parts?.[0]?.text?.trim().replace(/^["']|["']$/g, '');
 
       if (generatedPrompt) {
-        // Combine the generated description with required style elements if not already present
         let finalPrompt = generatedPrompt;
         if (!finalPrompt.includes("minimalist style")) finalPrompt += ", minimalist style";
         if (!finalPrompt.includes("simple drawing")) finalPrompt += ", simple drawing";
@@ -976,20 +1003,24 @@ export const generateImageForWord = async (
         if (!finalPrompt.includes("no text")) finalPrompt += ", no text";
         if (!finalPrompt.includes("no letters")) finalPrompt += ", no letters";
         if (!finalPrompt.includes("icon")) finalPrompt += ", icon style";
-
         descriptiveImagePrompt = finalPrompt;
         console.log(`Using generated prompt: "${descriptiveImagePrompt}"`);
       } else {
-         console.warn("Gemini returned empty or invalid prompt, using fallback.");
-         // Fallback is already set above
+         console.warn("Gemini returned empty or invalid prompt for Imagen, using fallback.");
       }
     } catch (error) {
       console.error("Error generating descriptive prompt for Imagen, using fallback:", error);
-      // Fallback is already set above, just log the error
     }
-
-    // --- Call Imagen with the (potentially improved) prompt ---
+    // --- Call Imagen Proxy ---
     return await callImagenProxy(descriptiveImagePrompt);
+  } else {
+    // --- Call Image Search Proxy ---
+    const query = (level === 1 && word.length <= 2 && !normalizedTopic.includes('alphabet') && !normalizedTopic.includes('vowel') && !normalizedTopic.includes('consonant'))
+      ? `${langName} ${word} simple drawing icon` // More specific for non-alphabet simple words
+      : (level === 1 && word.length <= 2)
+          ? `${langName} letter ${word} alphabet` // Keep for alphabet characters
+          : `${langName} ${word} simple drawing icon`; // Generic fallback
+    return await searchForImage(query);
   }
 };
 

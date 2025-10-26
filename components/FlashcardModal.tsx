@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { UserData, Language, TeachMeType, FlashcardSettings, FlashcardActivityType, FlashcardMode } from '../types';
+import { UserData, Language, TeachMeType, FlashcardSettings, FlashcardActivityType, FlashcardMode, UsageKey, SubscriptionStatus } from '../types';
 import { CloseIcon, ChevronLeftIcon, ChevronRightIcon, CheckIcon, XIcon, RefreshIcon, VolumeUpIcon, SentenceIcon, MicIcon } from './Icons';
 import LoadingSpinner from './LoadingSpinner';
 import * as geminiService from '../services/geminiService';
@@ -30,6 +30,8 @@ interface FlashcardModalProps {
     teachMeData: TeachMeData;
     onSpeak: (text: string, languageCode: string) => Promise<void>;
     onListen: (languageCode: string) => Promise<string>;
+    handleUsageCheck: (feature: UsageKey, action: () => Promise<void> | void) => Promise<void>;
+    subscriptionStatus: SubscriptionStatus;
 }
 
 // Helper: A simple LanguageSelector component (can be moved to Icons.tsx or its own file)
@@ -78,6 +80,8 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
     availableLanguages,
     teachMeData,
     onSpeak,
+    handleUsageCheck,
+    subscriptionStatus,
 }) => {
     // --- STATE ---
     // Load last settings from user profile or use defaults
@@ -202,13 +206,14 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
             (activityType === 'translation' && card.translation) ||
             (activityType === 'definition' && card.definition) ||
             (activityType === 'image' && card.imageUrl) ||
-            (activityType === 'sentence' && card.sentence)) { // ADD sentence check
+            (activityType === 'sentence' && card.sentence)) {
             return;
         }
 
         setIsLoadingContent(true);
-        // Reset definition translation when loading new card content
         setDefinitionTranslation(null);
+        setSentenceTranslation(null); // Reset sentence translation too
+
         try {
             let updatedCard = { ...card };
             const currentTopic = selectedTopic; // Capture selectedTopic at call time
@@ -223,27 +228,41 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
             } else if (activityType === 'definition' && !card.definition) {
                 updatedCard.definition = await geminiService.getDefinition(card.term, targetLangName, userNativeLangName);
             } else if (activityType === 'image' && !card.imageUrl) {
-                // FIX: Pass the captured selectedTopic (topicTitle)
-                updatedCard.imageUrl = await geminiService.generateImageForWord(card.term, targetLangName, selectedLevel, currentTopic);
-            } else if (activityType === 'sentence' && !card.sentence) { // ADD sentence fetching
+                // Pass handleUsageCheck and subscriptionStatus to generateImageForWord
+                updatedCard.imageUrl = await geminiService.generateImageForWord(
+                    card.term,
+                    targetLangName,
+                    selectedLevel,
+                    currentTopic,
+                    handleUsageCheck, // <-- Pass down
+                    subscriptionStatus // <-- Pass down
+                );
+            } else if (activityType === 'sentence' && !card.sentence) {
                 updatedCard.sentence = await geminiService.getSentence(card.term, targetLangName, userNativeLangName);
             }
 
             setFlashcards(prev => prev.map(fc => fc.id === updatedCard.id ? updatedCard : fc));
         } catch (error) {
             console.error(`Error loading content for card ${card.id}:`, error);
-            // Optionally set an error state on the card itself
+            // Optionally update card state with error flag
+             if (activityType === 'image' && card) {
+                // Set a placeholder or error image URL if generation failed
+                const updatedCardWithError = { ...card, imageUrl: 'https://via.placeholder.com/300x200.png?text=Image+Error' };
+                setFlashcards(prev => prev.map(fc => fc.id === card.id ? updatedCardWithError : fc));
+            }
         } finally {
             setIsLoadingContent(false);
         }
-    }, [activityType, targetLangName, translationTargetLangName, userNativeLangName, selectedLevel, selectedTopic]);
-
-    // Preload content for the *next* card
-    useEffect(() => {
-        if (sessionState === 'active' && currentIndex + 1 < flashcards.length) {
-            loadCardContent(flashcards[currentIndex + 1]);
-        }
-    }, [currentIndex, flashcards, sessionState, loadCardContent]);
+    }, [
+        activityType,
+        targetLangName,
+        translationTargetLangName,
+        userNativeLangName,
+        selectedLevel,
+        selectedTopic,
+        handleUsageCheck, // <-- Add dependency
+        subscriptionStatus // <-- Add dependency
+    ]);
 
 
     // Start a new flashcard session

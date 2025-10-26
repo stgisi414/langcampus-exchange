@@ -125,7 +125,7 @@ export interface Language {
 
 export type SubscriptionStatus = 'free' | 'subscriber';
 
-export type UsageKey = 'searches' | 'messages' | 'audioPlays' | 'lessons' | 'quizzes';
+export type UsageKey = 'searches' | 'messages' | 'audioPlays' | 'lessons' | 'quizzes' | 'imagenGenerations';
 
 export interface UsageData {
   searches: number;
@@ -133,6 +133,7 @@ export interface UsageData {
   audioPlays: number;
   lessons: number;
   quizzes: number;
+  imagenGenerations: number;
   lastUsageDate: string; // Stored as 'YYYY-MM-DD'
 }
 
