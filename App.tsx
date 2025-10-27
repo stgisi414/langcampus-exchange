@@ -2957,6 +2957,10 @@ const AppContent: React.FC<AppContentProps> = ({ user, errorModal, setErrorModal
   const [transcribingId, setTranscribingId] = useState<string | null>(null);
   const [replyingToMessage, setReplyingToMessage] = useState<Message | null>(null);
   const [showFlashcardModal, setShowFlashcardModal] = useState(false);
+  
+  const userUid = user?.uid;
+  const userSubscription = user?.subscription;
+  const userNativeLanguage = user?.nativeLanguage;
 
   useEffect(() => {
     // DEBUG LOG: Initial check for age verification status
@@ -3343,20 +3347,24 @@ const AppContent: React.FC<AppContentProps> = ({ user, errorModal, setErrorModal
 
   const savedChat = user?.savedChat || null;
 
-  const handleUsageCheck = async (feature: UsageKey, action: () => (void | Promise<void>)) => {
-      if (!user) return;
+  const handleUsageCheck = useCallback(async (feature: UsageKey, action: () => (void | Promise<void>)) => {
+      if (!userUid) return; // Use stable var
       const canProceed = await checkAndIncrementUsage(
-        user.uid,
+        userUid, // Use stable var
         feature,
-        user.subscription // Pass the subscription status
+        userSubscription // Use stable var
       );
       if (canProceed) {
         await action();
       } else {
-        setSubscriptionModalReason("limit");
-        setShowSubscriptionModal(true);
+        if (userSubscription === 'free') { // Use stable var
+            setSubscriptionModalReason("limit");
+            setShowSubscriptionModal(true);
+        } else {
+            console.warn(`Subscriber hit usage limit for: ${feature}. Fallback will occur.`);
+        }
       }
-  };
+  }, [userUid, userSubscription, setShowSubscriptionModal]);
 
   const findPartners = async () => {
     if (currentPartner) { // Check if any chat is active (minimized or maximized)
@@ -3794,22 +3802,16 @@ const AppContent: React.FC<AppContentProps> = ({ user, errorModal, setErrorModal
   };
 
   const handleSpeakNote = useCallback(async (text: string, contextOrLangCode: string): Promise<void> => {
-      // --- This logic detects if the call is from the flashcard modal ---
-      // We check if the 'contextOrLangCode' string looks like a language code (e.g., 'ko-KR', 'en-US')
-      const isFlashcardCall = /^[a-z]{2}-[A-Z]{2}$/.test(contextOrLangCode);
+      const isFlashcardCall = /^[a-z]{2,3}(-[A-Z]{2})?$|^[a-z]{2}$/.test(contextOrLangCode);
 
       if (isFlashcardCall) {
           // --- SIMPLE PATH (for Flashcards) ---
-          const languageCode = contextOrLangCode; // The string IS the language code
-          const gender = 'female'; // Use a consistent default gender for flashcards
-          const voiceMap = VOICE_MAP[languageCode] || VOICE_MAP['en-US'];
-          const voiceName = voiceMap[gender] || voiceMap['female'];
-
+          const languageCode = contextOrLangCode;
+          const gender = 'female';
           return new Promise<void>(async (resolve) => {
               try {
-                  // No usage check, no SSML tagging
                   const audioContent = await geminiService.synthesizeSpeech(
-                      `<speak>${text}</speak>`, // Just wrap in speak tags
+                      `<speak>${text}</speak>`,
                       languageCode,
                       gender
                   );
@@ -3826,26 +3828,24 @@ const AppContent: React.FC<AppContentProps> = ({ user, errorModal, setErrorModal
                   console.error("Error synthesizing speech for flashcard:", error);
                   resolve();
               }
-              setTimeout(() => resolve(), 15000); // Timeout fallback
+              setTimeout(() => resolve(), 15000);
           });
 
       } else {
           // --- COMPLEX PATH (for Chat Partner) ---
-          // 'contextOrLangCode' is actually a 'topic' (which this function seems to ignore)
-          // This is your original code logic
-          const baseLangCode = targetLanguage;
-          const gender = currentPartner?.gender || 'male';
-          const foreignLangCode = user.nativeLanguage || 'en-US';
-          const voiceMapForForeignLang = VOICE_MAP[foreignLangCode];
-          let foreignVoiceName: string | undefined;
-          if (voiceMapForForeignLang) {
-              foreignVoiceName = voiceMapForForeignLang[gender] || voiceMapForForeignLang['male'];
-          }
-          const finalForeignVoice = foreignVoiceName || VOICE_MAP['en-US']['male'];
-
           return new Promise<void>(async (resolve) => {
               await handleUsageCheck("audioPlays", async () => {
                   try {
+                      const baseLangCode = targetLanguage;
+                      const gender = currentPartner?.gender || 'male';
+                      const foreignLangCode = userNativeLanguage || 'en-US'; // Use stable var
+                      const voiceMapForForeignLang = VOICE_MAP[foreignLangCode];
+                      let foreignVoiceName: string | undefined;
+                      if (voiceMapForForeignLang) {
+                          foreignVoiceName = voiceMapForForeignLang[gender] || voiceMapForForeignLang['male'];
+                      }
+                      const finalForeignVoice = foreignVoiceName || VOICE_MAP['en-US']['male'];
+
                       const ssmlText = await geminiService.tagTextForTTS(text, baseLangCode, finalForeignVoice);
                       const audioContent = await geminiService.synthesizeSpeech(ssmlText, baseLangCode, gender);
                       const audioBlob = new Blob([base64ToArrayBuffer(audioContent)], { type: 'audio/mpeg' });
@@ -3862,7 +3862,7 @@ const AppContent: React.FC<AppContentProps> = ({ user, errorModal, setErrorModal
                       try {
                           if ('speechSynthesis' in window) {
                               const utterance = new SpeechSynthesisUtterance(text);
-                              utterance.lang = baseLangCode;
+                              utterance.lang = targetLanguage;
                               utterance.onend = () => resolve();
                               window.speechSynthesis.speak(utterance);
                           } else {
@@ -3882,7 +3882,7 @@ const AppContent: React.FC<AppContentProps> = ({ user, errorModal, setErrorModal
               }, 15000);
           });
       }
-  }, [currentPartner, targetLanguage, handleUsageCheck, user.nativeLanguage, user.uid, geminiService.synthesizeSpeech, geminiService.tagTextForTTS]); // Added services to dependency array
+  }, [currentPartner, targetLanguage, handleUsageCheck, userNativeLanguage]);// Added services to dependency array
 
   const handleRequestTranscription = async (audioUrl: string, messageIndex: number) => {
     // Check if already transcribed or currently transcribing
@@ -3931,11 +3931,11 @@ const AppContent: React.FC<AppContentProps> = ({ user, errorModal, setErrorModal
     }
   };
 
-  const handleAddXp = (amount: number) => {
-    if (user && amount > 0) {
-      firestoreService.addXp(user.uid, amount); // Direct call here is OK
+  const handleAddXp = useCallback((amount: number) => {
+    if (userUid && amount > 0) { // Use stable var
+      firestoreService.addXp(userUid, amount); // Use stable var
     }
-  };
+  }, [userUid]);
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-sans flex flex-col">
@@ -4184,7 +4184,7 @@ const AppContent: React.FC<AppContentProps> = ({ user, errorModal, setErrorModal
           teachMeData={{ grammarData, vocabData, conversationData }}
           onSpeak={handleSpeakNote}
           handleUsageCheck={handleUsageCheck} 
-          subscriptionStatus={user.subscription}
+          subscriptionStatus={userSubscription}
         />
       )}
     </div>

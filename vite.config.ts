@@ -20,32 +20,32 @@ export default defineConfig(({ mode }) => {
       server: {
         proxy: {
           '/geminiProxy': {
-            target: 'http://127.0.0.1:5001/langcampus-exchange/us-central1',
+            target: 'http://localhost:5001/langcampus-exchange/us-central1', // FIX: localhost
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/geminiProxy/, '/geminiProxy'),
           },
           '/googleCloudTTS': {
-            target: 'http://127.0.0.1:5001/langcampus-exchange/us-central1',
+            target: 'http://localhost:5001/langcampus-exchange/us-central1', // FIX: localhost
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/googleCloudTTS/, '/googleCloudTTS'),
           },
           '/transcribeAudio': {
-            target: 'http://127.0.0.1:5001/langcampus-exchange/us-central1',
+            target: 'http://localhost:5001/langcampus-exchange/us-central1', // FIX: localhost
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/transcribeAudio/, '/transcribeAudio'),
           },
           '/youtubeProxy': {
-            target: 'http://127.0.0.1:5001/langcampus-exchange/us-central1',
+            target: 'http://localhost:5001/langcampus-exchange/us-central1', // FIX: localhost
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/youtubeProxy/, '/youtubeProxy'),
           },
           '/imagenProxy': {
-            target: 'https://127.0.0.1:5001/langcampus-exchange/us-central1',
+            target: 'http://localhost:5001/langcampus-exchange/us-central1', // FIX: https to http, 127.0.0.1 to localhost
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/imagenProxy/, '/imagenProxy')
           },
           '/imageSearchProxy': {
-            target: 'http://127.0.0.1:5001/langcampus-exchange/us-central1',
+            target: 'http://localhost:5001/langcampus-exchange/us-central1', // FIX: 127.0.0.1 to localhost
             changeOrigin: true,
             rewrite: (path) => path.replace(/^\/imageSearchProxy/, '/imageSearchProxy')
           },

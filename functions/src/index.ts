@@ -1,21 +1,83 @@
 import cors from "cors";
-import { onRequest, Request as FunctionsRequest, HttpsError } from "firebase-functions/v2/https"; // Import HttpsError
+import { onRequest, Request as FunctionsRequest, HttpsError } from "firebase-functions/v2/https";
 import { Response as ExpressResponse } from "express";
 import * as logger from "firebase-functions/logger";
 import Stripe from "stripe";
-import { getFirestore } from "firebase-admin/firestore";
-import { initializeApp, getApps } from "firebase-admin/app";
-import { getAuth } from "firebase-admin/auth";
-import { SpeechClient } from "@google-cloud/speech";
-import { TextToSpeechClient } from "@google-cloud/text-to-speech";
-import { getStorage } from 'firebase-admin/storage'; // Import Storage
 import { v4 as uuidv4 } from 'uuid'; // Import uuid
 
-if (getApps().length === 0) {
-  initializeApp();
+// --- Lazy Initializers ---
+// We use 'require' inside functions to load these SDKs only when needed,
+// which avoids the deployment timeout.
+
+// Firebase Admin SDK (initialized once per function instance)
+let adminInitialized = false;
+function ensureAdminInitialized() {
+  if (!adminInitialized) {
+    const admin = require("firebase-admin/app");
+    if (admin.getApps().length === 0) {
+      admin.initializeApp();
+    }
+    adminInitialized = true;
+  }
 }
 
-const bucket = getStorage().bucket();
+// Firestore Client (lazy getter)
+let dbInstance: ReturnType<typeof import("firebase-admin/firestore").getFirestore> | null = null;
+function getDb() {
+  if (!dbInstance) {
+    ensureAdminInitialized();
+    const { getFirestore } = require("firebase-admin/firestore");
+    dbInstance = getFirestore();
+  }
+  return dbInstance;
+}
+
+// Auth Client (lazy getter)
+let authInstance: ReturnType<typeof import("firebase-admin/auth").getAuth> | null = null;
+function getFirebaseAuth() {
+  if (!authInstance) {
+    ensureAdminInitialized();
+    const { getAuth } = require("firebase-admin/auth");
+    authInstance = getAuth();
+  }
+  return authInstance;
+}
+
+// Storage Client (lazy getter)
+let storageInstance: ReturnType<typeof import("firebase-admin/storage").getStorage> | null = null;
+function getStorageAdmin() {
+    if (!storageInstance) {
+        ensureAdminInitialized();
+        const { getStorage } = require("firebase-admin/storage");
+        storageInstance = getStorage();
+    }
+    return storageInstance;
+}
+function getBucket() {
+    // We can safely use the non-null assertion '!' because our logic ensures it's initialized.
+    return getStorageAdmin()!.bucket();
+}
+
+// Speech Client (lazy getter)
+let speechClientInstance: import("@google-cloud/speech").SpeechClient | null = null;
+function getSpeechClient() {
+    if (!speechClientInstance) {
+        const { SpeechClient } = require("@google-cloud/speech");
+        speechClientInstance = new SpeechClient();
+    }
+    return speechClientInstance;
+}
+
+// TextToSpeech Client (lazy getter)
+let ttsClientInstance: import("@google-cloud/text-to-speech").TextToSpeechClient | null = null;
+function getTtsClient() {
+    if (!ttsClientInstance) {
+        const { TextToSpeechClient } = require("@google-cloud/text-to-speech");
+        ttsClientInstance = new TextToSpeechClient();
+    }
+    return ttsClientInstance;
+}
+// --- End Lazy Initializers ---
 
 const allowedOrigins = [
   "https://langcampus-exchange.web.app",
@@ -37,15 +99,17 @@ export const geminiProxy = onRequest(
       if (request.method !== "POST") {
         return response.status(405).send("Method Not Allowed");
       }
-      const { prompt, model } = request.body;
-      if (!prompt) {
-        return response.status(400).send("Bad Request: Missing prompt");
-      }
-      const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-      if (!GEMINI_API_KEY) {
-        return response.status(500).send("Internal Server Error: API key not configured.");
-      }
+
       try {
+        const { prompt, model } = request.body;
+        if (!prompt) {
+          return response.status(400).send("Bad Request: Missing prompt");
+        }
+        const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+        if (!GEMINI_API_KEY) {
+          return response.status(500).send("Internal Server Error: API key not configured.");
+        }
+        
         const modelToUse = model || "gemini-2.5-flash"; // Using a more recent model
         const modelUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelToUse}:generateContent?key=${GEMINI_API_KEY}`;
 
@@ -73,11 +137,18 @@ export const geminiProxy = onRequest(
         };
         // --- END OF FIX ---
 
-        const geminiResponse = await fetch(modelUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(requestBody), // Use the new request body
-        });
+        let geminiResponse;
+        try {
+          geminiResponse = await fetch(modelUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(requestBody), // Use the new request body
+          });
+        } catch (fetchError: any) {
+            logger.error("Network error calling Gemini API:", fetchError.message);
+            return response.status(502).send("Bad Gateway: Error contacting Gemini API.");
+        }
+
 
         if (!geminiResponse.ok) {
           const errorText = await geminiResponse.text();
@@ -91,9 +162,14 @@ export const geminiProxy = onRequest(
         if (!data.candidates || data.candidates.length === 0) {
             logger.warn("Gemini response was blocked or empty. Finish Reason:", data.promptFeedback?.blockReason);
             logger.warn("Safety Ratings:", data.promptFeedback?.safetyRatings);
+            return response.status(500).json({
+              error: "Gemini response blocked or empty",
+              details: data.promptFeedback || "No candidates returned."
+            });
         }
 
-        return response.json(data);
+        return response.status(200).json(data);
+
       } catch (error) {
         logger.error("Catastrophic error calling Gemini API:", error);
         return response.status(500).send("Internal Server Error");
@@ -120,7 +196,7 @@ export const youtubeProxy = onRequest(
         return response.status(500).send("Internal Server Error: API key not configured.");
       }
       
-      const db = getFirestore();
+      const db = getDb()!; // Use the lazy getter with non-null assertion
       const cacheKey = `${languageName}_${topic}`.replace(/[^a-zA-Z0-9]/g, '_');
       const cacheRef = db.collection('videoCache').doc(cacheKey);
       const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
@@ -198,7 +274,6 @@ export const transcribeAudio = onRequest(
                 return response.status(400).send("Unsupported audio format");
             }
 
-            // --- FIX: Declare config object *before* the try block ---
             const config: any = {
                 encoding: encoding,
                 languageCode: languageCode,
@@ -206,13 +281,12 @@ export const transcribeAudio = onRequest(
             if (sampleRateHertz) {
                 config.sampleRateHertz = sampleRateHertz;
             }
-            // --- END FIX ---
 
             try {
-                const speechClient = new SpeechClient();
+                const speechClient = getSpeechClient()!; // Use lazy getter with non-null assertion
                 const audio = { content: audioBytes };
 
-                logger.info("Sending config to Speech API:", config); // Log the config before sending
+                logger.info("Sending config to Speech API:", config);
                 const requestPayload = { audio: audio, config: config };
 
                 const [operation] = await speechClient.longRunningRecognize(requestPayload);
@@ -228,12 +302,10 @@ export const transcribeAudio = onRequest(
             } catch (error) {
                 logger.error("Error transcribing audio:", error);
                 const errorMessage = error instanceof Error ? error.message : "Could not transcribe audio.";
-                // --- FIX: 'config' is now accessible here for logging ---
                 if (error instanceof Error && error.message.includes('INVALID_ARGUMENT')) {
-                    logger.error("Speech API Error: Invalid argument. Config sent was:", config); // Log the config
-                    return response.status(400).send(`Speech API Error: Invalid argument. Please check audio format compatibility.`); // Don't send config in response
+                    logger.error("Speech API Error: Invalid argument. Config sent was:", config);
+                    return response.status(400).send(`Speech API Error: Invalid argument. Please check audio format compatibility.`);
                 }
-                // --- END FIX ---
                 return response.status(500).send(`Internal Server Error: ${errorMessage}`);
             }
         });
@@ -275,9 +347,8 @@ export const googleCloudTTS = onRequest(
       }
 
       try {
-        const ttsClient = new TextToSpeechClient();
+        const ttsClient = getTtsClient()!; // Use lazy getter with non-null assertion
 
-        // FIX: The voice lookup logic is now correctly placed here.
         const languageVoices = VOICE_MAP[languageCode] || VOICE_MAP["en-US"];
         const voiceName = languageVoices[gender] || languageVoices['male'];
 
@@ -326,10 +397,10 @@ export const createStripePortalLink = onRequest(
       const idToken = authorization.split('Bearer ')[1];
       
       try {
-        const decodedToken = await getAuth().verifyIdToken(idToken);
+        const decodedToken = await getFirebaseAuth()!.verifyIdToken(idToken); // Use lazy getter
         const uid = decodedToken.uid;
         
-        const db = getFirestore();
+        const db = getDb()!; // Use lazy getter
 
         if (!process.env.STRIPE_SECRET_KEY) {
 
@@ -378,24 +449,14 @@ export const imagenProxy = onRequest(
         return response.status(405).send("Method Not Allowed");
       }
 
-      // --- FIX: Get the prompt directly from the request body ---
       const { prompt } = request.body;
       if (!prompt) {
-        // Changed error message to reflect the new input
         return response.status(400).send("Bad Request: Missing prompt");
       }
-      // --- END FIX ---
-
-      // Construct the specific Imagen 4.0 fast model URL for your project
-      // Replace 'langcampus-exchange' if your project ID is different
+      
       const imageModelUrl = `https://us-central1-aiplatform.googleapis.com/v1/projects/langcampus-exchange/locations/us-central1/publishers/google/models/imagen-4.0-fast-generate-001:predict`;
 
-      // --- REMOVED: Internal prompt construction ---
-      // const imagePrompt = `A simple, clear, minimalist drawing or icon representing the word "${word}" in ${language}. White background, no text or letters.`;
-      // --- END REMOVAL ---
-
       try {
-        // Fetch the access token using the metadata server (works in Cloud Functions)
         const tokenResponse = await fetch("http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token", { headers: { "Metadata-Flavor": "Google" } });
         if (!tokenResponse.ok) {
            logger.error("Error fetching access token:", { status: tokenResponse.status, text: await tokenResponse.text() });
@@ -410,9 +471,7 @@ export const imagenProxy = onRequest(
 
         const imageApiRequest = {
           instances: [{
-            // --- FIX: Use the prompt from the request body ---
             prompt: prompt,
-            // --- END FIX ---
             negativePrompt: "text, words, letters, writing, captions, headlines, titles, signs, numbers, fonts, blurry, unclear, abstract, complex background",
           }],
           parameters: {
@@ -422,9 +481,7 @@ export const imagenProxy = onRequest(
           },
         };
 
-        // --- FIX: Log the received prompt ---
         logger.info("Sending request to Imagen API:", { url: imageModelUrl, prompt: prompt.substring(0, 100) + '...' });
-        // --- END FIX ---
 
         const imageApiResponse = await fetch(imageModelUrl, {
           method: "POST",
@@ -451,8 +508,8 @@ export const imagenProxy = onRequest(
         }
 
         const imageBuffer = Buffer.from(base64ImageBytes, 'base64');
-        const fileName = `flashcard_images/${uuidv4()}.jpeg`;
-        const file = bucket.file(fileName);
+        const fileName = `flashcard_images/${uuidv4()}.jpeg`; // This is fine, it's scoped to this function
+        const file = getBucket()!.file(fileName); // Use lazy getter
 
         logger.info(`Uploading image to Storage: ${fileName}`);
         await file.save(imageBuffer, {
@@ -480,18 +537,12 @@ export const imagenProxy = onRequest(
 );
 
 export const imageSearchProxy = onRequest(
-  { secrets: ["CUSTOM_SEARCH_API_KEY", "CUSTOM_SEARCH_ENGINE_ID"], timeoutSeconds: 60 }, // Standard timeout should be sufficient now
+  { secrets: ["CUSTOM_SEARCH_API_KEY", "CUSTOM_SEARCH_ENGINE_ID"], timeoutSeconds: 60 },
   (request: FunctionsRequest, response: ExpressResponse) => {
-    // Apply CORS handling FIRST
     corsHandler(request, response, async () => {
       logger.info("imageSearchProxy started, CORS check passed.");
 
-      // Now check the method AFTER CORS headers are potentially handled
       if (request.method !== "POST") {
-        // Note: corsHandler might automatically handle OPTIONS,
-        // but explicitly allowing POST is clearer.
-        // If OPTIONS requests still fail, you might need more specific handling,
-        // but typically the middleware handles it if run first.
         return response.status(405).send("Method Not Allowed");
       }
 
@@ -500,8 +551,8 @@ export const imageSearchProxy = onRequest(
         return response.status(400).send("Bad Request: Missing query");
       }
 
-      const apiKey = process.env.CUSTOM_SEARCH_API_KEY; // Assuming you add this secret
-      const cx = process.env.CUSTOM_SEARCH_ENGINE_ID; // Assuming you add this secret
+      const apiKey = process.env.CUSTOM_SEARCH_API_KEY;
+      const cx = process.env.CUSTOM_SEARCH_ENGINE_ID;
 
       if (!apiKey || !cx) {
         logger.error("API Key or Custom Search Engine ID not configured.");
@@ -517,7 +568,6 @@ export const imageSearchProxy = onRequest(
         if (!searchResponse.ok) {
           const errorText = await searchResponse.text();
           logger.error("Error from Google Custom Search API:", { status: searchResponse.status, text: errorText });
-          // Propagate the status code if possible, otherwise use 502 Bad Gateway
           const statusCode = searchResponse.status >= 400 && searchResponse.status < 600 ? searchResponse.status : 502;
           return response.status(statusCode).send(`Image search failed: ${errorText}`);
         }
@@ -527,7 +577,6 @@ export const imageSearchProxy = onRequest(
 
         if (!imageUrl) {
           logger.warn("No image found in search results for:", query);
-          // Send a 404 Not Found if no image is returned by the search
           return response.status(404).json({ imageUrl: null, message: "No image found for this query." });
         }
 
@@ -538,6 +587,6 @@ export const imageSearchProxy = onRequest(
         logger.error("Error in imageSearchProxy function:", error);
         return response.status(500).send("Internal Server Error: Image search failed.");
       }
-    }); // End of corsHandler scope
+    });
   }
 );

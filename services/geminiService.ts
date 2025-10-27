@@ -777,21 +777,23 @@ export const getInitialWelcomeMessage = async (partner: Partner): Promise<Messag
  * Gets a simple definition for a word using Gemini.
  * @param word The word in the target language.
  * @param targetLangName Target language name (e.g., "Spanish").
- * @param userNativeLangName The user's native language (for context).
+ * @param userNativeLangName The user's native language (for context, but NOT for the definition itself).
  * @returns A promise resolving to the definition string.
  */
 export const getDefinition = async (
   word: string,
   targetLangName: string,
-  userNativeLangName: string // We keep this to pass from the modal, but update the prompt
+  userNativeLangName: string
 ): Promise<string> => {
   try {
     // --- UPDATED PROMPT ---
-    // Be very explicit that the definition MUST be in the target language.
     const prompt = `
       Provide a simple definition for the ${targetLangName} term: "${word}".
+
+      **CRITICAL INSTRUCTION:** The definition MUST NOT contain the word "${word}" itself. Find synonyms or descriptive phrases instead.
+
       The definition MUST be written entirely in ${targetLangName}.
-      Do not use ${userNativeLangName} (English) in the definition.
+      Do not use ${userNativeLangName} in the definition.
       Keep it concise (1-2 sentences) and suitable for a language learner.
       Respond ONLY with the definition text.
     `;
@@ -799,7 +801,10 @@ export const getDefinition = async (
 
     const response = await callGeminiProxy(prompt, "gemini-2.5-flash-lite");
     // Trim potentially leading/trailing whitespace or newlines from AI response
-    return response.candidates[0].content.parts[0].text.trim();
+    let definition = response.candidates[0].content.parts[0].text.trim();
+    // Remove potential surrounding quotes sometimes added by the AI
+    definition = definition.replace(/^["']|["']$/g, '');
+    return definition; // Return the cleaned definition
   } catch (error) {
     console.error(`Error getting definition for ${word} in ${targetLangName}:`, error);
     return `Definition unavailable for "${word}".`;
@@ -1029,32 +1034,65 @@ export const generateImageForWord = async (
  * @param word The word in the target language.
  * @param targetLangName Target language name (e.g., "Spanish").
  * @param userNativeLangName The user's native language (for context).
- * @returns A promise resolving to the sentence string.
+ * @returns A promise resolving to an object: { fullSentence: string, sentenceWithBlank: string }.
  */
 export const getSentence = async (
   word: string,
   targetLangName: string,
   userNativeLangName: string
-): Promise<string> => {
+): Promise<{ fullSentence: string, sentenceWithBlank: string }> => { // <-- FIX: Return type is an object
   try {
+    // --- START FIX: Updated Prompt ---
     const prompt = `
-      Create one simple example sentence using the ${targetLangName} term: "${word}".
-      The sentence MUST be written entirely in ${targetLangName}.
-      Do not use ${userNativeLangName} in the sentence itself.
-      Keep the sentence concise (max 10-12 words) and suitable for a language learner.
-      Ensure the sentence clearly demonstrates the meaning or usage of the word "${word}".
-      Respond ONLY with the sentence text. Do not add quotation marks or any explanation.
+      You are creating a flashcard quiz.
+      Target Language: ${targetLangName}
+      User's Native Language: ${userNativeLangName}
+      Target Word: "${word}"
+
+      Task:
+      1.  Create one simple, clear example sentence (max 10-12 words) in ${targetLangName} that uses the word "${word}".
+      2.  Create a second version of that exact sentence, but replace the word "${word}" with "___" (three underscores).
+      3.  Respond ONLY with a valid JSON object with two keys: "fullSentence" and "sentenceWithBlank".
+
+      Example for word "manzana" in Spanish:
+      {
+        "fullSentence": "Me gusta comer una manzana roja.",
+        "sentenceWithBlank": "Me gusta comer una ___ roja."
+      }
+      
+      Example for word "走" in Chinese:
+      {
+        "fullSentence": "他走得很快。",
+        "sentenceWithBlank": "他___得很快。"
+      }
+
+      Generate the JSON for the word "${word}" now.
     `;
+    // --- END FIX ---
 
     const response = await callGeminiProxy(prompt, "gemini-2.5-flash-lite");
-    // Trim potentially leading/trailing whitespace or newlines from AI response
-    let sentence = response.candidates[0].content.parts[0].text.trim();
-    // Remove potential surrounding quotes sometimes added by the AI
-    sentence = sentence.replace(/^["']|["']$/g, '');
-    return sentence;
+    
+    // --- START FIX: Parse JSON response ---
+    const rawText = response.candidates[0].content.parts[0].text;
+    const sentenceData = cleanAndParseJson(rawText); // Use the helper
+
+    if (!sentenceData.fullSentence || !sentenceData.sentenceWithBlank) {
+      throw new Error("AI response was missing required sentence fields.");
+    }
+    
+    return {
+      fullSentence: sentenceData.fullSentence,
+      sentenceWithBlank: sentenceData.sentenceWithBlank
+    };
+    // --- END FIX ---
+
   } catch (error) {
     console.error(`Error getting sentence for ${word} in ${targetLangName}:`, error);
-    return `Sentence unavailable for "${word}".`;
+    // Return an error object that matches the expected structure
+    return {
+      fullSentence: `Sentence unavailable for "${word}".`,
+      sentenceWithBlank: `Sentence unavailable for "${word}".`
+    };
   }
 };
 

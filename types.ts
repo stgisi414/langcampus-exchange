@@ -52,6 +52,7 @@ export interface Flashcard {
     definition?: string; // Definition in target language (maybe simplified)
     imageUrl?: string; // URL for the generated image
     sentence?: string; // ADDED: Example sentence in target language
+    sentenceWithBlank?: string;
 }
 
 export type QuizQuestion = {

@@ -104,6 +104,7 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
     const [feedback, setFeedback] = useState<'correct' | 'incorrect' | null>(null);
     const [score, setScore] = useState(0);
     const [isLoadingContent, setIsLoadingContent] = useState(false);
+    const isLoadingContentRef = useRef(false);
     const [hasViewedPrompt, setHasViewedPrompt] = useState(false);
     const [isCheckingReview, setIsCheckingReview] = useState(false);
     const [definitionTranslation, setDefinitionTranslation] = useState<string | null>(null);
@@ -200,70 +201,107 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
     }, [selectedLanguageCode, selectedLevel, selectedTopic, teachMeType, activityType, mode, amount, translationTargetLanguageCode, user.uid]);
 
 
-    // Load content (translation, definition, image) for a card on demand
     const loadCardContent = useCallback(async (card: Flashcard | undefined) => {
+        // --- START FIX: USE THE REF LOCK ---
+        // This check is immune to stale state.
+        if (isLoadingContentRef.current) {
+            return; // Already loading, kill this call
+        }
+        // --- END FIX ---
+
         if (!card ||
             (activityType === 'translation' && card.translation) ||
             (activityType === 'definition' && card.definition) ||
             (activityType === 'image' && card.imageUrl) ||
             (activityType === 'sentence' && card.sentence)) {
+            
             return;
         }
 
+        // --- START FIX: SET THE LOCK ---
+        isLoadingContentRef.current = true; // Set the ref lock
         setIsLoadingContent(true);
+        // --- END FIX ---
+        
         setDefinitionTranslation(null);
-        setSentenceTranslation(null); // Reset sentence translation too
+        setSentenceTranslation(null); 
 
         try {
             let updatedCard = { ...card };
             const currentTopic = selectedTopic; // Capture selectedTopic at call time
 
-            if (activityType === 'translation' && !card.translation) {
-                updatedCard.translation = await geminiService.getTranslation(
+            if (activityType === 'translation') {
+                const translationResult = await geminiService.getTranslation(
                     card.term,
                     targetLangName,
                     translationTargetLangName,
                     selectedLevel
                 );
-            } else if (activityType === 'definition' && !card.definition) {
-                updatedCard.definition = await geminiService.getDefinition(card.term, targetLangName, userNativeLangName);
-            } else if (activityType === 'image' && !card.imageUrl) {
-                // Pass handleUsageCheck and subscriptionStatus to generateImageForWord
+                // --- Handle empty/failed translation ---
+                updatedCard.translation = translationResult || "[Translation Error]";
+            } else if (activityType === 'definition') {
+                const definitionResult = await geminiService.getDefinition(card.term, targetLangName, userNativeLangName);
+                updatedCard.definition = definitionResult || "[Definition Error]";
+            } else if (activityType === 'image') {
                 updatedCard.imageUrl = await geminiService.generateImageForWord(
                     card.term,
                     targetLangName,
                     selectedLevel,
                     currentTopic,
-                    handleUsageCheck, // <-- Pass down
-                    subscriptionStatus // <-- Pass down
+                    handleUsageCheck,
+                    subscriptionStatus
                 );
-            } else if (activityType === 'sentence' && !card.sentence) {
-                updatedCard.sentence = await geminiService.getSentence(card.term, targetLangName, userNativeLangName);
+                // Ensure imageUrl is not empty, use placeholder on error caught by generateImageForWord
+                if (!updatedCard.imageUrl) updatedCard.imageUrl = `https://via.placeholder.com/300x200.png?text=Error`;
+
+            } else if (activityType === 'sentence' && !card.sentence) { // Check for full sentence (which holds the answer)
+                const sentenceData = await geminiService.getSentence(card.term, targetLangName, userNativeLangName);
+                updatedCard.sentence = sentenceData.fullSentence;
+                updatedCard.sentenceWithBlank = sentenceData.sentenceWithBlank; // <-- FIX: Store both
             }
 
             setFlashcards(prev => prev.map(fc => fc.id === updatedCard.id ? updatedCard : fc));
         } catch (error) {
-            console.error(`Error loading content for card ${card.id}:`, error);
-            // Optionally update card state with error flag
-             if (activityType === 'image' && card) {
-                // Set a placeholder or error image URL if generation failed
-                const updatedCardWithError = { ...card, imageUrl: 'https://via.placeholder.com/300x200.png?text=Image+Error' };
-                setFlashcards(prev => prev.map(fc => fc.id === card.id ? updatedCardWithError : fc));
-            }
+            console.error(`Error loading content for card ${card.id} (${activityType}):`, error);
+            // Update card state with error flag/message
+             const errorPlaceholder = `[${activityType.charAt(0).toUpperCase() + activityType.slice(1)} Error]`;
+             const updatedCardWithError = {
+                 ...card,
+                 ...(activityType === 'translation' && { translation: errorPlaceholder }),
+                 ...(activityType === 'definition' && { definition: errorPlaceholder }),
+                 ...(activityType === 'image' && { imageUrl: 'https://via.placeholder.com/300x200.png?text=Image+Error' }),
+                 ...(activityType === 'sentence' && { sentence: errorPlaceholder, sentenceWithBlank: errorPlaceholder }),
+             };
+             setFlashcards(prev => prev.map(fc => fc.id === card.id ? updatedCardWithError : fc));
         } finally {
+            // --- START FIX: RELEASE THE LOCK ---
+            isLoadingContentRef.current = false; // Release the ref lock
             setIsLoadingContent(false);
+            // --- END FIX ---
         }
-    }, [
+    }, [ // Add all dependencies used inside useCallback
         activityType,
         targetLangName,
         translationTargetLangName,
         userNativeLangName,
         selectedLevel,
         selectedTopic,
-        handleUsageCheck, // <-- Add dependency
-        subscriptionStatus // <-- Add dependency
+        handleUsageCheck,
+        subscriptionStatus,
+        setIsLoadingContent, // Include state setters if needed, though often stable
+        setDefinitionTranslation,
+        setSentenceTranslation,
+        setFlashcards
     ]);
+    // --- End useCallback wrap ---
 
+     // ADD: Effect to load content when index or activity type changes
+    useEffect(() => {
+        const cardToLoad = flashcards[currentIndex];
+        if (sessionState === 'active' && cardToLoad) {
+            loadCardContent(cardToLoad);
+        }
+     }, [currentIndex, activityType, sessionState, loadCardContent]);
 
     // Start a new flashcard session
     const startSession = async () => {
@@ -348,7 +386,7 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
                 term: word,
             }));
 
-            setFlashcards(fetchedCards);
+            setFlashcards(fetchedCards); 
             setSessionState('active');
             // Preload content for the *first* card
             await loadCardContent(fetchedCards[0]);
@@ -434,7 +472,14 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
 
     const handleSpeakTerm = () => {
         if (flashcards[currentIndex]) {
-            onSpeak(flashcards[currentIndex].term, selectedLanguageCode);
+            const termToSpeak = flashcards[currentIndex].term;
+            
+            console.log("--- DEBUG: handleSpeakTerm ---");
+            console.log("Term:", termToSpeak);
+            console.log("Passing language code:", selectedLanguageCode);
+            console.log("Translation language code (for comparison):", translationTargetLanguageCode);
+            
+            onSpeak(termToSpeak, selectedLanguageCode);
         }
     };
 
@@ -620,8 +665,7 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
                 backContent = (
                     <div className="flex flex-col items-center">
                         <span className="mb-2">{isLoadingContent && !currentCard.definition ? <LoadingSpinner size="sm" /> : currentCard.definition}</span>
-                        {/* REINSTATE: Translation button for definition */}
-                        {currentCard.definition && (
+                        {currentCard.definition && !currentCard.definition.startsWith('[Definition Error]') && ( // Don't show translate button on error
                             <button
                                 onClick={(e) => { e.stopPropagation(); handleTranslateDefinition(); }}
                                 className="text-xs text-blue-200 hover:underline mt-2 disabled:opacity-90"
@@ -636,11 +680,11 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
                 backContent = isLoadingContent && !currentCard.imageUrl ?
                     <LoadingSpinner size="sm" /> :
                     <img src={currentCard.imageUrl} alt={currentCard.term} className="max-w-full max-h-48 mx-auto object-contain" />;
-            } else if (activityType === 'sentence') { // ADD sentence display
+            } else if (activityType === 'sentence') {
                 backContent = (
                     <div className="flex flex-col items-center">
-                        <span className="mb-2">{isLoadingContent && !currentCard.sentence ? <LoadingSpinner size="sm" /> : currentCard.sentence}</span>
-                        {currentCard.sentence && (
+                        <span className="mb-2">{isLoadingContent && !currentCard.sentenceWithBlank ? <LoadingSpinner size="sm" /> : currentCard.sentenceWithBlank}</span>
+                        {currentCard.sentence && !currentCard.sentence.startsWith('[Sentence Error]') && ( // Don't show translate button on error
                             <button
                                 onClick={(e) => { e.stopPropagation(); handleTranslateSentence(); }}
                                 className="text-xs text-blue-200 hover:underline mt-2 disabled:opacity-90"
@@ -655,17 +699,31 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
         }
         // --- Review Mode Rendering ---
         else { // review mode
-            if (activityType === 'translation') {
-                reviewPrompt = isLoadingContent && !currentCard.translation ? <LoadingSpinner size="sm" /> : currentCard.translation;
-            } else if (activityType === 'definition') {
-                reviewPrompt = isLoadingContent && !currentCard.definition ? <LoadingSpinner size="sm" /> : currentCard.definition;
-            } else if (activityType === 'image') {
-                reviewPrompt = isLoadingContent && !currentCard.imageUrl ?
-                    <LoadingSpinner size="sm" /> :
-                    <img src={currentCard.imageUrl} alt="Guess the word" className="max-w-full max-h-48 mx-auto object-contain" />;
-            } else if (activityType === 'sentence') { // ADD sentence prompt
-                reviewPrompt = isLoadingContent && !currentCard.sentence ? <LoadingSpinner size="sm" /> : currentCard.sentence;
+            // --- REFINED: Explicitly handle loading state for the prompt content ---
+            const contentIsActuallyLoading = isLoadingContent && (
+                (activityType === 'translation' && !currentCard.translation) ||
+                (activityType === 'definition' && !currentCard.definition) ||
+                (activityType === 'image' && !currentCard.imageUrl) ||
+                (activityType === 'sentence' && !currentCard.sentenceWithBlank)
+            );
+
+            if (contentIsActuallyLoading) {
+                reviewPrompt = <LoadingSpinner size="sm" />;
+            } else {
+                 // Content finished loading or was already present, display it or error
+                 if (activityType === 'translation') {
+                    reviewPrompt = currentCard.translation || "[Translation missing after load]"; // More specific error
+                 } else if (activityType === 'definition') {
+                    reviewPrompt = currentCard.definition || "[Definition missing after load]";
+                 } else if (activityType === 'image') {
+                    reviewPrompt = currentCard.imageUrl ?
+                        <img src={currentCard.imageUrl} alt="Guess the word" className="max-w-full max-h-48 mx-auto object-contain" />
+                        : "[Image missing after load]";
+                 } else if (activityType === 'sentence') {
+                    reviewPrompt = currentCard.sentenceWithBlank || "[Sentence missing after load]";
+                 }
             }
+            // --- END REFINED ---
         }
     }
 
@@ -794,7 +852,7 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
                                             {activityType !== 'image' && backContent && !(isLoadingContent && (
                                                 (activityType === 'translation' && !currentCard.translation) ||
                                                 (activityType === 'definition' && !currentCard.definition) ||
-                                                (activityType === 'sentence' && !currentCard.sentence)
+                                                (activityType === 'sentence' && !currentCard.sentenceWithBlank)
                                             )) && (
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); handleSpeakBackContent(); }}
@@ -811,11 +869,18 @@ const FlashcardModal: React.FC<FlashcardModalProps> = ({
                                     // Review Mode
                                     // ... (Review mode logic remains the same, ensure reviewPrompt uses correct content type)
                                     <div className="w-full flex flex-col items-center justify-center">
-                                        <div className="mb-4">{reviewPrompt}</div>
+                                        <div className="mb-4 h-48 flex items-center justify-center">{reviewPrompt}</div>
                                         {!hasViewedPrompt && feedback === null && (
                                             <button
+                                                // Disable button if content is still loading for the prompt
                                                 onClick={() => setHasViewedPrompt(true)}
                                                 className="button-primary"
+                                                disabled={isLoadingContent && ( // Check if still loading necessary content
+                                                    (activityType === 'translation' && !currentCard.translation) ||
+                                                    (activityType === 'definition' && !currentCard.definition) ||
+                                                    (activityType === 'image' && !currentCard.imageUrl) ||
+                                                    (activityType === 'sentence' && !currentCard.sentence)
+                                                )}
                                             >
                                                 Ready to Guess
                                             </button>
