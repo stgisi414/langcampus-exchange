@@ -87,6 +87,7 @@ import NotesModal from "./components/NotesModal.tsx";
 import RecordRTC from 'recordrtc';
 import AgeVerificationModal from "./components/AgeVerificationModal.tsx";
 import FlashcardModal from "./components/FlashcardModal";
+import TutorialModal from './components/TutorialModal';
 
 // Helper for localStorage (Removed as we are using Firestore for persistence)
 
@@ -528,72 +529,6 @@ const PartnerCard: React.FC<{
     </div>
   );
 };
-
-// Tutorial Modal Component
-const TutorialModal: React.FC<{ onClose: () => void }> = ({ onClose }) => (
-  <div
-    className="fixed inset-0 bg-black bg-opacity-60 flex justify-center items-center z-50 p-4"
-    role="dialog"
-    aria-modal="true"
-  >
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col animate-fade-in-down">
-      <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-          Welcome to Langcampus Exchange!
-        </h2>
-        <button
-          onClick={onClose}
-          className="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200"
-          aria-label="Close tutorial"
-        >
-          <CloseIcon className="w-6 h-6" />
-        </button>
-      </div>
-      <div className="p-6 space-y-4 overflow-y-auto">
-        <p className="text-gray-700 dark:text-gray-300">
-          Here's a quick guide to get you started:
-        </p>
-        <ul className="list-disc list-inside space-y-2 text-gray-600 dark:text-gray-400">
-          <li>
-            <strong>Set Your Languages:</strong> Use the dropdown menus at the
-            top to select your native language and the language you want to
-            learn.
-          </li>
-          <li>
-            <strong>Personalize Your Profile:</strong> Click on "My Info" to add
-            your name and hobbies. This helps find partners with similar
-            interests!
-          </li>
-          <li>
-            <strong>Find a Partner:</strong> Click the "Find New Pals" button to
-            generate a list of AI language partners.
-          </li>
-          <li>
-            <strong>Start Chatting:</strong> Choose a partner and click "Start
-            Chat" to open the conversation window.
-          </li>
-          <li>
-            <strong>Use Learning Tools:</strong> Inside the chat, you can toggle
-            "Corrections" for real-time feedback, use the "Teach Me" button for
-            grammar/vocab lessons, and click any message to hear it spoken.
-          </li>
-          <li>
-            <strong>Save Your Progress:</strong> Don't want to lose a great
-            conversation? Click the "Save Chat" icon to save it for later.
-          </li>
-        </ul>
-      </div>
-      <div className="flex justify-end p-4 border-t dark:border-gray-700">
-        <button
-          onClick={onClose}
-          className="px-6 py-2 bg-blue-500 text-white font-bold rounded-lg hover:bg-blue-600 transition-colors"
-        >
-          Got it!
-        </button>
-      </div>
-    </div>
-  </div>
-);
 
 // Define a new interface to hold the original data plus a unique ID
 interface PairWithId {
@@ -1201,18 +1136,20 @@ const TeachMeModal: React.FC<{
   const displayTitle = useMemo(() => {
     const currentTitle = groupTopic || selectedTopic;
     if (!currentTitle) {
-        return isGroupChat ? `Group Topic: ${language}` : `Teach Me: ${language}`;
+      return isGroupChat ? `Group Topic: ${language}` : `Teach Me: ${language}`;
     }
     
-    // 1. Prioritize persistent settings from group or solo cache (which has type/level)
+    // 1. Prioritize persistent settings from group or solo cache
     const persistentSettings = groupChat?.groupTeachMeSettings || cache;
 
     // 2. If no persistent settings exist, fall back to current modal state (activeTab/level)
+    //    This is what we need to display the title when the lesson is first loaded.
     const displayType = persistentSettings?.type || activeTab;
     const displayLevel = persistentSettings?.level || level;
     
     return `${displayType} ${displayLevel}: ${currentTitle}`;
-  }, [groupTopic, selectedTopic, language, isGroupChat, groupChat, cache, activeTab, level]);
+
+  }, [groupTopic, selectedTopic, language, isGroupChat, groupChat, cache]);
   
   // --- 2. EFFECTS (with corrected content handling) ---
   useEffect(() => {
@@ -2957,6 +2894,7 @@ const AppContent: React.FC<AppContentProps> = ({ user, errorModal, setErrorModal
   const [transcribingId, setTranscribingId] = useState<string | null>(null);
   const [replyingToMessage, setReplyingToMessage] = useState<Message | null>(null);
   const [showFlashcardModal, setShowFlashcardModal] = useState(false);
+  const [showTutorialModal, setShowTutorialModal] = useState(false);
   
   const userUid = user?.uid;
   const userSubscription = user?.subscription;
@@ -3999,8 +3937,16 @@ const AppContent: React.FC<AppContentProps> = ({ user, errorModal, setErrorModal
             <div>
               <p className="font-bold">New Here?</p>
               <p>
-                Click the "My Info" <InfoIcon className="w-6 h-6 inline-block align-middle" /> icon to learn how to use Langcampus
-                Exchange.
+                {/* --- START FIX --- */}
+                Click 
+                <button 
+                  onClick={() => setShowTutorialModal(true)} 
+                  className="font-bold text-blue-600 dark:text-blue-300 hover:underline mx-1"
+                >
+                  here
+                </button> 
+                to learn how to use Langcampus Exchange.
+                {/* --- END FIX --- */}
               </p>
             </div>
             <button
@@ -4013,6 +3959,10 @@ const AppContent: React.FC<AppContentProps> = ({ user, errorModal, setErrorModal
               <CloseIcon className="w-6 h-6" />
             </button>
           </div>
+        )}
+
+        {showTutorialModal && (
+          <TutorialModal onClose={() => setShowTutorialModal(false)} />
         )}
 
         {savedChat && !currentPartner && (
@@ -4079,7 +4029,7 @@ const AppContent: React.FC<AppContentProps> = ({ user, errorModal, setErrorModal
                           className="inline-flex items-center text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 underline font-semibold"
                       >
                           <FlashcardsIcon className="w-5 h-5 inline-block mr-1" />
-                          flashcards
+                          Flashcards
                       </button>.
                   </p>
                 ) : (

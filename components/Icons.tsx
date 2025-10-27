@@ -243,3 +243,9 @@ export const MicIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({ className }) 
     <line x1="12" y1="19" x2="12" y2="22"></line>
   </svg>
 );
+
+export const ChatIcon: React.FC<React.SVGProps<SVGSVGElement>> = ({ className }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className={className}>
+    <path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"/>
+  </svg>
+);
