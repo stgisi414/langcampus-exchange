@@ -12,9 +12,9 @@
     "@google/genai": "^1.20.0",
     "@invertase/firestore-stripe-payments": "^0.0.8",
     "@stripe/stripe-js": "^7.9.0",
-    "firebase": "^10.12.2",
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
+    "firebase": "^12.6.0",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
     "react-router-dom": "^7.9.1",
     "recordrtc": "^5.6.2"
   },
